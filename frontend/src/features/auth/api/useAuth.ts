@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/src/lib/api-client';
-import { AuthResponse, LoginRequest, RegisterRequest } from '@/src/types/api';
+import { apiClient } from '@/lib/api-client';
+import { AuthResponse, LoginRequest, RegisterRequest } from '@/types/api';
 
 export const useLogin = () => {
   const queryClient = useQueryClient();
@@ -35,5 +35,19 @@ export const useRegister = () => {
       const response = await apiClient.post<AuthResponse>('/auth/register', data);
       return response.data;
     },
+  });
+};
+export const useCheckAuth = () => {
+  return useMutation({
+    mutationFn: async () => {
+      // Try to access a protected route to check if we are authenticated
+      // Since we don't have a dedicated /me endpoint yet, we can use a lightweight protected endpoint
+      // or just rely on the 401 interceptor.
+      // However, for initial load, we might want to check status.
+      // Let's assume we can check system status as a way to verify auth
+      const response = await apiClient.get('/system/status');
+      return response.data;
+    },
+    retry: false,
   });
 };

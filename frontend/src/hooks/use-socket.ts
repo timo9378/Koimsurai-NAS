@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { DockerStats, JobUpdate, Job } from '@/src/types/api';
+import { DockerStats, JobUpdate, Job } from '@/types/api';
 
 type WebSocketMessage =
   | { type: 'docker_stats'; data: DockerStats }

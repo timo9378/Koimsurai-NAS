@@ -2,7 +2,7 @@
 
 // User Models
 export interface User {
-  id: number;
+  id: number; // i64 in Rust, but JS number is safe up to 2^53
   username: string;
   created_at: string; // ISO 8601
 }
@@ -18,6 +18,7 @@ export interface LoginRequest {
 export interface RegisterRequest {
   username: string;
   password: string;
+  invite_code: string;
 }
 
 // File Models
@@ -33,13 +34,31 @@ export interface Tag {
 
 export interface FileInfo {
   name: string;
+  path: string; // Added path for convenience
   is_dir: boolean;
-  size: number;
+  size: number; // u64 in Rust
   modified: string;
   mime_type: string | null;
   metadata: FileMetadata | null;
   tags: Tag[];
   is_starred: boolean;
+}
+
+export interface FileVersion {
+  id: string;
+  size: number;
+  modified: string;
+  path: string;
+}
+
+export interface BatchOperationRequest {
+  paths: string[];
+  destination?: string;
+}
+
+export interface TagRequest {
+  name: string;
+  color: string;
 }
 
 // Job Models
@@ -85,12 +104,19 @@ export interface UploadSession {
 }
 
 // System/Docker Models (Inferred from prompt requirements as they weren't in the file list)
+export interface DiskInfo {
+  name: string;
+  total_space: number;
+  available_space: number;
+}
+
 export interface SystemStatus {
   cpu_usage: number;
-  ram_usage: number;
-  total_ram: number;
-  disk_usage: number;
-  total_disk: number;
+  total_memory: number;
+  used_memory: number;
+  total_swap: number;
+  used_swap: number;
+  disks: DiskInfo[];
 }
 
 export interface DockerContainer {

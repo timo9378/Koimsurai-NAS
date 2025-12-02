@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@/src/lib/api-client';
-import { SystemStatus, DockerContainer } from '@/src/types/api';
+import { apiClient } from '@/lib/api-client';
+import { SystemStatus, DockerContainer } from '@/types/api';
 
 export const useSystemStatus = () => {
   return useQuery({
@@ -20,5 +20,6 @@ export const useDockerContainers = () => {
       const response = await apiClient.get<DockerContainer[]>('/docker/containers');
       return response.data;
     },
+    refetchInterval: 10000,
   });
 };
