@@ -187,6 +187,7 @@ export const useToggleStar = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
+      queryClient.invalidateQueries({ queryKey: ['favorites'] });
     },
   });
 };
@@ -236,6 +237,16 @@ export const useEmptyTrash = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trash'] });
+    },
+  });
+};
+
+export const useFavorites = () => {
+  return useQuery({
+    queryKey: ['favorites'],
+    queryFn: async () => {
+      const response = await apiClient.get<FileInfo[]>('/favorites');
+      return response.data;
     },
   });
 };

@@ -3,11 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ChevronLeft, 
-  ChevronRight, 
-  LayoutGrid, 
-  List as ListIcon, 
+  ChevronRight,
+  LayoutGrid,
+  List as ListIcon,
   Search,
   HardDrive,
+  Home,
+  Server,
   Clock,
   Cloud,
   Download,
@@ -23,7 +25,7 @@ import {
   StarOff
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useFiles, useDelete, useRename, useAddTag, useRemoveTag, useToggleStar, useTrash, useRestoreFromTrash, useEmptyTrash } from '@/features/files/api/useFiles';
+import { useFiles, useDelete, useRename, useAddTag, useRemoveTag, useToggleStar, useTrash, useRestoreFromTrash, useEmptyTrash, useFavorites } from '@/features/files/api/useFiles';
 import { FileInfo } from '@/types/api';
 import {
   ContextMenu,
@@ -107,6 +109,7 @@ export const Finder = () => {
 
   const { data: files, isLoading } = useFiles({ path: currentPath });
   const { data: trashFiles, isLoading: isTrashLoading } = useTrash();
+  const { data: favorites } = useFavorites();
   
   const deleteFile = useDelete();
   const renameFile = useRename();
@@ -176,10 +179,26 @@ export const Finder = () => {
   const handleRename = (file: FileInfo) => {
     const newName = prompt('Enter new name:', file.name);
     if (newName && newName !== file.name) {
-      renameFile.mutate({ 
-        path: file.path || (currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`), 
-        newName 
+      renameFile.mutate({
+        path: file.path || (currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`),
+        newName
       });
+    }
+  };
+
+  const handleFavoriteClick = (fav: FileInfo) => {
+    const fullPath = fav.path.startsWith('/') ? fav.path : `/${fav.path}`;
+    
+    if (fav.is_dir) {
+      handleNavigate(fullPath);
+    } else {
+      // Navigate to parent directory
+      const parentPath = fullPath.substring(0, fullPath.lastIndexOf('/')) || '/';
+      handleNavigate(parentPath);
+      // Select the file
+      setTimeout(() => {
+        setSelectedFiles(new Set([fav.name]));
+      }, 100);
     }
   };
 
@@ -191,15 +210,31 @@ export const Finder = () => {
           <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-2 mb-2">Favorites</div>
           <SidebarItem icon={Clock} label="Recents" />
           <SidebarItem icon={File} label="Applications" />
-          <SidebarItem icon={Download} label="Downloads" />
-          <SidebarItem icon={Folder} label="Documents" active />
-          <SidebarItem icon={Cloud} label="iCloud Drive" />
+          {favorites?.map((fav) => (
+            <SidebarItem
+              key={fav.path}
+              icon={fav.is_dir ? Folder : File}
+              label={fav.name}
+              active={currentPath === (fav.path.startsWith('/') ? fav.path : `/${fav.path}`) && !isTrashMode}
+              onClick={() => handleFavoriteClick(fav)}
+            />
+          ))}
         </div>
 
         <div className="space-y-1">
           <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-2 mb-2">Locations</div>
-          <SidebarItem icon={HardDrive} label="Macintosh HD" />
-          <SidebarItem icon={HardDrive} label="Koimsurai NAS" />
+          <SidebarItem
+            icon={Home}
+            label="Home"
+            active={currentPath === '/home' && !isTrashMode}
+            onClick={() => handleNavigate('/home')}
+          />
+          <SidebarItem
+            icon={Server}
+            label="Koimsurai NAS"
+            active={currentPath === '/DataVol1' && !isTrashMode}
+            onClick={() => handleNavigate('/DataVol1')}
+          />
           <SidebarItem icon={Trash2} label="Trash" active={isTrashMode} onClick={handleTrashMode} />
         </div>
         
