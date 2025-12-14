@@ -7,6 +7,8 @@ import { X, Minus, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Finder } from '@/components/apps/Finder';
 import { Dashboard } from '@/components/apps/Dashboard';
+import { DockerManager } from '@/components/apps/DockerManager';
+import { Photos } from '@/components/apps/Photos';
 
 const WindowContent = ({ appType }: { appType: string }) => {
   switch (appType) {
@@ -14,6 +16,10 @@ const WindowContent = ({ appType }: { appType: string }) => {
       return <Finder />;
     case 'dashboard':
       return <Dashboard />;
+    case 'docker':
+      return <DockerManager />;
+    case 'photos':
+      return <Photos />;
     default:
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -236,6 +242,20 @@ const Window = ({ window }: { window: WindowState }) => {
 
 export const WindowContainer = () => {
   const windows = useWindowStore((state) => state.windows);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        const { activeWindowId, closeWindow } = useWindowStore.getState();
+        if (activeWindowId) {
+          closeWindow(activeWindowId);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
     <div className="fixed inset-0 pointer-events-none z-0">

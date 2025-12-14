@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { 
-  ChevronLeft, 
+import {
+  ChevronLeft,
   ChevronRight,
   LayoutGrid,
   List as ListIcon,
@@ -26,7 +26,8 @@ import {
   StarOff,
   Share2,
   History,
-  Tags
+  Tags,
+  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -47,6 +48,7 @@ import {
   useThumbnail
 } from '@/features/files/api/useFiles';
 import { FileInfo } from '@/types/api';
+import { FilePreview } from './FilePreview';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -145,6 +147,7 @@ export const Finder = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [previewFile, setPreviewFile] = useState<FileInfo | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const renameInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -174,6 +177,32 @@ export const Finder = () => {
     setCurrentPath(path);
     setSelectedFiles(new Set());
   };
+
+  // Quick Look (Spacebar)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' && selectedFiles.size === 1 && !renamingFile) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (previewFile) {
+          setPreviewFile(null);
+        } else {
+          const fileName = Array.from(selectedFiles)[0];
+          const file = currentFiles?.find(f => f.name === fileName);
+          if (file) setPreviewFile(file);
+        }
+      }
+      if (e.code === 'Escape' && previewFile) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        setPreviewFile(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  }, [selectedFiles, previewFile, currentFiles, renamingFile]);
 
   const handleTrashMode = () => {
     setIsTrashMode(true);
@@ -330,6 +359,14 @@ export const Finder = () => {
     }
   };
 
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
+
   return (
     <div className="flex h-full bg-white/50 dark:bg-black/50 backdrop-blur-xl rounded-lg overflow-hidden border border-white/20 shadow-2xl">
       {/* Sidebar */}
@@ -378,7 +415,12 @@ export const Finder = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 bg-white/40 dark:bg-black/40">
+      <div className="flex-1 flex flex-col min-w-0 bg-white/40 dark:bg-black/40 relative">
+        {/* Quick Look Overlay */}
+        {previewFile && (
+          <FilePreview file={previewFile} onClose={() => setPreviewFile(null)} />
+        )}
+
         {/* Toolbar */}
         <div className="h-12 flex items-center justify-between px-4 border-b border-white/10 bg-white/40 dark:bg-black/40 backdrop-blur-md">
           <div className="flex items-center gap-4">

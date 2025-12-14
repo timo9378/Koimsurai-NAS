@@ -79,6 +79,7 @@ export interface JobUpdate {
   status: JobStatus;
   progress: number;
   error: string | null;
+  type?: string;
 }
 
 // Upload Models
