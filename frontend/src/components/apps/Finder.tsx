@@ -6,6 +6,7 @@ import {
   ChevronRight,
   LayoutGrid,
   List as ListIcon,
+  Upload,
   Search,
   HardDrive,
   Home,
@@ -22,10 +23,29 @@ import {
   Info,
   Edit2,
   Star,
-  StarOff
+  StarOff,
+  Share2,
+  History,
+  Tags
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useFiles, useDelete, useRename, useAddTag, useRemoveTag, useToggleStar, useTrash, useRestoreFromTrash, useEmptyTrash, useFavorites } from '@/features/files/api/useFiles';
+import {
+  useFiles,
+  useDelete,
+  useRename,
+  useAddTag,
+  useRemoveTag,
+  useToggleStar,
+  useTrash,
+  useRestoreFromTrash,
+  useEmptyTrash,
+  useFavorites,
+  useUpload,
+  useDownload,
+  useCreateShare,
+  useFileVersions,
+  useThumbnail
+} from '@/features/files/api/useFiles';
 import { FileInfo } from '@/types/api';
 import {
   ContextMenu,
@@ -84,11 +104,27 @@ const Breadcrumbs = ({ path, onNavigate }: { path: string, onNavigate: (path: st
   );
 };
 
-const FileIcon = ({ file }: { file: FileInfo }) => {
+const FileIcon = ({ file, currentPath }: { file: FileInfo; currentPath?: string }) => {
+  const isImage = file.mime_type?.startsWith('image/');
+
+  // Determine thumbnail path: prefer the file.path provided by backend; if missing,
+  // construct relative path from the current directory + filename (no leading '/').
+  const thumbnailPath = file.path
+    ? file.path
+    : (currentPath && currentPath !== '/')
+      ? `${currentPath.replace(/^\//, '')}/${file.name}`
+      : file.name;
+
+  const { data: thumbnail } = useThumbnail(thumbnailPath, 'medium');
+
   if (file.is_dir) {
     return <Folder className="w-12 h-12 text-blue-500 fill-blue-500/20" />;
   }
-  // Add more specific icons based on mime_type or extension here
+  
+  if (isImage && thumbnail) {
+    return <img src={thumbnail} alt={file.name} className="w-12 h-12 object-cover rounded shadow-sm" />;
+  }
+
   return <File className="w-12 h-12 text-gray-500" />;
 };
 
@@ -106,6 +142,11 @@ export const Finder = () => {
   const [history, setHistory] = useState<string[]>(['/']);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [isTrashMode, setIsTrashMode] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [renamingFile, setRenamingFile] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const renameInputRef = React.useRef<HTMLInputElement>(null);
 
   const { data: files, isLoading } = useFiles({ path: currentPath });
   const { data: trashFiles, isLoading: isTrashLoading } = useTrash();
@@ -116,6 +157,9 @@ export const Finder = () => {
   const toggleStar = useToggleStar();
   const restoreFromTrash = useRestoreFromTrash();
   const emptyTrash = useEmptyTrash();
+  const uploadFile = useUpload();
+  const downloadFile = useDownload();
+  const createShare = useCreateShare();
 
   const currentFiles = isTrashMode ? trashFiles : files;
   const isCurrentLoading = isTrashMode ? isTrashLoading : isLoading;
@@ -177,12 +221,48 @@ export const Finder = () => {
   };
 
   const handleRename = (file: FileInfo) => {
-    const newName = prompt('Enter new name:', file.name);
-    if (newName && newName !== file.name) {
-      renameFile.mutate({
-        path: file.path || (currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`),
-        newName
+    setRenamingFile(file.name);
+    setRenameValue(file.name);
+    // Focus will be handled by useEffect or autoFocus
+  };
+
+  const submitRename = async () => {
+    if (!renamingFile || !renameValue || renameValue === renamingFile) {
+      setRenamingFile(null);
+      return;
+    }
+
+    try {
+      await renameFile.mutateAsync({
+        path: currentPath === '/' ? `/${renamingFile}` : `${currentPath}/${renamingFile}`,
+        newName: renameValue
       });
+      setRenamingFile(null);
+    } catch (error) {
+      console.error('Rename failed:', error);
+      alert('Failed to rename file');
+    }
+  };
+
+  useEffect(() => {
+    if (renamingFile && renameInputRef.current) {
+      renameInputRef.current.focus();
+      renameInputRef.current.select();
+    }
+  }, [renamingFile]);
+
+  const handleShare = async (file: FileInfo) => {
+    // Simple prompt for now, could be a modal
+    if (confirm(`Create share link for ${file.name}?`)) {
+      try {
+        const result = await createShare.mutateAsync({
+          file_path: file.path || (currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`)
+        });
+        // Show result (in a real app, copy to clipboard)
+        prompt('Share Link Created:', `${window.location.origin}/s/${result.id}`);
+      } catch (error) {
+        alert('Failed to create share link');
+      }
     }
   };
 
@@ -199,6 +279,54 @@ export const Finder = () => {
       setTimeout(() => {
         setSelectedFiles(new Set([fav.name]));
       }, 100);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging && !isTrashMode) setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (isTrashMode) return;
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      await handleUploadFiles(files);
+    }
+  };
+
+  const handleUploadFiles = async (files: File[]) => {
+    for (const file of files) {
+      try {
+        await uploadFile.mutateAsync({
+          file,
+          path: currentPath
+        });
+      } catch (error) {
+        console.error(`Failed to upload ${file.name}:`, error);
+      }
+    }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleUploadFiles(Array.from(e.target.files));
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -286,6 +414,24 @@ export const Finder = () => {
                 Empty Trash
               </button>
             )}
+            {!isTrashMode && (
+              <>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-1.5 rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                  title="Upload"
+                >
+                  <Upload className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+                </button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  multiple
+                  onChange={handleFileInputChange}
+                />
+              </>
+            )}
             <div className="flex bg-black/5 dark:bg-white/10 rounded-md p-0.5">
               <button 
                 onClick={() => setViewMode('grid')}
@@ -319,7 +465,21 @@ export const Finder = () => {
         </div>
 
         {/* File View */}
-        <div className="flex-1 overflow-auto p-4" onClick={() => setSelectedFiles(new Set())}>
+        <div
+          className="flex-1 overflow-auto p-4 relative"
+          onClick={() => setSelectedFiles(new Set())}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {isDragging && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center bg-blue-500/10 dark:bg-blue-500/20 backdrop-blur-sm border-2 border-blue-500 border-dashed m-2 rounded-lg pointer-events-none">
+              <div className="flex flex-col items-center gap-2 text-blue-600 dark:text-blue-400">
+                <Upload className="w-12 h-12" />
+                <span className="text-lg font-medium">Drop files to upload</span>
+              </div>
+            </div>
+          )}
           {isCurrentLoading ? (
             <div className="flex items-center justify-center h-full text-gray-500">Loading...</div>
           ) : viewMode === 'grid' ? (
@@ -337,15 +497,31 @@ export const Finder = () => {
                           : "hover:bg-black/5 dark:hover:bg-white/5"
                       )}
                     >
-                      <FileIcon file={file} />
-                      <span className={cn(
-                        "text-xs text-center px-1 rounded truncate w-full transition-colors",
-                        selectedFiles.has(file.name)
-                          ? "text-blue-700 dark:text-blue-300 font-medium bg-blue-500/10"
-                          : "text-gray-700 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-white"
-                      )}>
-                        {file.name}
-                      </span>
+                      <FileIcon file={file} currentPath={currentPath} />
+                      {renamingFile === file.name ? (
+                        <input
+                          ref={renameInputRef}
+                          type="text"
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onBlur={submitRename}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') submitRename();
+                            if (e.key === 'Escape') setRenamingFile(null);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-xs text-center px-1 rounded w-full bg-white dark:bg-black border border-blue-500 focus:outline-none text-black dark:text-white"
+                        />
+                      ) : (
+                        <span className={cn(
+                          "text-xs text-center px-1 rounded truncate w-full transition-colors",
+                          selectedFiles.has(file.name)
+                            ? "text-blue-700 dark:text-blue-300 font-medium bg-blue-500/10"
+                            : "text-gray-700 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-white"
+                        )}>
+                          {file.name}
+                        </span>
+                      )}
                     </div>
                   </ContextMenuTrigger>
                   <ContextMenuContent className="w-64">
@@ -364,12 +540,22 @@ export const Finder = () => {
                         <ContextMenuItem onClick={() => handleFileDoubleClick(file)}>
                           <Folder className="mr-2 h-4 w-4" /> Open
                         </ContextMenuItem>
-                        <ContextMenuItem>
+                        <ContextMenuItem onClick={() => downloadFile.mutate(file.path || (currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`))}>
                           <Download className="mr-2 h-4 w-4" /> Download
+                        </ContextMenuItem>
+                        <ContextMenuItem onClick={() => handleShare(file)}>
+                          <Share2 className="mr-2 h-4 w-4" /> Share
                         </ContextMenuItem>
                         <ContextMenuItem onClick={() => toggleStar.mutate(file.path || file.name)}>
                           {file.is_starred ? <StarOff className="mr-2 h-4 w-4" /> : <Star className="mr-2 h-4 w-4" />}
                           {file.is_starred ? "Remove from Favorites" : "Add to Favorites"}
+                        </ContextMenuItem>
+                        <ContextMenuSeparator />
+                        <ContextMenuItem>
+                          <Tags className="mr-2 h-4 w-4" /> Tags...
+                        </ContextMenuItem>
+                        <ContextMenuItem>
+                          <History className="mr-2 h-4 w-4" /> Versions
                         </ContextMenuItem>
                         <ContextMenuSeparator />
                         <ContextMenuItem onClick={() => handleRename(file)}>
@@ -417,7 +603,23 @@ export const Finder = () => {
                     >
                       <div className="flex items-center gap-2">
                         <SmallFileIcon file={file} />
-                        <span className="truncate">{file.name}</span>
+                        {renamingFile === file.name ? (
+                          <input
+                            ref={renameInputRef}
+                            type="text"
+                            value={renameValue}
+                            onChange={(e) => setRenameValue(e.target.value)}
+                            onBlur={submitRename}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') submitRename();
+                              if (e.key === 'Escape') setRenamingFile(null);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-sm px-1 rounded bg-white dark:bg-black border border-blue-500 focus:outline-none text-black dark:text-white flex-1"
+                          />
+                        ) : (
+                          <span className="truncate">{file.name}</span>
+                        )}
                       </div>
                       <div className={cn("text-xs", selectedFiles.has(file.name) ? "text-blue-100" : "text-gray-500")}>
                         {file.is_dir ? '--' : `${(file.size / 1024).toFixed(1)} KB`}
@@ -443,8 +645,11 @@ export const Finder = () => {
                         <ContextMenuItem onClick={() => handleFileDoubleClick(file)}>
                           <Folder className="mr-2 h-4 w-4" /> Open
                         </ContextMenuItem>
-                        <ContextMenuItem>
+                        <ContextMenuItem onClick={() => downloadFile.mutate(file.path || (currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`))}>
                           <Download className="mr-2 h-4 w-4" /> Download
+                        </ContextMenuItem>
+                        <ContextMenuItem onClick={() => handleShare(file)}>
+                          <Share2 className="mr-2 h-4 w-4" /> Share
                         </ContextMenuItem>
                         <ContextMenuItem onClick={() => toggleStar.mutate(file.path || file.name)}>
                           {file.is_starred ? <StarOff className="mr-2 h-4 w-4" /> : <Star className="mr-2 h-4 w-4" />}
@@ -479,7 +684,14 @@ export const Finder = () => {
         
         {/* Status Bar */}
         <div className="h-6 flex items-center px-4 border-t border-white/10 bg-white/40 dark:bg-black/40 text-xs text-gray-500 backdrop-blur-md">
-          {currentFiles ? `${currentFiles.length} items` : 'Loading...'}
+          {uploadFile.isPending ? (
+            <span className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+              Uploading...
+            </span>
+          ) : (
+            currentFiles ? `${currentFiles.length} items` : 'Loading...'
+          )}
         </div>
       </div>
     </div>

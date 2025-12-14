@@ -14,9 +14,10 @@ export const useFiles = ({ path, sortBy = 'name', order = 'asc', page = 1, limit
   return useQuery({
     queryKey: ['files', path, sortBy, order, page, limit],
     queryFn: async () => {
-      const endpoint = path === '/' || path === ''
+      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+      const endpoint = cleanPath === ''
         ? '/files'
-        : `/files/${encodeURIComponent(path)}`;
+        : `/files/${encodeURIComponent(cleanPath)}`;
       
       const params = new URLSearchParams();
       if (sortBy) params.append('sort_by', sortBy);
@@ -35,7 +36,8 @@ export const useFileVersions = (path: string) => {
     queryKey: ['files', 'versions', path],
     queryFn: async () => {
       if (!path) return [];
-      const response = await apiClient.get<FileVersion[]>(`/files/${encodeURIComponent(path)}/versions`);
+      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+      const response = await apiClient.get<FileVersion[]>(`/files/${encodeURIComponent(cleanPath)}/versions`);
       return response.data;
     },
     enabled: !!path,
@@ -50,14 +52,19 @@ export const useUpload = () => {
       const formData = new FormData();
       formData.append('file', file);
       
-      const endpoint = path === '/' || path === ''
+      // Remove leading slash if present to ensure correct path handling
+      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+      const endpoint = cleanPath === ''
         ? '/upload'
-        : `/upload/${encodeURIComponent(path)}`;
+        : `/upload/${encodeURIComponent(cleanPath)}`;
 
+      // Let axios set the Content-Type with boundary automatically
+      // We explicitly set Content-Type to undefined to override the default application/json
+      // and let the browser generate the correct multipart/form-data header with boundary
       const response = await apiClient.post(endpoint, formData, {
         headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+          'Content-Type': undefined,
+        } as any,
       });
       return response.data;
     },
@@ -92,10 +99,28 @@ export const useRename = () => {
 
   return useMutation({
     mutationFn: async ({ path, newName }: { path: string; newName: string }) => {
-      await apiClient.put(`/files/${encodeURIComponent(path)}`, { new_path: newName });
+      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+      // Build new_path as the same directory + newName so the backend receives the full target path
+      const dir = cleanPath.includes('/') ? cleanPath.substring(0, cleanPath.lastIndexOf('/')) : '';
+      const newPath = dir ? `${dir}/${newName}` : newName;
+      await apiClient.put(`/files/${encodeURIComponent(cleanPath)}`, { new_path: newPath });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+    onSuccess: (_, variables) => {
+      // Recompute parent directory from the original path and invalidate both
+      // the general files queries and the specific parent directory so the
+      // UI showing the directory listing will be refetched.
+      try {
+        const originalPath = variables.path as string;
+        const cleanPath = originalPath.startsWith('/') ? originalPath.slice(1) : originalPath;
+        const dir = cleanPath.includes('/') ? cleanPath.substring(0, cleanPath.lastIndexOf('/')) : '';
+        const parentPath = dir ? `/${dir}` : '/';
+
+        queryClient.invalidateQueries({ queryKey: ['files'] });
+        queryClient.invalidateQueries({ queryKey: ['files', parentPath] });
+      } catch (e) {
+        // Fallback: invalidate all files queries
+        queryClient.invalidateQueries({ queryKey: ['files'] });
+      }
     },
   });
 };
@@ -105,7 +130,8 @@ export const useDelete = () => {
 
   return useMutation({
     mutationFn: async (path: string) => {
-      await apiClient.delete(`/files/${encodeURIComponent(path)}`);
+      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+      await apiClient.delete(`/files/${encodeURIComponent(cleanPath)}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
@@ -157,7 +183,8 @@ export const useAddTag = () => {
 
   return useMutation({
     mutationFn: async ({ path, tag }: { path: string; tag: TagRequest }) => {
-      await apiClient.post(`/files/${encodeURIComponent(path)}/tags`, tag);
+      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+      await apiClient.post(`/files/${encodeURIComponent(cleanPath)}/tags`, tag);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
@@ -170,7 +197,8 @@ export const useRemoveTag = () => {
 
   return useMutation({
     mutationFn: async ({ path, tagName }: { path: string; tagName: string }) => {
-      await apiClient.delete(`/files/${encodeURIComponent(path)}/tags/${encodeURIComponent(tagName)}`);
+      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+      await apiClient.delete(`/files/${encodeURIComponent(cleanPath)}/tags/${encodeURIComponent(tagName)}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
@@ -183,7 +211,8 @@ export const useToggleStar = () => {
 
   return useMutation({
     mutationFn: async (path: string) => {
-      await apiClient.post(`/files/${encodeURIComponent(path)}/star`);
+      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+      await apiClient.post(`/files/${encodeURIComponent(cleanPath)}/star`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
@@ -197,7 +226,8 @@ export const useRestoreVersion = () => {
 
   return useMutation({
     mutationFn: async ({ path, versionId }: { path: string; versionId: string }) => {
-      await apiClient.post(`/files/${encodeURIComponent(path)}/restore/${versionId}`);
+      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+      await apiClient.post(`/files/${encodeURIComponent(cleanPath)}/restore/${versionId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
@@ -247,6 +277,190 @@ export const useFavorites = () => {
     queryFn: async () => {
       const response = await apiClient.get<FileInfo[]>('/favorites');
       return response.data;
+    },
+  });
+};
+
+export const useDownload = () => {
+  return useMutation({
+    mutationFn: async (path: string) => {
+      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+      const response = await apiClient.get(`/download/${encodeURIComponent(cleanPath)}`, {
+        responseType: 'blob',
+      });
+      
+      // Create a download link and trigger it
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      const fileName = path.split('/').pop() || 'download';
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    },
+  });
+};
+
+export const useThumbnail = (path: string, size: 'small' | 'medium' | 'large' = 'small') => {
+  return useQuery({
+    queryKey: ['thumbnail', path, size],
+    queryFn: async () => {
+      if (!path) return null;
+      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+      // Use encodeURI to preserve '/' characters so backend wildcard routes match
+      const encodedPath = encodeURI(cleanPath);
+      const response = await apiClient.get(`/thumbnail/${size}/${encodedPath}`, {
+        responseType: 'blob',
+      });
+      return URL.createObjectURL(response.data);
+    },
+    enabled: !!path,
+    staleTime: Infinity, // Thumbnails rarely change
+  });
+};
+
+export const useSearch = (query: string) => {
+  return useQuery({
+    queryKey: ['search', query],
+    queryFn: async () => {
+      if (!query) return [];
+      const response = await apiClient.get<FileInfo[]>(`/search?q=${encodeURIComponent(query)}`);
+      return response.data;
+    },
+    enabled: !!query,
+  });
+};
+
+export const useCreateShare = () => {
+  return useMutation({
+    mutationFn: async (data: { file_path: string; password?: string; expires?: number }) => {
+      const cleanPath = data.file_path.startsWith('/') ? data.file_path.slice(1) : data.file_path;
+      const response = await apiClient.post('/share', { ...data, file_path: cleanPath });
+      return response.data;
+    },
+  });
+};
+
+// Media Hooks
+export const useMediaTimeline = (groupBy: 'day' | 'month' | 'year' = 'day') => {
+  return useQuery({
+    queryKey: ['media', 'timeline', groupBy],
+    queryFn: async () => {
+      const response = await apiClient.get(`/media/timeline?group_by=${groupBy}`);
+      return response.data;
+    },
+  });
+};
+
+// AI Hooks
+export const useSearchAiTags = (query: string, minConfidence?: number, limit?: number) => {
+  return useQuery({
+    queryKey: ['search', 'ai-tags', query, minConfidence, limit],
+    queryFn: async () => {
+      if (!query) return [];
+      const params = new URLSearchParams();
+      params.append('q', query);
+      if (minConfidence) params.append('min_confidence', minConfidence.toString());
+      if (limit) params.append('limit', limit.toString());
+      
+      const response = await apiClient.get(`/search/ai-tags?${params.toString()}`);
+      return response.data;
+    },
+    enabled: !!query,
+  });
+};
+
+export const useAiTagsList = () => {
+  return useQuery({
+    queryKey: ['ai-tags', 'list'],
+    queryFn: async () => {
+      const response = await apiClient.get('/search/ai-tags/list');
+      return response.data;
+    },
+  });
+};
+
+export const useAiAnalyze = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (path: string) => {
+      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+      const response = await apiClient.post('/ai/analyze', { path: cleanPath });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['files'] });
+    },
+  });
+};
+
+// System Hooks
+export const useSystemStatus = () => {
+  return useQuery({
+    queryKey: ['system', 'status'],
+    queryFn: async () => {
+      const response = await apiClient.get('/system/status');
+      return response.data;
+    },
+    refetchInterval: 5000, // Refresh every 5 seconds
+  });
+};
+
+export const useTasks = () => {
+  return useQuery({
+    queryKey: ['tasks'],
+    queryFn: async () => {
+      const response = await apiClient.get('/tasks');
+      return response.data;
+    },
+    refetchInterval: 3000,
+  });
+};
+
+// Docker Hooks
+export const useDockerStatus = () => {
+  return useQuery({
+    queryKey: ['docker', 'status'],
+    queryFn: async () => {
+      const response = await apiClient.get('/docker/status');
+      return response.data;
+    },
+  });
+};
+
+export const useDockerContainers = (all: boolean = false) => {
+  return useQuery({
+    queryKey: ['docker', 'containers', all],
+    queryFn: async () => {
+      const response = await apiClient.get(`/docker/containers?all=${all}`);
+      return response.data;
+    },
+  });
+};
+
+export const useDockerContainerStats = (id: string) => {
+  return useQuery({
+    queryKey: ['docker', 'containers', id, 'stats'],
+    queryFn: async () => {
+      if (!id) return null;
+      const response = await apiClient.get(`/docker/containers/${id}/stats`);
+      return response.data;
+    },
+    enabled: !!id,
+    refetchInterval: 2000,
+  });
+};
+
+export const useDockerAction = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, action }: { id: string; action: 'start' | 'stop' | 'restart' }) => {
+      await apiClient.post(`/docker/containers/${id}/${action}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['docker', 'containers'] });
     },
   });
 };
