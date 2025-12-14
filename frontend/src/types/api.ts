@@ -91,6 +91,7 @@ export interface InitUploadRequest {
 
 export interface InitUploadResponse {
   upload_id: string;
+  uploaded_size?: number;
 }
 
 export interface UploadSession {

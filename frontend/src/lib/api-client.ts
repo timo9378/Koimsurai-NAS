@@ -3,6 +3,7 @@ import axios from 'axios';
 export const apiClient = axios.create({
   baseURL: '/api',
   withCredentials: true,
+  timeout: 0, // Disable timeout for large file uploads
   headers: {
     'Content-Type': 'application/json',
   },
@@ -17,7 +18,7 @@ apiClient.interceptors.response.use(
         // Redirect to login page
         // In a real app, you might want to use a more sophisticated way to handle this,
         // like a global event or a specific hook, but window.location is robust for 401s.
-        // window.location.href = '/login';
+        window.location.href = '/login';
         console.warn('Unauthorized access, redirecting to login...');
       }
     }

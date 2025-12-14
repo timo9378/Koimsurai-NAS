@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import { FileInfo, FileVersion, TagRequest, BatchOperationRequest, InitUploadRequest, InitUploadResponse } from '@/types/api';
+import { FileInfo, FileVersion, TagRequest, BatchOperationRequest, InitUploadRequest, InitUploadResponse, UploadSession } from '@/types/api';
 
 interface UseFilesParams {
   path: string;
@@ -37,7 +37,7 @@ export const useFileVersions = (path: string) => {
     queryFn: async () => {
       if (!path) return [];
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      const response = await apiClient.get<FileVersion[]>(`/files/${encodeURIComponent(cleanPath)}/versions`);
+      const response = await apiClient.get<FileVersion[]>(`/versions/file/${encodeURIComponent(cleanPath)}`);
       return response.data;
     },
     enabled: !!path,
@@ -58,14 +58,8 @@ export const useUpload = () => {
         ? '/upload'
         : `/upload/${encodeURIComponent(cleanPath)}`;
 
-      // Let axios set the Content-Type with boundary automatically
-      // We explicitly set Content-Type to undefined to override the default application/json
-      // and let the browser generate the correct multipart/form-data header with boundary
-      const response = await apiClient.post(endpoint, formData, {
-        headers: {
-          'Content-Type': undefined,
-        } as any,
-      });
+      // Use postForm to automatically handle multipart/form-data headers and boundaries
+      const response = await apiClient.postForm(endpoint, formData);
       return response.data;
     },
     onSuccess: (_, variables) => {
@@ -77,8 +71,19 @@ export const useUpload = () => {
 export const useInitUpload = () => {
   return useMutation({
     mutationFn: async (data: InitUploadRequest) => {
-      const response = await apiClient.post<InitUploadResponse>('/upload/init', data);
-      return response.data;
+      try {
+        const response = await apiClient.post<InitUploadResponse>('/upload/init', data);
+        return response.data;
+      } catch (error: any) {
+        // If 409 Conflict, check if we can resume an existing session
+        // The backend should return upload_id AND uploaded_size in the 409 response body for resumption
+        if (error.response?.status === 409 && error.response?.data?.upload_id) {
+          console.warn('Upload session exists, resuming...', error.response.data);
+          return error.response.data as InitUploadResponse;
+        }
+        // If 409 but no upload_id, it means file exists (Priority 2) -> Throw to let UI handle conflict
+        throw error;
+      }
     },
   });
 };
@@ -91,6 +96,19 @@ export const useUploadChunk = () => {
       });
       return response.data;
     },
+  });
+};
+
+export const useUploadSession = (id: string) => {
+  return useQuery({
+    queryKey: ['upload', 'session', id],
+    queryFn: async () => {
+      if (!id) return null;
+      const response = await apiClient.get<UploadSession>(`/upload/session/${id}`);
+      return response.data;
+    },
+    enabled: !!id,
+    retry: false,
   });
 };
 
@@ -135,6 +153,9 @@ export const useDelete = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
+      // After deleting a file (moved to trash), refresh the trash list so
+      // components using `useTrash` get updated data.
+      queryClient.invalidateQueries({ queryKey: ['trash'] });
     },
   });
 };
@@ -184,7 +205,7 @@ export const useAddTag = () => {
   return useMutation({
     mutationFn: async ({ path, tag }: { path: string; tag: TagRequest }) => {
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      await apiClient.post(`/files/${encodeURIComponent(cleanPath)}/tags`, tag);
+      await apiClient.post(`/tags/add/${encodeURIComponent(cleanPath)}`, tag);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
@@ -198,7 +219,7 @@ export const useRemoveTag = () => {
   return useMutation({
     mutationFn: async ({ path, tagName }: { path: string; tagName: string }) => {
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      await apiClient.delete(`/files/${encodeURIComponent(cleanPath)}/tags/${encodeURIComponent(tagName)}`);
+      await apiClient.delete(`/tags/remove/${encodeURIComponent(tagName)}/${encodeURIComponent(cleanPath)}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
@@ -212,7 +233,7 @@ export const useToggleStar = () => {
   return useMutation({
     mutationFn: async (path: string) => {
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      await apiClient.post(`/files/${encodeURIComponent(cleanPath)}/star`);
+      await apiClient.post(`/star/file/${encodeURIComponent(cleanPath)}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
@@ -226,8 +247,11 @@ export const useRestoreVersion = () => {
 
   return useMutation({
     mutationFn: async ({ path, versionId }: { path: string; versionId: string }) => {
-      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      await apiClient.post(`/files/${encodeURIComponent(cleanPath)}/restore/${versionId}`);
+      // const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+      // Note: The backend route seems to only require versionId: /versions/restore/{id}
+      // If path is needed for invalidation, we keep it in args but not in URL if not required.
+      // Based on instructions: /api/versions/restore/${id}
+      await apiClient.post(`/versions/restore/${versionId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });

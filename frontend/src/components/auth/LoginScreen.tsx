@@ -60,8 +60,8 @@ export function LoginScreen() {
         return
       }
       
-      // Reload page to trigger auth check
-      window.location.reload()
+      // Redirect to home page
+      window.location.href = '/';
     } catch (err: unknown) {
       console.error("Auth error:", err)
       if (err && typeof err === 'object' && 'response' in err) {

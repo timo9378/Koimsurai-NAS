@@ -24,7 +24,7 @@ import {
   useContainerLogs,
   ContainerInfo
 } from '@/features/docker/api/useDocker';
-import { TerminalView } from './TerminalView';
+import dynamic from 'next/dynamic';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +37,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+const TerminalView = dynamic(() => import('./TerminalView').then(mod => mod.TerminalView), {
+  ssr: false,
+  loading: () => <div className="h-full w-full bg-[#1e1e1e] animate-pulse" />
+});
 
 const ContainerCard = ({ container }: { container: ContainerInfo }) => {
   const { start, stop, restart, remove } = useContainerActions();

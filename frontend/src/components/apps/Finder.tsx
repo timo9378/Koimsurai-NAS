@@ -27,9 +27,12 @@ import {
   Share2,
   History,
   Tags,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { apiClient } from '@/lib/api-client';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   useFiles,
   useDelete,
@@ -42,12 +45,15 @@ import {
   useEmptyTrash,
   useFavorites,
   useUpload,
+  useInitUpload,
+  useUploadChunk,
   useDownload,
   useCreateShare,
   useFileVersions,
-  useThumbnail
+  useThumbnail,
+  useUploadSession
 } from '@/features/files/api/useFiles';
-import { FileInfo } from '@/types/api';
+import { FileInfo, UploadSession } from '@/types/api';
 import { FilePreview } from './FilePreview';
 import {
   ContextMenu,
@@ -59,6 +65,15 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 type ViewMode = 'grid' | 'list';
 
@@ -137,6 +152,14 @@ const SmallFileIcon = ({ file }: { file: FileInfo }) => {
   return <File className="w-4 h-4 text-gray-500" />;
 };
 
+interface UploadTask {
+  file: File;
+  progress: number;
+  status: 'uploading' | 'completed' | 'error';
+  uploadId?: string;
+  error?: string;
+}
+
 export const Finder = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [currentPath, setCurrentPath] = useState('/');
@@ -148,8 +171,11 @@ export const Finder = () => {
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [previewFile, setPreviewFile] = useState<FileInfo | null>(null);
+  const [uploadTasks, setUploadTasks] = useState<Record<string, UploadTask>>({});
+  const [conflictFile, setConflictFile] = useState<{ file: File, taskId: string } | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const renameInputRef = React.useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
 
   const { data: files, isLoading } = useFiles({ path: currentPath });
   const { data: trashFiles, isLoading: isTrashLoading } = useTrash();
@@ -161,6 +187,8 @@ export const Finder = () => {
   const restoreFromTrash = useRestoreFromTrash();
   const emptyTrash = useEmptyTrash();
   const uploadFile = useUpload();
+  const initUpload = useInitUpload();
+  const uploadChunk = useUploadChunk();
   const downloadFile = useDownload();
   const createShare = useCreateShare();
 
@@ -181,15 +209,19 @@ export const Finder = () => {
   // Quick Look (Spacebar)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && selectedFiles.size === 1 && !renamingFile) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (previewFile) {
-          setPreviewFile(null);
-        } else {
+      if (e.code === 'Space') {
+        // 如果有選中檔案，且沒有正在預覽
+        if (selectedFiles.size === 1 && !previewFile && !renamingFile) {
+          e.preventDefault();
+          e.stopPropagation();
+          // 找出被選中的那個檔案物件
           const fileName = Array.from(selectedFiles)[0];
           const file = currentFiles?.find(f => f.name === fileName);
           if (file) setPreviewFile(file);
+        } else if (previewFile) {
+          e.preventDefault();
+          e.stopPropagation();
+          setPreviewFile(null); // 再次按空白鍵關閉
         }
       }
       if (e.code === 'Escape' && previewFile) {
@@ -339,14 +371,163 @@ export const Finder = () => {
 
   const handleUploadFiles = async (files: File[]) => {
     for (const file of files) {
+      const taskId = `${file.name}-${Date.now()}`;
+      setUploadTasks(prev => ({
+        ...prev,
+        [taskId]: { file, progress: 0, status: 'uploading' }
+      }));
+
       try {
-        await uploadFile.mutateAsync({
-          file,
-          path: currentPath
-        });
-      } catch (error) {
+        // Use chunked upload for files larger than 10MB
+        if (file.size > 10 * 1024 * 1024) {
+          await processChunkedUpload(taskId, file);
+        } else {
+          await uploadFile.mutateAsync({
+            file,
+            path: currentPath
+          });
+          setUploadTasks(prev => ({
+            ...prev,
+            [taskId]: { ...prev[taskId], progress: 100, status: 'completed' }
+          }));
+          // Remove completed task after 3 seconds
+          setTimeout(() => {
+            setUploadTasks(prev => {
+              const newState = { ...prev };
+              delete newState[taskId];
+              return newState;
+            });
+          }, 3000);
+        }
+      } catch (error: any) {
         console.error(`Failed to upload ${file.name}:`, error);
+        setUploadTasks(prev => ({
+          ...prev,
+          [taskId]: { ...prev[taskId], status: 'error', error: error.message || 'Upload failed' }
+        }));
       }
+    }
+  };
+
+  const processChunkedUpload = async (taskId: string, file: File, resumeUploadId?: string, startOffset: number = 0) => {
+    const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
+    let upload_id = resumeUploadId;
+
+    try {
+      if (!upload_id) {
+        try {
+          // Initialize upload
+          const initResult = await initUpload.mutateAsync({
+            file_path: currentPath === '/' ? '' : currentPath.startsWith('/') ? currentPath.slice(1) : currentPath,
+            file_name: file.name,
+            total_size: file.size
+          });
+          
+          // Check if we got a resumed session (Priority 1)
+          if (initResult.uploaded_size !== undefined) {
+             console.log(`Resuming upload for ${file.name} from ${initResult.uploaded_size}`);
+             upload_id = initResult.upload_id;
+             startOffset = initResult.uploaded_size;
+          } else {
+             // New session (Priority 3)
+             upload_id = initResult.upload_id;
+          }
+
+          // Update task with upload_id for potential resume
+          setUploadTasks(prev => ({
+            ...prev,
+            [taskId]: { ...prev[taskId], uploadId: upload_id }
+          }));
+
+        } catch (error: any) {
+          // Check for 409 Conflict (Priority 2 - File Exists)
+          if (error.response?.status === 409 && !error.response?.data?.upload_id) {
+             setConflictFile({ file, taskId });
+             // Pause the task UI
+             setUploadTasks(prev => ({
+               ...prev,
+               [taskId]: { ...prev[taskId], status: 'error', error: 'File exists' }
+             }));
+             return;
+          }
+          throw error;
+        }
+      }
+
+      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+      const startChunkIndex = Math.floor(startOffset / CHUNK_SIZE);
+
+      // Upload chunks
+      for (let i = startChunkIndex; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, file.size);
+        const chunk = file.slice(start, end);
+        
+        await uploadChunk.mutateAsync({
+          sessionId: upload_id!,
+          chunk
+        });
+
+        // Update progress
+        const progress = Math.round((end / file.size) * 100);
+        setUploadTasks(prev => ({
+          ...prev,
+          [taskId]: { ...prev[taskId], progress }
+        }));
+      }
+
+      // Invalidate files query to refresh the list
+      await queryClient.invalidateQueries({ queryKey: ['files'] });
+
+      setUploadTasks(prev => ({
+        ...prev,
+        [taskId]: { ...prev[taskId], status: 'completed' }
+      }));
+
+      // Remove completed task after 3 seconds
+      setTimeout(() => {
+        setUploadTasks(prev => {
+          const newState = { ...prev };
+          delete newState[taskId];
+          return newState;
+        });
+      }, 3000);
+
+    } catch (error: any) {
+      console.error(`Chunk upload failed for ${file.name}:`, error);
+      setUploadTasks(prev => ({
+        ...prev,
+        [taskId]: {
+          ...prev[taskId],
+          status: 'error',
+          error: error.message || 'Upload interrupted',
+          uploadId: upload_id // Ensure uploadId is saved for resume
+        }
+      }));
+    }
+  };
+
+  const handleResumeUpload = async (taskId: string) => {
+    const task = uploadTasks[taskId];
+    if (!task || !task.uploadId) return;
+
+    setUploadTasks(prev => ({
+      ...prev,
+      [taskId]: { ...prev[taskId], status: 'uploading', error: undefined }
+    }));
+
+    try {
+      // Get current session status to find offset
+      const response = await apiClient.get<UploadSession>(`/upload/session/${task.uploadId}`);
+      const uploadedSize = response.data.uploaded_size;
+      
+      await processChunkedUpload(taskId, task.file, task.uploadId, uploadedSize);
+    } catch (error: any) {
+      console.error('Failed to resume upload:', error);
+      setUploadTasks(prev => ({
+        ...prev,
+        [taskId]: { ...prev[taskId], status: 'error', error: 'Failed to resume upload' }
+      }));
     }
   };
 
@@ -416,6 +597,54 @@ export const Finder = () => {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 bg-white/40 dark:bg-black/40 relative">
+        {/* Conflict Dialog */}
+        <Dialog open={!!conflictFile} onOpenChange={(open) => !open && setConflictFile(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>File Conflict</DialogTitle>
+              <DialogDescription>
+                A file named "{conflictFile?.file.name}" already exists in this location.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" onClick={() => {
+                if (conflictFile) {
+                  // Cancel upload
+                  setUploadTasks(prev => {
+                    const newState = { ...prev };
+                    delete newState[conflictFile.taskId];
+                    return newState;
+                  });
+                  setConflictFile(null);
+                }
+              }}>
+                Cancel
+              </Button>
+              <Button onClick={() => {
+                // TODO: Implement Rename logic if needed, for now we just overwrite (which requires backend support or delete+upload)
+                // Since the backend returns 409 for existing file, we might need to delete it first or use a force flag if supported.
+                // For this implementation, we will alert user that overwrite is not yet supported or implement delete-then-upload.
+                
+                // Assuming we want to overwrite:
+                if (conflictFile) {
+                   const path = currentPath === '/' ? `/${conflictFile.file.name}` : `${currentPath}/${conflictFile.file.name}`;
+                   deleteFile.mutateAsync(path).then(() => {
+                      // Retry upload after deletion
+                      setUploadTasks(prev => ({
+                        ...prev,
+                        [conflictFile.taskId]: { ...prev[conflictFile.taskId], status: 'uploading', error: undefined }
+                      }));
+                      processChunkedUpload(conflictFile.taskId, conflictFile.file);
+                      setConflictFile(null);
+                   });
+                }
+              }}>
+                Overwrite
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Quick Look Overlay */}
         {previewFile && (
           <FilePreview file={previewFile} onClose={() => setPreviewFile(null)} />
@@ -725,14 +954,40 @@ export const Finder = () => {
         </div>
         
         {/* Status Bar */}
-        <div className="h-6 flex items-center px-4 border-t border-white/10 bg-white/40 dark:bg-black/40 text-xs text-gray-500 backdrop-blur-md">
-          {uploadFile.isPending ? (
-            <span className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-              Uploading...
-            </span>
+        <div className="h-auto min-h-[24px] flex flex-col justify-center px-4 py-1 border-t border-white/10 bg-white/40 dark:bg-black/40 text-xs text-gray-500 backdrop-blur-md">
+          {Object.entries(uploadTasks).length > 0 ? (
+            <div className="flex flex-col gap-2 w-full py-1">
+              {Object.entries(uploadTasks).map(([taskId, task]) => (
+                <div key={taskId} className="flex items-center gap-2 w-full">
+                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                  <span className="truncate max-w-[150px]">{task.file.name}</span>
+                  <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className={cn(
+                        "h-full transition-all duration-300",
+                        task.status === 'error' ? "bg-red-500" : "bg-blue-500"
+                      )}
+                      style={{ width: `${task.progress}%` }}
+                    />
+                  </div>
+                  <span className="w-10 text-right">{task.progress}%</span>
+                  {task.status === 'error' && task.uploadId && (
+                    <button
+                      onClick={() => handleResumeUpload(taskId)}
+                      className="p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded text-blue-600 dark:text-blue-400"
+                      title="Resume Upload"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                    </button>
+                  )}
+                  {task.status === 'error' && (
+                    <span className="text-red-500 text-[10px]">{task.error}</span>
+                  )}
+                </div>
+              ))}
+            </div>
           ) : (
-            currentFiles ? `${currentFiles.length} items` : 'Loading...'
+            <span>{currentFiles ? `${currentFiles.length} items` : 'Loading...'}</span>
           )}
         </div>
       </div>
