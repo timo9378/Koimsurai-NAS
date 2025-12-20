@@ -3,6 +3,7 @@
 import React from 'react';
 import { TopBar } from './TopBar';
 import { WindowContainer } from './WindowContainer';
+import { UploadStatus } from './UploadStatus';
 
 interface DesktopLayoutProps {
   children?: React.ReactNode;
@@ -20,6 +21,7 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
       <main className="relative w-full h-full pt-8 pb-20">
         <WindowContainer />
         {children}
+        <UploadStatus />
       </main>
     </div>
   );

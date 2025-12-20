@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type AppType = 'finder' | 'launchpad' | 'photos' | 'docker' | 'settings' | 'trash' | 'calculator' | 'terminal' | 'dashboard';
+export type AppType = 'finder' | 'launchpad' | 'photos' | 'docker' | 'settings' | 'trash' | 'calculator' | 'terminal' | 'dashboard' | 'preview';
 
 export interface WindowState {
   id: string;
@@ -12,6 +12,7 @@ export interface WindowState {
   zIndex: number;
   position: { x: number; y: number };
   size: { width: number; height: number };
+  props?: any;
 }
 
 interface WindowStore {
@@ -19,7 +20,7 @@ interface WindowStore {
   activeWindowId: string | null;
   nextZIndex: number;
 
-  openWindow: (appType: AppType, title?: string) => void;
+  openWindow: (appType: AppType, title?: string, props?: any) => void;
   closeWindow: (id: string) => void;
   minimizeWindow: (id: string) => void;
   maximizeWindow: (id: string) => void;
@@ -34,7 +35,7 @@ export const useWindowStore = create<WindowStore>((set, get) => ({
   activeWindowId: null,
   nextZIndex: 100,
 
-  openWindow: (appType, title) => {
+  openWindow: (appType, title, props) => {
     const { windows, nextZIndex } = get();
     
     const id = crypto.randomUUID();
@@ -50,6 +51,7 @@ export const useWindowStore = create<WindowStore>((set, get) => ({
       zIndex: nextZIndex,
       position: { x: 100 + windows.length * 20, y: 100 + windows.length * 20 },
       size: { width: 800, height: 600 },
+      props,
     };
 
     set({

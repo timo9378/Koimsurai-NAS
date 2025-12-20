@@ -9,8 +9,9 @@ import { Finder } from '@/components/apps/Finder';
 import { Dashboard } from '@/components/apps/Dashboard';
 import { DockerManager } from '@/components/apps/DockerManager';
 import { Photos } from '@/components/apps/Photos';
+import { FilePreview } from '@/components/apps/FilePreview';
 
-const WindowContent = ({ appType }: { appType: string }) => {
+const WindowContent = ({ appType, props }: { appType: string, props?: any }) => {
   switch (appType) {
     case 'finder':
       return <Finder />;
@@ -20,6 +21,8 @@ const WindowContent = ({ appType }: { appType: string }) => {
       return <DockerManager />;
     case 'photos':
       return <Photos />;
+    case 'preview':
+      return <FilePreview {...props} />;
     default:
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -234,7 +237,7 @@ const Window = ({ window }: { window: WindowState }) => {
 
       {/* Window Content */}
       <div className="flex-1 overflow-hidden relative z-0">
-        <WindowContent appType={window.appType} />
+        <WindowContent appType={window.appType} props={window.props} />
       </div>
     </motion.div>
   );

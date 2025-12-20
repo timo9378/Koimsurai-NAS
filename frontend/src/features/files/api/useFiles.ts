@@ -143,6 +143,27 @@ export const useRename = () => {
   });
 };
 
+export const useCreateFolder = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ path, name }: { path: string; name: string }) => {
+      const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+      const endpoint = cleanPath === ''
+        ? '/files/mkdir'
+        : `/files/mkdir/${encodeURIComponent(cleanPath)}`;
+      
+      await apiClient.post(endpoint, { name });
+    },
+    onSuccess: (_, variables) => {
+      // Invalidate the directory where the folder was created
+      const cleanPath = variables.path.startsWith('/') ? variables.path : `/${variables.path}`;
+      queryClient.invalidateQueries({ queryKey: ['files'] });
+      queryClient.invalidateQueries({ queryKey: ['files', cleanPath] });
+    },
+  });
+};
+
 export const useDelete = () => {
   const queryClient = useQueryClient();
 

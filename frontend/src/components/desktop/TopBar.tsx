@@ -18,9 +18,12 @@ import {
   User,
   Loader2,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTheme } from 'next-themes';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -232,6 +235,7 @@ export const TopBar = () => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const logoutMutation = useLogout();
   const { data: systemStatus } = useSystemStatus();
+  const { theme, setTheme } = useTheme();
 
   const handleLogout = async () => {
     try {
@@ -318,6 +322,13 @@ export const TopBar = () => {
             <span className="text-blue-400">↑</span>
             <span>5.2 MB/s</span>
           </div>
+        </div>
+
+        <div
+          className="hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer transition-colors"
+          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+        >
+          {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
         </div>
 
         <div className="flex items-center gap-2 hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer transition-colors">
