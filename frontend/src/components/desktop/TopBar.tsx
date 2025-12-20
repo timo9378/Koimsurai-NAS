@@ -45,7 +45,8 @@ import { SpotlightSearch } from './SpotlightSearch';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { Job } from '@/types/api';
-import { Progress } from "@/components/ui/progress" // Assuming this exists or I'll use HTML progress
+import { Progress } from "@/components/ui/progress"
+import { useWindowStore } from '@/store/window-store';
 
 const TaskManager = () => {
   const { data: tasks } = useQuery({
@@ -230,12 +231,68 @@ const NotificationCenter = () => {
   );
 };
 
+// Menu items for different app types
+const getMenuItemsForApp = (appType: string | null) => {
+  switch (appType) {
+    case 'finder':
+      return {
+        appName: 'Finder',
+        menus: [
+          { label: 'File', items: ['New Folder', 'New Window', 'Close Window'] },
+          { label: 'Edit', items: ['Cut', 'Copy', 'Paste', 'Select All'] },
+          { label: 'View', items: ['as Icons', 'as List', 'as Columns', 'Show Preview'] },
+          { label: 'Go', items: ['Back', 'Forward', 'Enclosing Folder', 'Home', 'Desktop'] },
+        ]
+      };
+    case 'photos':
+      return {
+        appName: 'Photos',
+        menus: [
+          { label: 'File', items: ['Import', 'Export', 'Share'] },
+          { label: 'Edit', items: ['Rotate', 'Crop', 'Adjust Color'] },
+          { label: 'View', items: ['Show Sidebar', 'Zoom In', 'Zoom Out'] },
+        ]
+      };
+    case 'terminal':
+      return {
+        appName: 'Terminal',
+        menus: [
+          { label: 'Shell', items: ['New Window', 'New Tab', 'Close Tab'] },
+          { label: 'Edit', items: ['Copy', 'Paste', 'Select All', 'Clear'] },
+          { label: 'View', items: ['Increase Font Size', 'Decrease Font Size'] },
+        ]
+      };
+    case 'docker':
+      return {
+        appName: 'Docker Manager',
+        menus: [
+          { label: 'File', items: ['Refresh', 'Settings'] },
+          { label: 'Container', items: ['Start', 'Stop', 'Restart', 'Remove'] },
+          { label: 'View', items: ['Show Logs', 'Show Stats'] },
+        ]
+      };
+    default:
+      return {
+        appName: 'Desktop',
+        menus: [
+          { label: 'File', items: ['New Folder', 'Get Info'] },
+          { label: 'Edit', items: ['Undo', 'Redo'] },
+          { label: 'View', items: ['Clean Up', 'Sort By'] },
+        ]
+      };
+  }
+};
+
 export const TopBar = () => {
   const [time, setTime] = useState<string>('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const logoutMutation = useLogout();
   const { data: systemStatus } = useSystemStatus();
   const { theme, setTheme } = useTheme();
+  const { windows, activeWindowId } = useWindowStore();
+
+  const activeWindow = windows.find(w => w.id === activeWindowId);
+  const menuConfig = getMenuItemsForApp(activeWindow?.appType || null);
 
   const handleLogout = async () => {
     try {
@@ -302,13 +359,29 @@ export const TopBar = () => {
           </DropdownMenuContent>
         </DropdownMenu>
         
-        <span className="hidden sm:inline hover:bg-white/10 px-2 py-0.5 rounded cursor-default transition-colors font-bold">Finder</span>
-        <span className="hidden sm:inline hover:bg-white/10 px-2 py-0.5 rounded cursor-default transition-colors">File</span>
-        <span className="hidden sm:inline hover:bg-white/10 px-2 py-0.5 rounded cursor-default transition-colors">Edit</span>
-        <span className="hidden sm:inline hover:bg-white/10 px-2 py-0.5 rounded cursor-default transition-colors">View</span>
-        <span className="hidden sm:inline hover:bg-white/10 px-2 py-0.5 rounded cursor-default transition-colors">Go</span>
-        <span className="hidden sm:inline hover:bg-white/10 px-2 py-0.5 rounded cursor-default transition-colors">Window</span>
-        <span className="hidden sm:inline hover:bg-white/10 px-2 py-0.5 rounded cursor-default transition-colors">Help</span>
+        <span className="hidden sm:inline hover:bg-white/10 px-2 py-0.5 rounded cursor-default transition-colors font-bold">
+          {menuConfig.appName}
+        </span>
+        
+        {menuConfig.menus.map((menu, index) => (
+          <DropdownMenu key={index}>
+            <DropdownMenuTrigger className="outline-none">
+              <span className="hidden sm:inline hover:bg-white/10 px-2 py-0.5 rounded cursor-default transition-colors">
+                {menu.label}
+              </span>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="bg-black/80 backdrop-blur-xl border-white/10 text-white">
+              {menu.items.map((item, itemIndex) => (
+                <DropdownMenuItem
+                  key={itemIndex}
+                  className="focus:bg-white/10 focus:text-white cursor-default"
+                >
+                  {item}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ))}
       </div>
 
       <div className="flex items-center gap-2">

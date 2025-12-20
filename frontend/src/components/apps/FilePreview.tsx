@@ -7,9 +7,11 @@ import Editor from '@monaco-editor/react';
 import { apiClient } from '@/lib/api-client';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
+import { useWindowStore } from '@/store/window-store';
 
 interface FilePreviewProps {
   file: FileInfo;
+  windowId?: string;
   onClose?: () => void; // Optional now as it's handled by window manager
 }
 
@@ -21,7 +23,8 @@ const formatBytes = (bytes: number) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 };
 
-export const FilePreview = ({ file }: FilePreviewProps) => {
+export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
+  const { updateWindowSize } = useWindowStore();
   const isImage = file.mime_type?.startsWith('image/');
   const isVideo = file.mime_type?.startsWith('video/');
   const isText = file.mime_type?.startsWith('text/') || 
@@ -62,9 +65,9 @@ export const FilePreview = ({ file }: FilePreviewProps) => {
   });
 
   return (
-    <div className="flex flex-col h-full w-full bg-gray-100 dark:bg-[#1e1e1e]">
+    <div className="flex flex-col h-full w-full bg-transparent">
       {/* Toolbar */}
-      <div className="h-12 flex items-center justify-between px-4 border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 shrink-0">
+      <div className="h-12 flex items-center justify-between px-4 border-b border-gray-200 dark:border-white/10 bg-white/50 dark:bg-white/5 shrink-0 backdrop-blur-sm">
         <div className="flex flex-col overflow-hidden">
           <span className="font-medium truncate text-sm">{file.name}</span>
           <span className="text-xs text-muted-foreground">{formatBytes(file.size)}</span>
@@ -88,6 +91,39 @@ export const FilePreview = ({ file }: FilePreviewProps) => {
             src={fileUrl}
             alt={file.name}
             className="max-w-full max-h-full object-contain shadow-lg rounded-lg"
+            onLoad={(e) => {
+              if (windowId) {
+                const img = e.currentTarget;
+                const naturalWidth = img.naturalWidth;
+                const naturalHeight = img.naturalHeight;
+                
+                // Calculate optimal window size
+                // Max width/height: 80% of screen or reasonable limit
+                // Adjusted for new maximized window constraints (padding)
+                const maxWidth = window.innerWidth * 0.85;
+                const maxHeight = window.innerHeight * 0.85;
+                
+                let width = naturalWidth;
+                let height = naturalHeight;
+                
+                // Add padding for toolbar (48px) and window borders/padding (32px)
+                const chromeHeight = 48 + 32;
+                const chromeWidth = 32;
+                
+                // Scale down if too large
+                if (width > maxWidth || height > maxHeight) {
+                  const ratio = Math.min(maxWidth / width, (maxHeight - chromeHeight) / height);
+                  width *= ratio;
+                  height *= ratio;
+                }
+                
+                // Ensure minimum size
+                width = Math.max(width + chromeWidth, 400);
+                height = Math.max(height + chromeHeight, 300);
+                
+                updateWindowSize(windowId, { width, height });
+              }
+            }}
             onError={(e) => {
               // Fallback or error handling
               console.error('Image load failed', e);

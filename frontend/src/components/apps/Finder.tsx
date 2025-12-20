@@ -62,7 +62,21 @@ export const Finder = () => {
   const queryClient = useQueryClient();
   
   const { tasks: uploadTasks, addTask, updateTask, removeTask } = useUploadStore();
-  const { openWindow } = useWindowStore();
+  const { openWindow, updateWindowAppState, windows } = useWindowStore();
+
+
+  
+  useEffect(() => {
+    const state = useWindowStore.getState();
+    const finderWindow = state.windows.find(w => w.appType === 'finder');
+    
+    if (finderWindow) {
+      // Only update if the path in state is different to avoid loop
+      if (JSON.stringify(finderWindow.appState?.currentPath) !== JSON.stringify(history)) {
+         updateWindowAppState(finderWindow.id, { currentPath: history });
+      }
+    }
+  }, [history, updateWindowAppState]); // Removed 'windows' dependency
 
   const { data: files, isLoading } = useFiles({ path: currentPath });
   const { data: trashFiles, isLoading: isTrashLoading } = useTrash();

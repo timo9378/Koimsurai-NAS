@@ -1,6 +1,8 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export type AppType = 'finder' | 'launchpad' | 'photos' | 'docker' | 'settings' | 'trash' | 'calculator' | 'terminal' | 'dashboard' | 'preview';
+export type DockPosition = 'bottom' | 'left' | 'right';
 
 export interface WindowState {
   id: string;
@@ -13,12 +15,15 @@ export interface WindowState {
   position: { x: number; y: number };
   size: { width: number; height: number };
   props?: any;
+  appState?: any;
 }
 
 interface WindowStore {
   windows: WindowState[];
   activeWindowId: string | null;
   nextZIndex: number;
+  windowHistory: Record<string, { position: { x: number; y: number }; size: { width: number; height: number } }>;
+  dockPosition: DockPosition;
 
   openWindow: (appType: AppType, title?: string, props?: any) => void;
   closeWindow: (id: string) => void;
@@ -28,19 +33,38 @@ interface WindowStore {
   focusWindow: (id: string) => void;
   updateWindowPosition: (id: string, position: { x: number; y: number }) => void;
   updateWindowSize: (id: string, size: { width: number; height: number }) => void;
+  updateWindowAppState: (id: string, state: any) => void;
+  setDockPosition: (position: DockPosition) => void;
 }
 
-export const useWindowStore = create<WindowStore>((set, get) => ({
-  windows: [],
-  activeWindowId: null,
-  nextZIndex: 100,
+export const useWindowStore = create<WindowStore>()(
+  persist(
+    (set, get) => ({
+      windows: [],
+      activeWindowId: null,
+      nextZIndex: 100,
+      windowHistory: {},
+      dockPosition: 'bottom',
 
-  openWindow: (appType, title, props) => {
-    const { windows, nextZIndex } = get();
+      openWindow: (appType, title, props) => {
+    const { windows, nextZIndex, focusWindow, windowHistory } = get();
+
+    if (!props && appType !== 'preview') {
+      const existingWindow = windows.find(w => w.appType === appType);
+      if (existingWindow) {
+        focusWindow(existingWindow.id);
+        return;
+      }
+    }
     
     const id = crypto.randomUUID();
     const defaultTitle = title || appType.charAt(0).toUpperCase() + appType.slice(1);
     
+    // Restore from history if available
+    const history = windowHistory[appType];
+    const position = history ? history.position : { x: 100 + windows.length * 20, y: 100 + windows.length * 20 };
+    const size = history ? history.size : { width: 800, height: 600 };
+
     const newWindow: WindowState = {
       id,
       appType,
@@ -49,8 +73,8 @@ export const useWindowStore = create<WindowStore>((set, get) => ({
       isMinimized: false,
       isMaximized: false,
       zIndex: nextZIndex,
-      position: { x: 100 + windows.length * 20, y: 100 + windows.length * 20 },
-      size: { width: 800, height: 600 },
+      position,
+      size,
       props,
     };
 
@@ -62,6 +86,21 @@ export const useWindowStore = create<WindowStore>((set, get) => ({
   },
 
   closeWindow: (id) => {
+    const { windows } = get();
+    const windowToClose = windows.find(w => w.id === id);
+    
+    if (windowToClose) {
+      set((state) => ({
+        windowHistory: {
+          ...state.windowHistory,
+          [windowToClose.appType]: {
+            position: windowToClose.position,
+            size: windowToClose.size
+          }
+        }
+      }));
+    }
+
     set((state) => ({
       windows: state.windows.filter((w) => w.id !== id),
       activeWindowId: state.activeWindowId === id ? null : state.activeWindowId,
@@ -127,4 +166,25 @@ export const useWindowStore = create<WindowStore>((set, get) => ({
       ),
     }));
   },
-}));
+
+      updateWindowAppState: (id, appState) => {
+        set((state) => ({
+          windows: state.windows.map((w) =>
+            w.id === id ? { ...w, appState: { ...w.appState, ...appState } } : w
+          ),
+        }));
+      },
+
+      setDockPosition: (position) => {
+        set({ dockPosition: position });
+      },
+    }),
+    {
+      name: 'window-storage',
+      partialize: (state) => ({
+        windowHistory: state.windowHistory,
+        dockPosition: state.dockPosition
+      }),
+    }
+  )
+);
