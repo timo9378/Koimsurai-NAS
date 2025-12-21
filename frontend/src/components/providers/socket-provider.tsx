@@ -40,6 +40,11 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     let reconnectTimer: NodeJS.Timeout;
 
     const connect = () => {
+      // Don't connect if we are on the login page
+      if (window.location.pathname.startsWith('/login')) {
+        return;
+      }
+
       ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
@@ -97,7 +102,10 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       };
 
       ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        // Only log error if not on login page (to avoid noise when auth fails)
+        if (!window.location.pathname.startsWith('/login')) {
+           console.error('WebSocket error:', error);
+        }
         ws.close();
       };
     };

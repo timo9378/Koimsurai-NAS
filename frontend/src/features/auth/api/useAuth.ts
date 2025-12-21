@@ -51,3 +51,29 @@ export const useCheckAuth = () => {
     retry: false,
   });
 };
+
+// Simple API helpers as requested
+export const authApi = {
+  login: async (data: LoginRequest) => {
+    const response = await apiClient.post<AuthResponse>('/auth/login', data);
+    return response.data;
+  },
+  
+  logout: async () => {
+    await apiClient.post('/auth/logout');
+  },
+
+  // Wrapper around apiClient which already handles auth headers/cookies and refresh token
+  fetchWithAuth: apiClient,
+
+  // Simple check if we are likely logged in (can be used for initial state)
+  // Note: True verification happens on the server
+  isLoggedIn: async () => {
+    try {
+      await apiClient.get('/system/status');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+};

@@ -29,6 +29,11 @@
 - **終端機 (Terminal)**：整合 xterm.js 的網頁版終端機。
 - **系統設定**：客製化桌面體驗。
 
+### 🔐 認證機制 (Authentication)
+- **HttpOnly Cookie**：使用安全的 HttpOnly Cookie 儲存 Access Token 與 Refresh Token，前端不直接接觸 Token。
+- **自動續期 (Auto Refresh)**：攔截 401 錯誤，自動呼叫 `/api/auth/refresh` 進行 Token 續期並重試請求。
+- **API 封裝**：提供 `login`, `logout`, `fetchWithAuth`, `isLoggedIn` 等簡易 API 介面。
+
 ## 🚀 技術堆疊 (Tech Stack)
 
 - **框架**: [Next.js 16](https://nextjs.org/) (App Router)

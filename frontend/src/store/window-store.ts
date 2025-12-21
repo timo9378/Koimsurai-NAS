@@ -37,8 +37,8 @@ interface WindowStore {
   setDockPosition: (position: DockPosition) => void;
 }
 
-export const useWindowStore = create<WindowStore>()(
-  persist(
+export const useWindowStore = create(
+  persist<WindowStore>(
     (set, get) => ({
       windows: [],
       activeWindowId: null,
