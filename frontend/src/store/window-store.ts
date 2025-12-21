@@ -38,7 +38,7 @@ interface WindowStore {
 }
 
 export const useWindowStore = create(
-  persist<WindowStore>(
+  persist<WindowStore, [], [], Pick<WindowStore, 'windowHistory' | 'dockPosition'>>(
     (set, get) => ({
       windows: [],
       activeWindowId: null,
