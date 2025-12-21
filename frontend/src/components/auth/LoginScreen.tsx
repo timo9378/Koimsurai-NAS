@@ -18,7 +18,7 @@ export function LoginScreen() {
   const [inviteCode, setInviteCode] = useState("")
   const [remember, setRemember] = useState(false)
   const [error, setError] = useState("")
-  const [currentTime, setCurrentTime] = useState(new Date())
+  const [currentTime, setCurrentTime] = useState<Date | null>(null)
 
   const loginMutation = useLogin()
   const registerMutation = useRegister()
@@ -26,6 +26,7 @@ export function LoginScreen() {
   const isLoading = loginMutation.isPending || registerMutation.isPending
 
   useEffect(() => {
+    setCurrentTime(new Date())
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
@@ -95,18 +96,22 @@ export function LoginScreen() {
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
 
       {/* Top Bar - Time & Date */}
-      <div className="relative z-10 w-full p-8 flex flex-col items-center pt-16">
-        <motion.div 
+      <div className="relative z-10 w-full pt-20 flex justify-center">
+        <motion.div
           initial={{ y: -20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="flex flex-col items-center space-y-1"
+          className="w-full flex flex-col items-center justify-center space-y-2 text-center"
         >
-          <h1 className="text-7xl font-thin tracking-tight drop-shadow-lg">
-            {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
-          </h1>
-          <p className="text-xl font-medium text-zinc-200 drop-shadow-md">
-            {currentTime.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}
-          </p>
+          {currentTime && (
+            <>
+              <h1 className="text-7xl font-thin tracking-tight drop-shadow-lg leading-none">
+                {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+              </h1>
+              <p className="text-xl font-medium text-zinc-200 drop-shadow-md">
+                {currentTime.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}
+              </p>
+            </>
+          )}
         </motion.div>
       </div>
 
