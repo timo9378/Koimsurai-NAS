@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+import { Button } from "@/components/ui/button";
+
 interface BreadcrumbsProps {
   path: string;
   onNavigate: (path: string) => void;
@@ -93,21 +95,25 @@ export const Toolbar = ({
           </button>
         </div>
         {isTrashMode ? (
-          <div className="text-sm font-medium text-gray-700 dark:text-gray-200">Trash</div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 px-3 py-1 bg-white/50 dark:bg-black/50 rounded-lg border border-white/20">
+              <Trash2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Trash</span>
+            </div>
+            <button
+              onClick={onEmptyTrash}
+              className="group flex items-center gap-2 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 rounded-lg transition-all duration-200"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-red-600 dark:text-red-400 group-hover:scale-110 transition-transform" />
+              <span className="text-xs font-medium text-red-600 dark:text-red-400">Empty Trash</span>
+            </button>
+          </div>
         ) : (
           <Breadcrumbs path={currentPath} onNavigate={onNavigate} />
         )}
       </div>
 
       <div className="flex items-center gap-3">
-        {isTrashMode && (
-          <button
-            onClick={onEmptyTrash}
-            className="px-3 py-1 text-xs font-medium text-white bg-red-500 rounded hover:bg-red-600 transition-colors"
-          >
-            Empty Trash
-          </button>
-        )}
         {!isTrashMode && (
           <button
             onClick={onUploadClick}

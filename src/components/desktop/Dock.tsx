@@ -184,6 +184,8 @@ const DockItem = ({ mouseX, icon: Icon, label, appType, isOpen, windows, onClick
               className="aspect-square rounded-xl bg-white/10 border border-white/20 backdrop-blur-md flex items-center justify-center cursor-pointer hover:bg-white/20 transition-colors relative z-10"
               onClick={onClick}
               whileTap={{ scale: 0.9 }}
+              data-context-type="dock-icon"
+              data-context-id={appType}
             >
               <Icon className="w-1/2 h-1/2 text-white" />
               {isOpen && (

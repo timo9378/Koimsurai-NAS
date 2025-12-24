@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { SystemStatus, DockerContainer } from '@/types/api';
 
@@ -10,6 +10,14 @@ export const useSystemStatus = () => {
       return response.data;
     },
     refetchInterval: 5000,
+  });
+};
+
+export const useRescan = () => {
+  return useMutation({
+    mutationFn: async () => {
+      await apiClient.post('/system/rescan');
+    },
   });
 };
 

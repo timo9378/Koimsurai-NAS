@@ -14,20 +14,25 @@ export const useFiles = ({ path, sortBy = 'name', order = 'asc', page = 1, limit
   return useQuery({
     queryKey: ['files', path, sortBy, order, page, limit],
     queryFn: async () => {
+      // Clean path but preserve structure for backend wildcard matching
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      const endpoint = cleanPath === ''
+      const endpoint = cleanPath === '' 
         ? '/files'
-        : `/files/${encodeURIComponent(cleanPath)}`;
+        : `/files/${cleanPath}`; // Use path directly, backend handles wildcard routes
       
       const params = new URLSearchParams();
       if (sortBy) params.append('sort_by', sortBy);
       if (order) params.append('order', order);
       if (page) params.append('page', page.toString());
       if (limit) params.append('limit', limit.toString());
+      // Add timestamp to prevent caching
+      params.append('_t', Date.now().toString());
 
       const response = await apiClient.get<FileInfo[]>(`${endpoint}?${params.toString()}`);
       return response.data;
     },
+    staleTime: 0, // Consider data stale immediately to ensure fresh data
+    refetchOnMount: true, // Always refetch when component mounts
   });
 };
 
@@ -37,7 +42,8 @@ export const useFileVersions = (path: string) => {
     queryFn: async () => {
       if (!path) return [];
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      const response = await apiClient.get<FileVersion[]>(`/versions/file/${encodeURIComponent(cleanPath)}`);
+      // Use path directly for backend wildcard routes
+      const response = await apiClient.get<FileVersion[]>(`/versions/file/${cleanPath}?_t=${Date.now()}`);
       return response.data;
     },
     enabled: !!path,
@@ -54,16 +60,30 @@ export const useUpload = () => {
       
       // Remove leading slash if present to ensure correct path handling
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      const endpoint = cleanPath === ''
-        ? '/upload'
-        : `/upload/${encodeURIComponent(cleanPath)}`;
+      
+      // Construct the full path including the filename
+      // If uploading to root (cleanPath is empty), just use filename
+      // Otherwise join directory and filename
+      // const fullPath = cleanPath ? `${cleanPath}/${file.name}` : file.name;
+      
+      // Use path directly for backend wildcard routes
+      // const endpoint = fullPath ? `/upload/${fullPath}` : `/upload`;
+      
+      // FIX: Backend likely expects the directory path, not the file path
+      // Encode path components to handle special characters (e.g. Chinese)
+      const endpoint = cleanPath ? `/upload/${cleanPath.split('/').map(encodeURIComponent).join('/')}` : `/upload`;
 
-      // Use postForm to automatically handle multipart/form-data headers and boundaries
-      const response = await apiClient.postForm(endpoint, formData);
+      // Explicitly set Content-Type to undefined so the browser sets it with the boundary
+      const response = await apiClient.post(endpoint, formData, {
+        headers: {
+          'Content-Type': undefined // This is crucial for multipart/form-data
+        } as any
+      });
       return response.data;
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['files', variables.path] });
+    onSuccess: async (_, variables) => {
+      // Invalidate all files queries to ensure deep/shallow updates are reflected
+      await queryClient.invalidateQueries({ queryKey: ['files'] });
     },
   });
 };
@@ -104,7 +124,7 @@ export const useUploadSession = (id: string) => {
     queryKey: ['upload', 'session', id],
     queryFn: async () => {
       if (!id) return null;
-      const response = await apiClient.get<UploadSession>(`/upload/session/${id}`);
+      const response = await apiClient.get<UploadSession>(`/upload/session/${id}?_t=${Date.now()}`);
       return response.data;
     },
     enabled: !!id,
@@ -121,24 +141,11 @@ export const useRename = () => {
       // Build new_path as the same directory + newName so the backend receives the full target path
       const dir = cleanPath.includes('/') ? cleanPath.substring(0, cleanPath.lastIndexOf('/')) : '';
       const newPath = dir ? `${dir}/${newName}` : newName;
-      await apiClient.put(`/files/${encodeURIComponent(cleanPath)}`, { new_path: newPath });
+      // Use path directly for backend wildcard routes
+      await apiClient.put(`/files/${cleanPath}`, { new_path: newPath });
     },
-    onSuccess: (_, variables) => {
-      // Recompute parent directory from the original path and invalidate both
-      // the general files queries and the specific parent directory so the
-      // UI showing the directory listing will be refetched.
-      try {
-        const originalPath = variables.path as string;
-        const cleanPath = originalPath.startsWith('/') ? originalPath.slice(1) : originalPath;
-        const dir = cleanPath.includes('/') ? cleanPath.substring(0, cleanPath.lastIndexOf('/')) : '';
-        const parentPath = dir ? `/${dir}` : '/';
-
-        queryClient.invalidateQueries({ queryKey: ['files'] });
-        queryClient.invalidateQueries({ queryKey: ['files', parentPath] });
-      } catch (e) {
-        // Fallback: invalidate all files queries
-        queryClient.invalidateQueries({ queryKey: ['files'] });
-      }
+    onSuccess: async (_, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ['files'] });
     },
   });
 };
@@ -148,18 +155,17 @@ export const useCreateFolder = () => {
 
   return useMutation({
     mutationFn: async ({ path, name }: { path: string; name: string }) => {
+      // Backend expects: POST /api/files/folder with body { "path": "parent_path", "folder_name": "name" }
+      // Clean the path - remove leading slash
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      const endpoint = cleanPath === ''
-        ? '/files/mkdir'
-        : `/files/mkdir/${encodeURIComponent(cleanPath)}`;
       
-      await apiClient.post(endpoint, { name });
+      await apiClient.post('/files/folder', { 
+        path: cleanPath,
+        folder_name: name
+      });
     },
-    onSuccess: (_, variables) => {
-      // Invalidate the directory where the folder was created
-      const cleanPath = variables.path.startsWith('/') ? variables.path : `/${variables.path}`;
-      queryClient.invalidateQueries({ queryKey: ['files'] });
-      queryClient.invalidateQueries({ queryKey: ['files', cleanPath] });
+    onSuccess: async (_, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ['files'] });
     },
   });
 };
@@ -169,14 +175,17 @@ export const useDelete = () => {
 
   return useMutation({
     mutationFn: async (path: string) => {
+      // Handle undefined or null path
+      if (!path) {
+        throw new Error('Path is required for deletion');
+      }
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      await apiClient.delete(`/files/${encodeURIComponent(cleanPath)}`);
+      // Use path directly for backend wildcard routes
+      await apiClient.delete(`/files/${cleanPath}`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
-      // After deleting a file (moved to trash), refresh the trash list so
-      // components using `useTrash` get updated data.
-      queryClient.invalidateQueries({ queryKey: ['trash'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['files'] });
+      await queryClient.invalidateQueries({ queryKey: ['trash'] });
     },
   });
 };
@@ -188,8 +197,9 @@ export const useBatchDelete = () => {
     mutationFn: async (paths: string[]) => {
       await apiClient.post('/files/batch/delete', { paths });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['files'] });
+      await queryClient.invalidateQueries({ queryKey: ['trash'] });
     },
   });
 };
@@ -201,8 +211,8 @@ export const useBatchMove = () => {
     mutationFn: async (data: BatchOperationRequest) => {
       await apiClient.post('/files/batch/move', data);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['files'] });
     },
   });
 };
@@ -214,8 +224,8 @@ export const useBatchCopy = () => {
     mutationFn: async (data: BatchOperationRequest) => {
       await apiClient.post('/files/batch/copy', data);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['files'] });
     },
   });
 };
@@ -226,10 +236,11 @@ export const useAddTag = () => {
   return useMutation({
     mutationFn: async ({ path, tag }: { path: string; tag: TagRequest }) => {
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      await apiClient.post(`/tags/add/${encodeURIComponent(cleanPath)}`, tag);
+      // Use path directly for backend wildcard routes
+      await apiClient.post(`/tags/add/${cleanPath}`, tag);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['files'] });
     },
   });
 };
@@ -240,10 +251,11 @@ export const useRemoveTag = () => {
   return useMutation({
     mutationFn: async ({ path, tagName }: { path: string; tagName: string }) => {
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      await apiClient.delete(`/tags/remove/${encodeURIComponent(tagName)}/${encodeURIComponent(cleanPath)}`);
+      // Tag name may need encoding but path should be direct for wildcard routes
+      await apiClient.delete(`/tags/remove/${tagName}/${cleanPath}`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['files'] });
     },
   });
 };
@@ -254,11 +266,12 @@ export const useToggleStar = () => {
   return useMutation({
     mutationFn: async (path: string) => {
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      await apiClient.post(`/star/file/${encodeURIComponent(cleanPath)}`);
+      // Use path directly for backend wildcard routes
+      await apiClient.post(`/star/file/${cleanPath}`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
-      queryClient.invalidateQueries({ queryKey: ['favorites'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['files'] });
+      await queryClient.invalidateQueries({ queryKey: ['favorites'] });
     },
   });
 };
@@ -274,8 +287,8 @@ export const useRestoreVersion = () => {
       // Based on instructions: /api/versions/restore/${id}
       await apiClient.post(`/versions/restore/${versionId}`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['files'] });
     },
   });
 };
@@ -283,7 +296,7 @@ export const useTrash = () => {
   return useQuery({
     queryKey: ['trash'],
     queryFn: async () => {
-      const response = await apiClient.get<FileInfo[]>('/trash');
+      const response = await apiClient.get<FileInfo[]>(`/trash?_t=${Date.now()}`);
       return response.data;
     },
   });
@@ -294,11 +307,12 @@ export const useRestoreFromTrash = () => {
 
   return useMutation({
     mutationFn: async (filename: string) => {
-      await apiClient.post(`/trash/${encodeURIComponent(filename)}`);
+      // Use filename directly for backend wildcard routes
+      await apiClient.post(`/trash/${filename}`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['trash'] });
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['trash'] });
+      await queryClient.invalidateQueries({ queryKey: ['files'] });
     },
   });
 };
@@ -310,8 +324,8 @@ export const useEmptyTrash = () => {
     mutationFn: async () => {
       await apiClient.delete('/trash');
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['trash'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['trash'] });
     },
   });
 };
@@ -320,7 +334,7 @@ export const useFavorites = () => {
   return useQuery({
     queryKey: ['favorites'],
     queryFn: async () => {
-      const response = await apiClient.get<FileInfo[]>('/favorites');
+      const response = await apiClient.get<FileInfo[]>(`/favorites?_t=${Date.now()}`);
       return response.data;
     },
   });
@@ -330,7 +344,8 @@ export const useDownload = () => {
   return useMutation({
     mutationFn: async (path: string) => {
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      const response = await apiClient.get(`/download/${encodeURIComponent(cleanPath)}`, {
+      // Use path directly for backend wildcard routes
+      const response = await apiClient.get(`/download/${cleanPath}`, {
         responseType: 'blob',
       });
       
@@ -354,9 +369,8 @@ export const useThumbnail = (path: string, size: 'small' | 'medium' | 'large' = 
     queryFn: async () => {
       if (!path) return null;
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      // Use encodeURI to preserve '/' characters so backend wildcard routes match
-      const encodedPath = encodeURI(cleanPath);
-      const response = await apiClient.get(`/thumbnail/${size}/${encodedPath}`, {
+      // Backend expects: GET /api/thumbnail/:size/*path
+      const response = await apiClient.get(`/thumbnail/${size}/${cleanPath}`, {
         responseType: 'blob',
       });
       return URL.createObjectURL(response.data);
@@ -371,7 +385,7 @@ export const useSearch = (query: string) => {
     queryKey: ['search', query],
     queryFn: async () => {
       if (!query) return [];
-      const response = await apiClient.get<FileInfo[]>(`/search?q=${encodeURIComponent(query)}`);
+      const response = await apiClient.get<FileInfo[]>(`/search?q=${encodeURIComponent(query)}&_t=${Date.now()}`);
       return response.data;
     },
     enabled: !!query,
@@ -393,7 +407,7 @@ export const useMediaTimeline = (groupBy: 'day' | 'month' | 'year' = 'day') => {
   return useQuery({
     queryKey: ['media', 'timeline', groupBy],
     queryFn: async () => {
-      const response = await apiClient.get(`/media/timeline?group_by=${groupBy}`);
+      const response = await apiClient.get(`/media/timeline?group_by=${groupBy}&_t=${Date.now()}`);
       return response.data;
     },
   });
@@ -409,6 +423,7 @@ export const useSearchAiTags = (query: string, minConfidence?: number, limit?: n
       params.append('q', query);
       if (minConfidence) params.append('min_confidence', minConfidence.toString());
       if (limit) params.append('limit', limit.toString());
+      params.append('_t', Date.now().toString());
       
       const response = await apiClient.get(`/search/ai-tags?${params.toString()}`);
       return response.data;
@@ -421,7 +436,7 @@ export const useAiTagsList = () => {
   return useQuery({
     queryKey: ['ai-tags', 'list'],
     queryFn: async () => {
-      const response = await apiClient.get('/search/ai-tags/list');
+      const response = await apiClient.get(`/search/ai-tags/list?_t=${Date.now()}`);
       return response.data;
     },
   });
@@ -435,8 +450,8 @@ export const useAiAnalyze = () => {
       const response = await apiClient.post('/ai/analyze', { path: cleanPath });
       return response.data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['files'] });
     },
   });
 };

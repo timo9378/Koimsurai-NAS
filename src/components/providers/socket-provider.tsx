@@ -7,7 +7,8 @@ import { DockerStats, JobUpdate, Job } from '@/types/api';
 
 type WebSocketMessage =
   | { type: 'docker_stats'; data: DockerStats }
-  | { type: 'job_update'; data: JobUpdate };
+  | { type: 'job_update'; data: JobUpdate }
+  | { type: 'file_change'; data: { path: string; action: 'created' | 'deleted' | 'modified' | 'renamed' } };
 
 interface SocketContextType {
   socket: WebSocket | null;
@@ -86,6 +87,12 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
                   description: jobUpdate.error || 'An error occurred during the operation.'
                 });
               }
+              break;
+            case 'file_change':
+              // Invalidate all file queries to refresh the file list
+              console.log('File change detected:', message.data);
+              queryClient.invalidateQueries({ queryKey: ['files'] });
+              queryClient.invalidateQueries({ queryKey: ['favorites'] });
               break;
           }
         } catch (error) {

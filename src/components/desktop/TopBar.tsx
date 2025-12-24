@@ -289,7 +289,7 @@ export const TopBar = () => {
   const logoutMutation = useLogout();
   const { data: systemStatus } = useSystemStatus();
   const { theme, setTheme } = useTheme();
-  const { windows, activeWindowId } = useWindowStore();
+  const { windows, activeWindowId, showDesktop, toggleShowDesktop } = useWindowStore();
 
   const activeWindow = windows.find(w => w.id === activeWindowId);
   const menuConfig = getMenuItemsForApp(activeWindow?.appType || null);
@@ -358,6 +358,20 @@ export const TopBar = () => {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        
+        {/* Show Desktop Button */}
+        <button 
+           className={cn(
+             "p-1 hover:bg-white/10 rounded-md transition-colors",
+             showDesktop && "text-blue-400 bg-white/10"
+           )}
+           onClick={toggleShowDesktop}
+           title="Show Desktop"
+        >
+          <div className="w-4 h-4 border-2 border-current rounded-[2px] relative flex items-center justify-center">
+             <div className="w-2 h-0.5 bg-current" />
+          </div>
+        </button>
         
         <span className="hidden sm:inline hover:bg-white/10 px-2 py-0.5 rounded cursor-default transition-colors font-bold">
           {menuConfig.appName}

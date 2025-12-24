@@ -131,16 +131,32 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
             }}
           />
         ) : isVideo ? (
-          <div className="w-full h-full bg-black rounded-lg overflow-hidden shadow-lg flex items-center justify-center">
+          <div className="w-full h-full flex flex-col bg-black rounded-lg overflow-hidden shadow-2xl">
             <video
               src={videoUrl}
               controls
-              autoPlay
               className="w-full h-full"
               controlsList="nodownload"
               crossOrigin="use-credentials"
+              style={{
+                objectFit: 'contain',
+              }}
               onError={(e) => console.error('Video playback error:', e)}
             />
+            {/* Custom overlay for better UX - optional */}
+            <style jsx global>{`
+              video::-webkit-media-controls-panel {
+                background-image: linear-gradient(transparent, rgba(0,0,0,0.7)) !important;
+              }
+              video::-webkit-media-controls-play-button {
+                background-color: rgba(255,255,255,0.9);
+                border-radius: 50%;
+              }
+              video::-webkit-media-controls-timeline {
+                background-color: rgba(255,255,255,0.2);
+                border-radius: 4px;
+              }
+            `}</style>
           </div>
         ) : isText ? (
           isTextLoading ? (

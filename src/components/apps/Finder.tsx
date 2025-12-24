@@ -11,18 +11,14 @@ import {
   useRestoreFromTrash,
   useEmptyTrash,
   useFavorites,
-  useUpload,
-  useInitUpload,
-  useUploadChunk,
   useDownload,
   useCreateShare,
-  useThumbnail,
-  useUploadSession,
   useCreateFolder
 } from '@/features/files/api/useFiles';
-import { FileInfo, UploadSession } from '@/types/api';
+import { FileInfo } from '@/types/api';
 import { useUploadStore } from '@/store/upload-store';
 import { useWindowStore } from '@/store/window-store';
+import { useFileUpload } from '@/features/files/hooks/useFileUpload'; // Updated import
 import {
   Dialog,
   DialogContent,
@@ -33,14 +29,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { apiClient } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Trash2 } from 'lucide-react';
 
 import { Sidebar } from './finder/Sidebar';
 import { Toolbar } from './finder/Toolbar';
 import { FileList } from './finder/FileList';
-import { UploadStatus } from '@/components/desktop/UploadStatus'; // Re-using existing component logic if needed, but Finder has its own status bar
+import { UploadStatus } from '@/components/desktop/UploadStatus'; 
 
 type ViewMode = 'grid' | 'list';
 
@@ -54,16 +49,20 @@ export const Finder = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
-  const [conflictFile, setConflictFile] = useState<{ file: File, taskId: string } | null>(null);
+  
   const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [isEmptyTrashConfirmOpen, setIsEmptyTrashConfirmOpen] = useState(false);
+  const [isPermanentDeleteConfirmOpen, setIsPermanentDeleteConfirmOpen] = useState(false);
+  const [filesToPermanentlyDelete, setFilesToPermanentlyDelete] = useState<string[]>([]);
   
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   
-  const { tasks: uploadTasks, addTask, updateTask, removeTask } = useUploadStore();
+  const { tasks: uploadTasks, removeTask } = useUploadStore();
   const { openWindow, updateWindowAppState, windows } = useWindowStore();
-
+  
+  const { handleUploadFiles, resumeUpload } = useFileUpload(); // Use hook
 
   
   useEffect(() => {
@@ -71,14 +70,13 @@ export const Finder = () => {
     const finderWindow = state.windows.find(w => w.appType === 'finder');
     
     if (finderWindow) {
-      // Only update if the path in state is different to avoid loop
       if (JSON.stringify(finderWindow.appState?.currentPath) !== JSON.stringify(history)) {
          updateWindowAppState(finderWindow.id, { currentPath: history });
       }
     }
-  }, [history, updateWindowAppState]); // Removed 'windows' dependency
+  }, [history, updateWindowAppState]);
 
-  const { data: files, isLoading } = useFiles({ path: currentPath });
+  const { data: files, isLoading, refetch } = useFiles({ path: currentPath });
   const { data: trashFiles, isLoading: isTrashLoading } = useTrash();
   const { data: favorites } = useFavorites();
   
@@ -87,9 +85,6 @@ export const Finder = () => {
   const toggleStar = useToggleStar();
   const restoreFromTrash = useRestoreFromTrash();
   const emptyTrash = useEmptyTrash();
-  const uploadFile = useUpload();
-  const initUpload = useInitUpload();
-  const uploadChunk = useUploadChunk();
   const downloadFile = useDownload();
   const createShare = useCreateShare();
   const createFolder = useCreateFolder();
@@ -108,15 +103,14 @@ export const Finder = () => {
     setSelectedFiles(new Set());
   };
 
-  // Quick Look (Spacebar)
+  // Quick Look (Spacebar) and Delete keys
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Quick Look - Spacebar
       if (e.code === 'Space') {
-        // 如果有選中檔案，且沒有正在重命名
         if (selectedFiles.size === 1 && !renamingFile) {
           e.preventDefault();
           e.stopPropagation();
-          // 找出被選中的那個檔案物件
           const fileName = Array.from(selectedFiles)[0];
           const file = currentFiles?.find(f => f.name === fileName);
           if (file) {
@@ -125,11 +119,37 @@ export const Finder = () => {
           }
         }
       }
+      
+      // Delete keys
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedFiles.size > 0 && !renamingFile) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (e.shiftKey) {
+          // Shift+Delete: Permanent delete with confirmation
+          const filePaths = Array.from(selectedFiles).map(fileName => {
+            const file = currentFiles?.find(f => f.name === fileName);
+            return file?.path || (currentPath === '/' ? `/${fileName}` : `${currentPath}/${fileName}`);
+          });
+          setFilesToPermanentlyDelete(filePaths);
+          setIsPermanentDeleteConfirmOpen(true);
+        } else {
+          // Delete: Move to trash (no confirmation)
+          Array.from(selectedFiles).forEach(fileName => {
+            const file = currentFiles?.find(f => f.name === fileName);
+            if (file) {
+              const fullPath = file.path || (currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`);
+              deleteFile.mutate(fullPath);
+            }
+          });
+          setSelectedFiles(new Set());
+        }
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [selectedFiles, currentFiles, renamingFile, openWindow]);
+  }, [selectedFiles, currentFiles, renamingFile, openWindow, currentPath, deleteFile]);
 
   const handleTrashMode = () => {
     setIsTrashMode(true);
@@ -174,9 +194,8 @@ export const Finder = () => {
   };
 
   const handleDelete = (file: FileInfo) => {
-    if (confirm(`Are you sure you want to delete ${file.name}?`)) {
-      deleteFile.mutate(file.path || (currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`));
-    }
+    // No confirmation dialog, directly move to trash
+    deleteFile.mutate(file.path || (currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`));
   };
 
   const handleRenameStart = (file: FileInfo) => {
@@ -251,121 +270,31 @@ export const Finder = () => {
 
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
-      await handleUploadFiles(files);
-    }
-  };
-
-  const handleUploadFiles = async (files: File[]) => {
-    for (const file of files) {
-      const taskId = `${file.name}-${Date.now()}`;
-      addTask({ id: taskId, file, path: currentPath, progress: 0, status: 'uploading' });
-
-      try {
-        if (file.size > 10 * 1024 * 1024) {
-          await processChunkedUpload(taskId, file);
-        } else {
-          await uploadFile.mutateAsync({
-            file,
-            path: currentPath
-          });
-          updateTask(taskId, { progress: 100, status: 'completed' });
-        }
-      } catch (error: any) {
-        console.error(`Failed to upload ${file.name}:`, error);
-        updateTask(taskId, { status: 'error', error: error.message || 'Upload failed' });
-      }
-    }
-  };
-
-  const processChunkedUpload = async (taskId: string, file: File, resumeUploadId?: string, startOffset: number = 0) => {
-    const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
-    let upload_id = resumeUploadId;
-
-    try {
-      if (!upload_id) {
-        try {
-          const initResult = await initUpload.mutateAsync({
-            file_path: currentPath === '/' ? '' : currentPath.startsWith('/') ? currentPath.slice(1) : currentPath,
-            file_name: file.name,
-            total_size: file.size
-          });
-          
-          if (initResult.uploaded_size !== undefined) {
-             console.log(`Resuming upload for ${file.name} from ${initResult.uploaded_size}`);
-             upload_id = initResult.upload_id;
-             startOffset = initResult.uploaded_size;
-          } else {
-             upload_id = initResult.upload_id;
-          }
-
-          updateTask(taskId, { uploadId: upload_id });
-
-        } catch (error: any) {
-          if (error.response?.status === 409 && !error.response?.data?.upload_id) {
-             setConflictFile({ file, taskId });
-             updateTask(taskId, { status: 'error', error: 'File exists' });
-             return;
-          }
-          throw error;
-        }
-      }
-
-      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-      const startChunkIndex = Math.floor(startOffset / CHUNK_SIZE);
-
-      for (let i = startChunkIndex; i < totalChunks; i++) {
-        const start = i * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, file.size);
-        const chunk = file.slice(start, end);
-        
-        await uploadChunk.mutateAsync({
-          sessionId: upload_id!,
-          chunk
-        });
-
-        const progress = Math.round((end / file.size) * 100);
-        updateTask(taskId, { progress });
-      }
-
-      await queryClient.invalidateQueries({ queryKey: ['files'] });
-      updateTask(taskId, { status: 'completed' });
-
-    } catch (error: any) {
-      console.error(`Chunk upload failed for ${file.name}:`, error);
-      updateTask(taskId, {
-        status: 'error',
-        error: error.message || 'Upload interrupted',
-        uploadId: upload_id
-      });
-    }
-  };
-
-  const handleResumeUpload = async (taskId: string) => {
-    const task = uploadTasks[taskId];
-    if (!task || !task.uploadId) return;
-
-    updateTask(taskId, { status: 'uploading', error: undefined });
-
-    try {
-      const response = await apiClient.get<UploadSession>(`/upload/session/${task.uploadId}`);
-      const uploadedSize = response.data.uploaded_size;
-      
-      await processChunkedUpload(taskId, task.file, task.uploadId, uploadedSize);
-    } catch (error: any) {
-      console.error('Failed to resume upload:', error);
-      updateTask(taskId, { status: 'error', error: 'Failed to resume upload' });
+      // Use hook
+      await handleUploadFiles(files, currentPath);
     }
   };
 
   const handleCreateFolder = async () => {
-    if (!newFolderName) return;
     try {
-      await createFolder.mutateAsync({
-        path: currentPath,
-        name: newFolderName
-      });
-      setIsCreateFolderOpen(false);
-      setNewFolderName('');
+      let name = '新資料夾';
+      let counter = 1;
+      
+      const currentFilesList = currentFiles || [];
+      
+      while (currentFilesList.some(f => f.name === name)) {
+        name = `新資料夾${counter}`;
+        counter++;
+      }
+
+      await createFolder.mutateAsync({ path: currentPath, name });
+      await queryClient.invalidateQueries({ queryKey: ['files'] });
+      
+      // 等待檔案列表更新後進入重命名模式
+      setTimeout(() => {
+        setRenamingFile(name);
+        setRenameValue(name);
+      }, 100);
     } catch (error) {
       console.error('Failed to create folder:', error);
       alert('Failed to create folder');
@@ -374,7 +303,7 @@ export const Finder = () => {
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      handleUploadFiles(Array.from(e.target.files));
+      handleUploadFiles(Array.from(e.target.files), currentPath);
     }
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -393,71 +322,6 @@ export const Finder = () => {
       />
 
       <div className="flex-1 flex flex-col min-w-0 bg-white/40 dark:bg-black/40 relative">
-        {/* Conflict Dialog */}
-        <Dialog open={!!conflictFile} onOpenChange={(open) => !open && setConflictFile(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>File Conflict</DialogTitle>
-              <DialogDescription>
-                A file named "{conflictFile?.file.name}" already exists in this location.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter className="gap-2 sm:gap-0">
-              <Button variant="outline" onClick={() => {
-                if (conflictFile) {
-                  removeTask(conflictFile.taskId);
-                  setConflictFile(null);
-                }
-              }}>
-                Cancel
-              </Button>
-              <Button onClick={() => {
-                if (conflictFile) {
-                   const path = currentPath === '/' ? `/${conflictFile.file.name}` : `${currentPath}/${conflictFile.file.name}`;
-                   deleteFile.mutateAsync(path).then(() => {
-                      updateTask(conflictFile.taskId, { status: 'uploading', error: undefined });
-                      processChunkedUpload(conflictFile.taskId, conflictFile.file);
-                      setConflictFile(null);
-                   });
-                }
-              }}>
-                Overwrite
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Create Folder Dialog */}
-        <Dialog open={isCreateFolderOpen} onOpenChange={setIsCreateFolderOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>New Folder</DialogTitle>
-              <DialogDescription>
-                Enter a name for the new folder.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="py-4">
-              <Input
-                value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
-                placeholder="Folder Name"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleCreateFolder();
-                }}
-                autoFocus
-              />
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCreateFolderOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleCreateFolder}>
-                Create
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
         <Toolbar
           currentPath={currentPath}
           isTrashMode={isTrashMode}
@@ -467,7 +331,7 @@ export const Finder = () => {
           onNavigate={handleNavigate}
           onBack={handleBack}
           onForward={handleForward}
-          onEmptyTrash={() => emptyTrash.mutate()}
+          onEmptyTrash={() => setIsEmptyTrashConfirmOpen(true)}
           onUploadClick={() => fileInputRef.current?.click()}
           onViewModeChange={setViewMode}
         />
@@ -505,10 +369,11 @@ export const Finder = () => {
           onShare={handleShare}
           onToggleStar={(path) => toggleStar.mutate(path)}
           onRenameStart={handleRenameStart}
-          onCreateFolder={() => setIsCreateFolderOpen(true)}
+          onCreateFolder={() => handleCreateFolder()}
           onUpload={() => fileInputRef.current?.click()}
-          onRefresh={() => queryClient.invalidateQueries({ queryKey: ['files'] })}
+          onRefresh={() => refetch()}
           onViewModeChange={setViewMode}
+          onSelectionChange={setSelectedFiles}
         />
         
         {/* Status Bar */}
@@ -533,7 +398,7 @@ export const Finder = () => {
                   <span className="w-10 text-right">{task.progress}%</span>
                   {task.status === 'error' && task.uploadId && (
                     <button
-                      onClick={() => handleResumeUpload(task.id)}
+                      onClick={() => resumeUpload(task.id)}
                       className="p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded text-blue-600 dark:text-blue-400"
                       title="Resume Upload"
                     >
@@ -551,6 +416,83 @@ export const Finder = () => {
           )}
         </div>
       </div>
+
+      {/* Empty Trash Confirmation Dialog */}
+      <Dialog open={isEmptyTrashConfirmOpen} onOpenChange={setIsEmptyTrashConfirmOpen}>
+        <DialogContent className="sm:max-w-[425px] bg-white/95 dark:bg-black/95 backdrop-blur-xl border-white/20">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
+              <Trash2 className="w-5 h-5" />
+              Empty Trash?
+            </DialogTitle>
+            <DialogDescription className="text-gray-600 dark:text-gray-400">
+              This will permanently delete all items in the Trash. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setIsEmptyTrashConfirmOpen(false)}
+              className="border-white/20"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                emptyTrash.mutate();
+                setIsEmptyTrashConfirmOpen(false);
+              }}
+              className="bg-red-500 hover:bg-red-600"
+            >
+              Empty Trash
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Permanent Delete Confirmation Dialog */}
+      <Dialog open={isPermanentDeleteConfirmOpen} onOpenChange={setIsPermanentDeleteConfirmOpen}>
+        <DialogContent className="sm:max-w-[425px] bg-white/95 dark:bg-black/95 backdrop-blur-xl border-white/20">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
+              <Trash2 className="w-5 h-5" />
+              Permanently Delete {filesToPermanentlyDelete.length} {filesToPermanentlyDelete.length === 1 ? 'Item' : 'Items'}?
+            </DialogTitle>
+            <DialogDescription className="text-gray-600 dark:text-gray-400">
+              This action cannot be undone. The {filesToPermanentlyDelete.length === 1 ? 'file' : 'files'} will be permanently deleted and cannot be recovered.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsPermanentDeleteConfirmOpen(false);
+                setFilesToPermanentlyDelete([]);
+              }}
+              className="border-white/20"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                // TODO: Implement permanent delete API call
+                filesToPermanentlyDelete.forEach(path => {
+                  // For now, use regular delete
+                  deleteFile.mutate(path);
+                });
+                setIsPermanentDeleteConfirmOpen(false);
+                setFilesToPermanentlyDelete([]);
+                setSelectedFiles(new Set());
+              }}
+              className="bg-red-500 hover:bg-red-600"
+            >
+              Permanently Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

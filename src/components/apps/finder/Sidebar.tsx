@@ -73,8 +73,8 @@ export const Sidebar = ({
         <SidebarItem
           icon={Home}
           label="Home"
-          active={currentPath === '/home' && !isTrashMode}
-          onClick={() => onNavigate('/home')}
+          active={currentPath === '/' && !isTrashMode}
+          onClick={() => onNavigate('/')}
         />
         <SidebarItem
           icon={Server}
