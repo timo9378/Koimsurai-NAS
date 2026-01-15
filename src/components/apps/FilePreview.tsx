@@ -27,26 +27,28 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
   const { updateWindowSize } = useWindowStore();
   const isImage = file.mime_type?.startsWith('image/');
   const isVideo = file.mime_type?.startsWith('video/');
-  const isText = file.mime_type?.startsWith('text/') || 
-                 file.name.endsWith('.json') || 
-                 file.name.endsWith('.md') || 
-                 file.name.endsWith('.ts') || 
-                 file.name.endsWith('.tsx') ||
-                 file.name.endsWith('.js') ||
-                 file.name.endsWith('.css') ||
-                 file.name.endsWith('.html');
+  const isPdf = file.mime_type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const isOffice = file.name.match(/\.(docx?|xlsx?|pptx?)$/i);
+  const isText = file.mime_type?.startsWith('text/') ||
+    file.name.endsWith('.json') ||
+    file.name.endsWith('.md') ||
+    file.name.endsWith('.ts') ||
+    file.name.endsWith('.tsx') ||
+    file.name.endsWith('.js') ||
+    file.name.endsWith('.css') ||
+    file.name.endsWith('.html');
 
   // Construct URLs with proper encoding
   // We use the /api/download endpoint which maps to the backend's download_file handler
   // This handler supports Range requests for video streaming and serves file content
-  
+
   // Remove leading slash for the API call as per useFiles.ts pattern
   const cleanPath = file.path.startsWith('/') ? file.path.slice(1) : file.path;
   const encodedPath = encodeURIComponent(cleanPath);
-  
+
   // The download endpoint: /api/download/{encoded_path}
   const fileUrl = `/api/download/${encodedPath}`;
-  
+
   // For video, we use the same endpoint as it supports Range requests
   // We can also try /api/media/stream if download doesn't work, but user indicated download_file is ready.
   // Let's use the same URL for consistency.
@@ -73,8 +75,8 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
           <span className="text-xs text-muted-foreground">{formatBytes(file.size)}</span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <a 
-            href={`/api/download${file.path}`} 
+          <a
+            href={`/api/download${file.path}`}
             download
             className="p-1.5 hover:bg-black/5 dark:hover:bg-white/10 rounded transition-colors"
             title="Download"
@@ -96,31 +98,31 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
                 const img = e.currentTarget;
                 const naturalWidth = img.naturalWidth;
                 const naturalHeight = img.naturalHeight;
-                
+
                 // Calculate optimal window size
                 // Max width/height: 80% of screen or reasonable limit
                 // Adjusted for new maximized window constraints (padding)
                 const maxWidth = window.innerWidth * 0.85;
                 const maxHeight = window.innerHeight * 0.85;
-                
+
                 let width = naturalWidth;
                 let height = naturalHeight;
-                
+
                 // Add padding for toolbar (48px) and window borders/padding (32px)
                 const chromeHeight = 48 + 32;
                 const chromeWidth = 32;
-                
+
                 // Scale down if too large
                 if (width > maxWidth || height > maxHeight) {
                   const ratio = Math.min(maxWidth / width, (maxHeight - chromeHeight) / height);
                   width *= ratio;
                   height *= ratio;
                 }
-                
+
                 // Ensure minimum size
                 width = Math.max(width + chromeWidth, 400);
                 height = Math.max(height + chromeHeight, 300);
-                
+
                 updateWindowSize(windowId, { width, height });
               }
             }}
@@ -178,6 +180,23 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
               />
             </div>
           )
+        ) : isPdf ? (
+          <div className="w-full h-full rounded-lg overflow-hidden shadow-lg bg-white">
+            <iframe
+              src={`${fileUrl}#toolbar=1&navpanes=0`}
+              className="w-full h-full border-0"
+              title={file.name}
+            />
+          </div>
+        ) : isOffice ? (
+          <div className="flex flex-col items-center gap-4 text-gray-500">
+            <File className="w-24 h-24 opacity-20" />
+            <div className="text-center">
+              <p className="text-lg font-medium text-gray-900 dark:text-white">Office 文件預覽</p>
+              <p className="text-sm">目前不支援直接預覽 Office 文件</p>
+              <p className="text-sm mt-2">請下載後使用相關軟體開啟</p>
+            </div>
+          </div>
         ) : (
           <div className="flex flex-col items-center gap-4 text-gray-500">
             <File className="w-24 h-24 opacity-20" />

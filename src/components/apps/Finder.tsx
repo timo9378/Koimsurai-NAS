@@ -35,7 +35,7 @@ import { RefreshCw, Trash2 } from 'lucide-react';
 import { Sidebar } from './finder/Sidebar';
 import { Toolbar } from './finder/Toolbar';
 import { FileList } from './finder/FileList';
-import { UploadStatus } from '@/components/desktop/UploadStatus'; 
+import { UploadStatus } from '@/components/desktop/UploadStatus';
 
 type ViewMode = 'grid' | 'list';
 
@@ -49,37 +49,55 @@ export const Finder = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
-  
+
   const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [isEmptyTrashConfirmOpen, setIsEmptyTrashConfirmOpen] = useState(false);
   const [isPermanentDeleteConfirmOpen, setIsPermanentDeleteConfirmOpen] = useState(false);
   const [filesToPermanentlyDelete, setFilesToPermanentlyDelete] = useState<string[]>([]);
-  
+
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
-  
+
   const { tasks: uploadTasks, removeTask } = useUploadStore();
   const { openWindow, updateWindowAppState, windows } = useWindowStore();
-  
+
   const { handleUploadFiles, resumeUpload } = useFileUpload(); // Use hook
 
-  
+
   useEffect(() => {
     const state = useWindowStore.getState();
     const finderWindow = state.windows.find(w => w.appType === 'finder');
-    
+
     if (finderWindow) {
       if (JSON.stringify(finderWindow.appState?.currentPath) !== JSON.stringify(history)) {
-         updateWindowAppState(finderWindow.id, { currentPath: history });
+        updateWindowAppState(finderWindow.id, { currentPath: history });
       }
     }
   }, [history, updateWindowAppState]);
 
+  // Listen for external navigation requests (e.g., from desktop folder double-click)
+  useEffect(() => {
+    const finderWindow = windows.find(w => w.appType === 'finder');
+    if (finderWindow?.appState?.navigateTo) {
+      const targetPath = finderWindow.appState.navigateTo;
+      // Clear the navigateTo state to prevent re-triggering
+      updateWindowAppState(finderWindow.id, { navigateTo: undefined });
+      // Navigate to the target path
+      setIsTrashMode(false);
+      const newHistory = history.slice(0, historyIndex + 1);
+      newHistory.push(targetPath);
+      setHistory(newHistory);
+      setHistoryIndex(newHistory.length - 1);
+      setCurrentPath(targetPath);
+      setSelectedFiles(new Set());
+    }
+  }, [windows, updateWindowAppState, history, historyIndex]);
+
   const { data: files, isLoading, refetch } = useFiles({ path: currentPath });
-  const { data: trashFiles, isLoading: isTrashLoading } = useTrash();
+  const { data: trashFiles, isLoading: isTrashLoading, refetch: refetchTrash } = useTrash();
   const { data: favorites } = useFavorites();
-  
+
   const deleteFile = useDelete();
   const renameFile = useRename();
   const toggleStar = useToggleStar();
@@ -119,12 +137,12 @@ export const Finder = () => {
           }
         }
       }
-      
+
       // Delete keys
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedFiles.size > 0 && !renamingFile) {
         e.preventDefault();
         e.stopPropagation();
-        
+
         if (e.shiftKey) {
           // Shift+Delete: Permanent delete with confirmation
           const filePaths = Array.from(selectedFiles).map(fileName => {
@@ -236,7 +254,7 @@ export const Finder = () => {
 
   const handleFavoriteClick = (fav: FileInfo) => {
     const fullPath = fav.path.startsWith('/') ? fav.path : `/${fav.path}`;
-    
+
     if (fav.is_dir) {
       handleNavigate(fullPath);
     } else {
@@ -277,19 +295,46 @@ export const Finder = () => {
 
   const handleCreateFolder = async () => {
     try {
+      // Refetch to get the latest files list for accurate duplicate checking
+      const { data: latestFiles } = await refetch();
+      const currentFilesList = latestFiles || [];
+
       let name = '新資料夾';
       let counter = 1;
-      
-      const currentFilesList = currentFiles || [];
-      
+
       while (currentFilesList.some(f => f.name === name)) {
         name = `新資料夾${counter}`;
         counter++;
       }
 
-      await createFolder.mutateAsync({ path: currentPath, name });
-      await queryClient.invalidateQueries({ queryKey: ['files'] });
-      
+      // Try to create folder, with retry logic for 409 conflicts
+      let created = false;
+      let attempts = 0;
+      const maxAttempts = 10;
+
+      while (!created && attempts < maxAttempts) {
+        try {
+          await createFolder.mutateAsync({ path: currentPath, name });
+          created = true;
+        } catch (error: any) {
+          if (error?.response?.status === 409) {
+            // Folder already exists, try next name
+            name = `新資料夾${counter}`;
+            counter++;
+            attempts++;
+          } else {
+            throw error;
+          }
+        }
+      }
+
+      if (!created) {
+        throw new Error('無法創建資料夾,請稍後再試');
+      }
+
+      // Refetch to show the new folder immediately
+      await refetch();
+
       // 等待檔案列表更新後進入重命名模式
       setTimeout(() => {
         setRenamingFile(name);
@@ -371,11 +416,11 @@ export const Finder = () => {
           onRenameStart={handleRenameStart}
           onCreateFolder={() => handleCreateFolder()}
           onUpload={() => fileInputRef.current?.click()}
-          onRefresh={() => refetch()}
+          onRefresh={() => isTrashMode ? refetchTrash() : refetch()}
           onViewModeChange={setViewMode}
           onSelectionChange={setSelectedFiles}
         />
-        
+
         {/* Status Bar */}
         <div className="h-auto min-h-[32px] flex flex-col justify-center px-4 py-1 border-t border-white/10 bg-white/40 dark:bg-black/40 text-xs text-gray-500 backdrop-blur-md">
           {Object.values(uploadTasks).filter(t => t.path === currentPath && t.status === 'uploading').length > 0 ? (
@@ -383,33 +428,33 @@ export const Finder = () => {
               {Object.values(uploadTasks)
                 .filter(t => t.path === currentPath)
                 .map((task) => (
-                <div key={task.id} className="flex items-center gap-2 w-full">
-                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                  <span className="truncate max-w-[150px]">{task.file.name}</span>
-                  <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div
-                      className={cn(
-                        "h-full transition-all duration-300",
-                        task.status === 'error' ? "bg-red-500" : "bg-blue-500"
-                      )}
-                      style={{ width: `${task.progress}%` }}
-                    />
+                  <div key={task.id} className="flex items-center gap-2 w-full">
+                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                    <span className="truncate max-w-[150px]">{task.file.name}</span>
+                    <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          "h-full transition-all duration-300",
+                          task.status === 'error' ? "bg-red-500" : "bg-blue-500"
+                        )}
+                        style={{ width: `${task.progress}%` }}
+                      />
+                    </div>
+                    <span className="w-10 text-right">{task.progress}%</span>
+                    {task.status === 'error' && task.uploadId && (
+                      <button
+                        onClick={() => resumeUpload(task.id)}
+                        className="p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded text-blue-600 dark:text-blue-400"
+                        title="Resume Upload"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                      </button>
+                    )}
+                    {task.status === 'error' && (
+                      <span className="text-red-500 text-[10px]">{task.error}</span>
+                    )}
                   </div>
-                  <span className="w-10 text-right">{task.progress}%</span>
-                  {task.status === 'error' && task.uploadId && (
-                    <button
-                      onClick={() => resumeUpload(task.id)}
-                      className="p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded text-blue-600 dark:text-blue-400"
-                      title="Resume Upload"
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                    </button>
-                  )}
-                  {task.status === 'error' && (
-                    <span className="text-red-500 text-[10px]">{task.error}</span>
-                  )}
-                </div>
-              ))}
+                ))}
             </div>
           ) : (
             <span>{currentFiles ? `${currentFiles.length} items` : 'Loading...'}</span>

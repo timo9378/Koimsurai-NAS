@@ -35,18 +35,20 @@ import {
 const FileIcon = ({ file, currentPath }: { file: FileInfo; currentPath?: string }) => {
   const isImage = file.mime_type?.startsWith('image/');
 
-  const thumbnailPath = file.path
-    ? file.path
-    : (currentPath && currentPath !== '/')
-      ? `${currentPath.replace(/^\//, '')}/${file.name}`
-      : file.name;
+  const thumbnailPath = isImage
+    ? (file.path
+      ? file.path
+      : (currentPath && currentPath !== '/')
+        ? `${currentPath.replace(/^\//, '')}/${file.name}`
+        : file.name)
+    : ''; // Empty string disables the query due to enabled: !!path
 
   const { data: thumbnail } = useThumbnail(thumbnailPath, 'medium');
 
   if (file.is_dir) {
     return <Folder className="w-12 h-12 text-blue-500 fill-blue-500/20" />;
   }
-  
+
   if (isImage && thumbnail) {
     return <img src={thumbnail} alt={file.name} className="w-12 h-12 object-cover rounded shadow-sm" />;
   }
@@ -158,7 +160,7 @@ export const FileList = ({
       const rect = containerRef.current.getBoundingClientRect();
       const currentX = e.clientX - rect.left;
       const currentY = e.clientY - rect.top + containerRef.current.scrollTop;
-      
+
       setSelectionBox(prev => prev ? ({ ...prev, currentX, currentY }) : null);
 
       // Calculate selection intersection
@@ -171,7 +173,7 @@ export const FileList = ({
       // This requires refs to file elements or calculating their positions based on grid
       // For simplicity, we can use document.elementsFromPoint or similar if we had coordinates
       // But in React, we might need to know where each item is.
-      
+
       // Alternative: Use a ref map for file items
     }
   };
@@ -189,7 +191,7 @@ export const FileList = ({
     if (selectionBox?.isSelecting && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       const scroll = containerRef.current.scrollTop;
-      
+
       const boxLeft = Math.min(selectionBox.startX, selectionBox.currentX);
       const boxTop = Math.min(selectionBox.startY, selectionBox.currentY);
       const boxRight = Math.max(selectionBox.startX, selectionBox.currentX);
@@ -207,17 +209,17 @@ export const FileList = ({
           const elRight = elLeft + elRect.width;
           const elBottom = elTop + elRect.height;
 
-          const isIntersecting = !(boxLeft > elRight || 
-                                 boxRight < elLeft || 
-                                 boxTop > elBottom || 
-                                 boxBottom < elTop);
-          
+          const isIntersecting = !(boxLeft > elRight ||
+            boxRight < elLeft ||
+            boxTop > elBottom ||
+            boxBottom < elTop);
+
           if (isIntersecting) {
-             newSelected.add(file.name);
+            newSelected.add(file.name);
           }
         }
       });
-      
+
       if (onSelectionChange) {
         onSelectionChange(newSelected);
       }
@@ -252,7 +254,7 @@ export const FileList = ({
           onDrop={onDrop}
         >
           {selectionBox?.isSelecting && (
-            <div 
+            <div
               className="absolute border border-blue-500/50 bg-blue-500/20 z-50 pointer-events-none"
               style={{
                 left: Math.min(selectionBox.startX, selectionBox.currentX),

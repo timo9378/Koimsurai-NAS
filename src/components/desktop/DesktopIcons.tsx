@@ -18,16 +18,16 @@ const GRID_SIZE = 100;
 const GRID_GAP = 8;
 
 export const DesktopIcons = () => {
-  const { data: files, error } = useFiles({ path: '/Desktop' });
+  const { data: files, error, refetch } = useFiles({ path: '/Desktop' });
   const createFolder = useCreateFolder();
   const renameFile = useRename();
-  const { openWindow } = useWindowStore();
+  const { openWindow, windows, updateWindowAppState, focusWindow } = useWindowStore();
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [newFolderName] = useState('新資料夾');
-  
+
   // State for icon positions
   const [iconPositions, setIconPositions] = useState<Map<string, IconPosition>>(new Map());
 
@@ -61,13 +61,13 @@ export const DesktopIcons = () => {
     if (iconPositions.has(file.path)) {
       return iconPositions.get(file.path)!;
     }
-    
+
     // Calculate default position based on index
     // Icons flow top to bottom, then left to right
     const iconsPerColumn = 8; // Adjust based on screen height
     const col = Math.floor(index / iconsPerColumn);
     const row = index % iconsPerColumn;
-    
+
     return { row, col };
   };
 
@@ -83,24 +83,47 @@ export const DesktopIcons = () => {
   useEffect(() => {
     const handleCreateFolder = async () => {
       try {
+        // Refetch to get fresh data for accurate duplicate detection
+        const { data: latestFiles } = await refetch();
+        const currentFiles = latestFiles || [];
+
         // Generate a unique name if "新資料夾" exists
         let name = newFolderName;
         let counter = 1;
-        
-        // Check if folder exists in current files list
-        // Note: files might be undefined initially
-        const currentFiles = files || [];
-        
+
         while (currentFiles.some(f => f.name === name)) {
           name = `${newFolderName}${counter}`;
           counter++;
         }
 
-        // Create folder with unique name - use 'Desktop' without leading slash
-        await createFolder.mutateAsync({ path: 'Desktop', name });
-        // Refresh the Desktop file list
-        await queryClient.invalidateQueries({ queryKey: ['files'] });
-        
+        // Try to create folder, with retry logic for 409 conflicts
+        let created = false;
+        let attempts = 0;
+        const maxAttempts = 10;
+
+        while (!created && attempts < maxAttempts) {
+          try {
+            await createFolder.mutateAsync({ path: 'Desktop', name });
+            created = true;
+          } catch (error: any) {
+            if (error?.response?.status === 409) {
+              // Folder already exists, try next name
+              name = `${newFolderName}${counter}`;
+              counter++;
+              attempts++;
+            } else {
+              throw error;
+            }
+          }
+        }
+
+        if (!created) {
+          throw new Error('無法創建資料夾,請稍後再試');
+        }
+
+        // Refresh the Desktop file list to show the new folder
+        await refetch();
+
         // After creation, start renaming the new folder
         setTimeout(() => {
           const newFolderPath = `Desktop/${name}`;
@@ -112,23 +135,23 @@ export const DesktopIcons = () => {
         alert('建立資料夾失敗');
       }
     };
-    
+
     window.addEventListener('desktop-create-folder', handleCreateFolder);
     return () => window.removeEventListener('desktop-create-folder', handleCreateFolder);
-  }, [createFolder, queryClient, newFolderName, files]);
+  }, [createFolder, refetch, newFolderName]);
 
   // Listen for delete event (e.g. from context menu or keyboard)
   useEffect(() => {
     const handleDelete = async () => {
       if (selectedFiles.size === 0) return;
-      
+
       if (confirm(`確定要刪除選取的 ${selectedFiles.size} 個項目嗎？`)) {
         try {
           if (selectedFiles.size === 1) {
-             const path = Array.from(selectedFiles)[0];
-             await deleteFile.mutateAsync(path);
+            const path = Array.from(selectedFiles)[0];
+            await deleteFile.mutateAsync(path);
           } else {
-             await batchDelete.mutateAsync(Array.from(selectedFiles));
+            await batchDelete.mutateAsync(Array.from(selectedFiles));
           }
           setSelectedFiles(new Set());
         } catch (error) {
@@ -147,7 +170,7 @@ export const DesktopIcons = () => {
     window.addEventListener('keydown', handleKeyDown);
     // We can also listen to a custom event if needed for context menu delete
     window.addEventListener('desktop-delete-selected', handleDelete);
-    
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('desktop-delete-selected', handleDelete);
@@ -162,11 +185,11 @@ export const DesktopIcons = () => {
     // BUT 'useFiles' might just return empty array if empty.
     // Better strategy: Check root first? Or just try to create on mount if we catch an error?
     // Let's rely on the fact that if useFiles returns error (404), we try to create.
-    
+
     // Actually, useFiles logic:
     // queryFn: ... apiClient.get ...
     // If it fails, error will be populated.
-    
+
     // Note: React Query doesn't automatically trigger creation.
     // We can use a side effect here.
   }, [files]);
@@ -189,7 +212,7 @@ export const DesktopIcons = () => {
 
   const handleIconClick = (e: React.MouseEvent, file: FileInfo) => {
     e.stopPropagation();
-    
+
     // If ctrl/cmd is pressed, toggle selection
     if (e.ctrlKey || e.metaKey) {
       const newSet = new Set(selectedFiles);
@@ -204,9 +227,18 @@ export const DesktopIcons = () => {
 
   const handleDoubleClick = (file: FileInfo) => {
     if (renamingFile) return; // Don't open if renaming
-    
+
     if (file.is_dir) {
-      openWindow('finder', file.name, { initialPath: file.path });
+      // Windows-style: Reuse existing Finder window if available
+      const existingFinder = windows.find(w => w.appType === 'finder' && !w.isMinimized);
+      if (existingFinder) {
+        // Navigate in existing window
+        updateWindowAppState(existingFinder.id, { navigateTo: file.path });
+        focusWindow(existingFinder.id);
+      } else {
+        // Open new Finder window
+        openWindow('finder', file.name, { initialPath: file.path });
+      }
     } else {
       openWindow('preview', file.name, { file });
     }
@@ -219,7 +251,7 @@ export const DesktopIcons = () => {
     }
 
     const file = files?.find(f => f.path === renamingFile);
-    
+
     if (!file || renameValue === file.name) {
       setRenamingFile(null);
       return;
@@ -238,29 +270,32 @@ export const DesktopIcons = () => {
       setRenamingFile(null);
     }
   };
-  
+
   // Handle selection box
   useEffect(() => {
     const handleSelectionChange = (e: Event) => {
       const customEvent = e as CustomEvent<{ rect: { left: number; top: number; width: number; height: number } }>;
       const { rect } = customEvent.detail;
-      
+      // Calculate right and bottom from rect dimensions
+      const rectRight = rect.left + rect.width;
+      const rectBottom = rect.top + rect.height;
+
       const newSelected = new Set<string>();
-      
+
       // Check intersection with each icon
       const icons = document.querySelectorAll('[data-context-type="desktop-icon"]');
       icons.forEach((icon) => {
         const iconRect = icon.getBoundingClientRect();
         const path = icon.getAttribute('data-context-id');
-        
-        if (path && !(rect.left > iconRect.right || 
-             rect.right < iconRect.left || 
-             rect.top > iconRect.bottom || 
-             rect.bottom < iconRect.top)) {
+
+        if (path && !(rect.left > iconRect.right ||
+          rectRight < iconRect.left ||
+          rect.top > iconRect.bottom ||
+          rectBottom < iconRect.top)) {
           newSelected.add(path);
         }
       });
-      
+
       setSelectedFiles(newSelected);
     };
 
@@ -270,7 +305,7 @@ export const DesktopIcons = () => {
 
     window.addEventListener('desktop-selection-change', handleSelectionChange);
     window.addEventListener('desktop-selection-end', handleSelectionEnd);
-    
+
     return () => {
       window.removeEventListener('desktop-selection-change', handleSelectionChange);
       window.removeEventListener('desktop-selection-end', handleSelectionEnd);
@@ -283,7 +318,7 @@ export const DesktopIcons = () => {
   // For now, simpler: DesktopLayout clicks reset selection if we lift state up.
   // Let's keep it local for now. If user clicks background, 'handleMouseDown' in DesktopLayout fires.
   // But that's for rubber band.
-  
+
   // We can add a listener to window for 'click' to clear selection if target is not an icon?
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -293,7 +328,7 @@ export const DesktopIcons = () => {
         setSelectedFiles(new Set());
       }
     };
-    
+
     window.addEventListener('click', handleClickOutside);
     return () => window.removeEventListener('click', handleClickOutside);
   }, []);
