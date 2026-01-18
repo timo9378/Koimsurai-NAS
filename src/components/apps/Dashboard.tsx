@@ -10,28 +10,18 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { Cpu, HardDrive, Activity, Thermometer } from 'lucide-react';
+import { Cpu, HardDrive, Activity, Thermometer, Monitor } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSystemStatus } from '@/features/system/api/useSystem';
 
-const Widget = ({ title, icon: Icon, children, className, value }: { title: string, icon: React.ElementType, children: React.ReactNode, className?: string, value?: string }) => (
-  <div className={cn("bg-white/30 dark:bg-black/30 backdrop-blur-xl border border-white/20 dark:border-white/10 rounded-2xl p-6 flex flex-col shadow-lg", className)}>
-    <div className="flex items-center justify-between mb-6">
-      <div className="flex items-center gap-3 text-gray-600 dark:text-zinc-400">
-        <div className="p-2 bg-white/40 dark:bg-white/5 rounded-lg shadow-sm">
-          <Icon className="w-5 h-5" />
-        </div>
-        <span className="font-medium text-sm tracking-wide uppercase">{title}</span>
-      </div>
-      {value && (
-        <span className="text-2xl font-bold text-gray-800 dark:text-white tracking-tight">{value}</span>
-      )}
-    </div>
-    <div className="flex-1 min-h-0 relative">
-      {children}
-    </div>
-  </div>
-);
+type TabType = 'cpu' | 'memory' | 'gpu' | 'storage';
+
+const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
+  { id: 'cpu', label: 'CPU', icon: Cpu },
+  { id: 'memory', label: 'Memory', icon: Activity },
+  { id: 'gpu', label: 'GPU', icon: Monitor },
+  { id: 'storage', label: 'Storage', icon: HardDrive },
+];
 
 // GPU Icon SVG component
 const GpuIcon = ({ className }: { className?: string }) => (
@@ -52,6 +42,7 @@ const GpuIcon = ({ className }: { className?: string }) => (
 export const Dashboard = () => {
   const { data: systemStatus } = useSystemStatus();
   const [history, setHistory] = useState<{ time: string; cpu: number; ram: number; gpu?: number }[]>([]);
+  const [activeTab, setActiveTab] = useState<TabType>('cpu');
 
   // Update history when new data arrives
   useEffect(() => {
@@ -98,237 +89,222 @@ export const Dashboard = () => {
   };
 
   const getDiskDisplayName = (disk: { name: string; mount_point: string; disk_type: string }) => {
-    // Use mount point for display, show disk type as subtitle
     if (disk.mount_point === '/') {
       return { name: 'System', subtitle: disk.disk_type };
     }
-    // Extract the last part of the mount path
     const parts = disk.mount_point.split('/').filter(Boolean);
     const name = parts[parts.length - 1] || disk.name;
     return { name, subtitle: disk.disk_type };
   };
 
-  return (
-    <div className="h-full p-8 overflow-auto bg-white/20 dark:bg-zinc-950/20 backdrop-blur-3xl custom-scrollbar">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 h-full max-h-[900px]">
-        {/* CPU Usage */}
-        <Widget
-          title="CPU Usage"
-          icon={Cpu}
-          className="col-span-2 row-span-1"
-          value={systemStatus ? `${systemStatus.cpu_usage.toFixed(1)}%` : '--'}
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={history}>
-              <defs>
-                <linearGradient id="colorCpu" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.5} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.1)" vertical={false} />
-              <XAxis
-                dataKey="time"
-                stroke="rgba(128,128,128,0.5)"
-                tick={{ fontSize: 12 }}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis
-                stroke="rgba(128,128,128,0.5)"
-                domain={['dataMin - 5', 'dataMax + 10']}
-                tick={{ fontSize: 12 }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(value) => `${Math.round(value)}%`}
-              />
-              <Tooltip
-                contentStyle={{ backgroundColor: 'rgba(255,255,255,0.8)', border: '1px solid rgba(0,0,0,0.1)', borderRadius: '12px', backdropFilter: 'blur(8px)', color: '#000' }}
-                itemStyle={{ color: '#3b82f6' }}
-                labelStyle={{ color: 'rgba(0,0,0,0.5)', marginBottom: '0.5rem' }}
-              />
-              <Area
-                type="monotone"
-                dataKey="cpu"
-                stroke="#3b82f6"
-                strokeWidth={3}
-                fillOpacity={1}
-                fill="url(#colorCpu)"
-                animationDuration={500}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </Widget>
-
-        {/* Storage */}
-        <Widget title="Storage" icon={HardDrive} className="col-span-1 row-span-2">
-          <div className="flex flex-col gap-5 h-full overflow-y-auto pr-2 custom-scrollbar">
-            {systemStatus?.disks.map((disk, i) => {
-              const used = disk.total_space - disk.available_space;
-              const percentage = (used / disk.total_space) * 100;
-              const displayInfo = getDiskDisplayName(disk);
-
-              return (
-                <div key={i} className="space-y-2">
-                  <div className="flex justify-between items-end">
-                    <div className="flex flex-col">
-                      <span className="text-gray-800 dark:text-white font-medium truncate max-w-[120px]" title={disk.mount_point}>
-                        {displayInfo.name}
-                      </span>
-                      <span className="text-xs text-gray-500 dark:text-zinc-500">{displayInfo.subtitle}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-sm text-gray-600 dark:text-zinc-300 font-medium">{formatBytes(used)}</span>
-                      <span className="text-xs text-gray-400 dark:text-zinc-500 ml-1">/ {formatBytes(disk.total_space)}</span>
-                    </div>
-                  </div>
-
-                  <div className="h-2.5 bg-gray-200 dark:bg-zinc-800/50 rounded-full overflow-hidden ring-1 ring-black/5 dark:ring-white/5">
-                    <div
-                      className={cn("h-full rounded-full transition-all duration-500 bg-gradient-to-r", getProgressColor(percentage))}
-                      style={{ width: `${percentage}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+  const renderCpuTab = () => (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-blue-500/20 rounded-lg">
+            <Cpu className="w-6 h-6 text-blue-400" />
           </div>
-        </Widget>
+          <div>
+            <div className="text-sm text-zinc-400">CPU Usage</div>
+            <div className="text-3xl font-bold text-white">
+              {systemStatus ? `${systemStatus.cpu_usage.toFixed(1)}%` : '--'}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 min-h-[200px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={history}>
+            <defs>
+              <linearGradient id="colorCpu" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.5} />
+                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.1)" vertical={false} />
+            <XAxis dataKey="time" stroke="rgba(128,128,128,0.5)" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+            <YAxis stroke="rgba(128,128,128,0.5)" domain={['dataMin - 5', 'dataMax + 10']} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={(value) => `${Math.round(value)}%`} />
+            <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: '#fff' }} />
+            <Area type="monotone" dataKey="cpu" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorCpu)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
 
-        {/* RAM Usage */}
-        <Widget
-          title="Memory Usage"
-          icon={Activity}
-          className="col-span-2 row-span-1"
-          value={systemStatus ? `${((systemStatus.used_memory / systemStatus.total_memory) * 100).toFixed(1)}%` : '--'}
-        >
+  const renderMemoryTab = () => (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-purple-500/20 rounded-lg">
+            <Activity className="w-6 h-6 text-purple-400" />
+          </div>
+          <div>
+            <div className="text-sm text-zinc-400">Memory Usage</div>
+            <div className="text-3xl font-bold text-white">
+              {systemStatus ? `${((systemStatus.used_memory / systemStatus.total_memory) * 100).toFixed(1)}%` : '--'}
+            </div>
+          </div>
+        </div>
+        {systemStatus && (
+          <div className="text-right text-sm text-zinc-400">
+            {formatBytes(systemStatus.used_memory)} / {formatBytes(systemStatus.total_memory)}
+          </div>
+        )}
+      </div>
+      <div className="flex-1 min-h-[200px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={history}>
+            <defs>
+              <linearGradient id="colorRam" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.5} />
+                <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.1)" vertical={false} />
+            <XAxis dataKey="time" stroke="rgba(128,128,128,0.5)" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+            <YAxis stroke="rgba(128,128,128,0.5)" domain={['dataMin - 5', 'dataMax + 10']} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={(value) => `${Math.round(value)}%`} />
+            <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: '#fff' }} />
+            <Area type="monotone" dataKey="ram" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorRam)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+
+  const renderGpuTab = () => {
+    if (!systemStatus?.gpu) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-zinc-400">
+          <Monitor className="w-16 h-16 mb-4 opacity-50" />
+          <div className="text-lg">No GPU Detected</div>
+        </div>
+      );
+    }
+
+    const gpu = systemStatus.gpu;
+    const vramPercent = (gpu.memory_used / gpu.memory_total) * 100;
+
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-green-500/20 rounded-lg">
+              <GpuIcon className="w-6 h-6 text-green-400" />
+            </div>
+            <div>
+              <div className="text-sm text-zinc-400">{gpu.name}</div>
+              <div className="text-3xl font-bold text-white">{gpu.utilization}%</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-orange-400">
+            <Thermometer className="w-5 h-5" />
+            <span className="text-xl font-semibold">{gpu.temperature}°C</span>
+          </div>
+        </div>
+
+        <div className="flex-1 min-h-[200px] mb-4">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={history}>
               <defs>
-                <linearGradient id="colorRam" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.5} />
-                  <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                <linearGradient id="colorGpu" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.5} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.1)" vertical={false} />
-              <XAxis
-                dataKey="time"
-                stroke="rgba(128,128,128,0.5)"
-                tick={{ fontSize: 12 }}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis
-                stroke="rgba(128,128,128,0.5)"
-                domain={['dataMin - 5', 'dataMax + 10']}
-                tick={{ fontSize: 12 }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(value) => `${Math.round(value)}%`}
-              />
-              <Tooltip
-                contentStyle={{ backgroundColor: 'rgba(255,255,255,0.8)', border: '1px solid rgba(0,0,0,0.1)', borderRadius: '12px', backdropFilter: 'blur(8px)', color: '#000' }}
-                itemStyle={{ color: '#8b5cf6' }}
-                labelStyle={{ color: 'rgba(0,0,0,0.5)', marginBottom: '0.5rem' }}
-              />
-              <Area
-                type="monotone"
-                dataKey="ram"
-                stroke="#8b5cf6"
-                strokeWidth={3}
-                fillOpacity={1}
-                fill="url(#colorRam)"
-                animationDuration={500}
-              />
+              <XAxis dataKey="time" stroke="rgba(128,128,128,0.5)" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+              <YAxis stroke="rgba(128,128,128,0.5)" domain={['dataMin - 5', 'dataMax + 10']} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={(value) => `${Math.round(value)}%`} />
+              <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: '#fff' }} />
+              <Area type="monotone" dataKey="gpu" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorGpu)" />
             </AreaChart>
           </ResponsiveContainer>
-        </Widget>
+        </div>
 
-        {/* GPU Usage */}
-        {systemStatus?.gpu && (
-          <Widget
-            title="GPU Usage"
-            icon={GpuIcon}
-            className="col-span-2 row-span-1"
-            value={`${systemStatus.gpu.utilization.toFixed(0)}%`}
-          >
-            <div className="flex flex-col gap-4 h-full">
-              {/* GPU Name and Temperature */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-zinc-400">{systemStatus.gpu.name}</span>
-                <div className="flex items-center gap-1.5 text-sm">
-                  <Thermometer className="w-4 h-4 text-orange-500" />
-                  <span className={cn(
-                    systemStatus.gpu.temperature > 80 ? "text-red-500" :
-                      systemStatus.gpu.temperature > 60 ? "text-orange-500" : "text-green-500"
-                  )}>
-                    {systemStatus.gpu.temperature}°C
-                  </span>
+        {/* VRAM Usage */}
+        <div className="bg-white/5 rounded-xl p-4">
+          <div className="flex justify-between mb-2">
+            <span className="text-sm text-zinc-400">VRAM</span>
+            <span className="text-sm text-white">{formatBytes(gpu.memory_used)} / {formatBytes(gpu.memory_total)}</span>
+          </div>
+          <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+            <div className={cn("h-full rounded-full bg-gradient-to-r", getProgressColor(vramPercent))} style={{ width: `${vramPercent}%` }} />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderStorageTab = () => (
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="p-2 bg-orange-500/20 rounded-lg">
+          <HardDrive className="w-6 h-6 text-orange-400" />
+        </div>
+        <div className="text-lg font-semibold text-white">Storage Devices</div>
+      </div>
+      <div className="flex-1 overflow-auto custom-scrollbar space-y-4">
+        {systemStatus?.disks?.map((disk, i) => {
+          const percentage = ((disk.total_space - disk.available_space) / disk.total_space) * 100;
+          const display = getDiskDisplayName(disk);
+          return (
+            <div key={i} className="bg-white/5 rounded-xl p-4">
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <div className="font-medium text-white">{display.name}</div>
+                  <div className="text-xs text-zinc-500">{display.subtitle}</div>
+                </div>
+                <div className="text-right">
+                  <span className="text-xl font-bold text-white">{formatBytes(disk.available_space)}</span>
+                  <span className="text-zinc-400 text-sm"> / {formatBytes(disk.total_space)}</span>
                 </div>
               </div>
-
-              {/* GPU Utilization Chart */}
-              <div className="flex-1">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={history}>
-                    <defs>
-                      <linearGradient id="colorGpu" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.5} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.1)" vertical={false} />
-                    <XAxis
-                      dataKey="time"
-                      stroke="rgba(128,128,128,0.5)"
-                      tick={{ fontSize: 12 }}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <YAxis
-                      stroke="rgba(128,128,128,0.5)"
-                      domain={['dataMin - 5', 'dataMax + 10']}
-                      tick={{ fontSize: 12 }}
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(value) => `${Math.round(value)}%`}
-                    />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: 'rgba(255,255,255,0.8)', border: '1px solid rgba(0,0,0,0.1)', borderRadius: '12px', backdropFilter: 'blur(8px)', color: '#000' }}
-                      itemStyle={{ color: '#10b981' }}
-                      labelStyle={{ color: 'rgba(0,0,0,0.5)', marginBottom: '0.5rem' }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="gpu"
-                      stroke="#10b981"
-                      strokeWidth={3}
-                      fillOpacity={1}
-                      fill="url(#colorGpu)"
-                      animationDuration={500}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* VRAM Usage Bar */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500 dark:text-zinc-500">VRAM</span>
-                  <span className="text-gray-600 dark:text-zinc-300">
-                    {formatBytes(systemStatus.gpu.memory_used)} / {formatBytes(systemStatus.gpu.memory_total)}
-                  </span>
-                </div>
-                <div className="h-2.5 bg-gray-200 dark:bg-zinc-800/50 rounded-full overflow-hidden ring-1 ring-black/5 dark:ring-white/5">
-                  <div
-                    className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-emerald-400 to-teal-500"
-                    style={{ width: `${(systemStatus.gpu.memory_used / systemStatus.gpu.memory_total) * 100}%` }}
-                  />
-                </div>
+              <div className="h-3 bg-white/10 rounded-full overflow-hidden">
+                <div className={cn("h-full rounded-full bg-gradient-to-r transition-all", getProgressColor(percentage))} style={{ width: `${percentage}%` }} />
               </div>
             </div>
-          </Widget>
-        )}
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'cpu': return renderCpuTab();
+      case 'memory': return renderMemoryTab();
+      case 'gpu': return renderGpuTab();
+      case 'storage': return renderStorageTab();
+    }
+  };
+
+  return (
+    <div className="h-full flex flex-col bg-white/20 dark:bg-zinc-950/20 backdrop-blur-3xl">
+      {/* Tab Bar */}
+      <div className="flex border-b border-white/10">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-all",
+                activeTab === tab.id
+                  ? "text-white bg-white/10 border-b-2 border-blue-500"
+                  : "text-zinc-400 hover:text-white hover:bg-white/5"
+              )}
+            >
+              <Icon className="w-4 h-4" />
+              <span className="hidden sm:inline">{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tab Content */}
+      <div className="flex-1 p-6 overflow-hidden">
+        {renderTabContent()}
       </div>
     </div>
   );

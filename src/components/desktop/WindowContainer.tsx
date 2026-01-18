@@ -11,6 +11,12 @@ import { Dashboard } from '@/components/apps/Dashboard';
 import { DockerManager } from '@/components/apps/DockerManager';
 import { Photos } from '@/components/apps/Photos';
 import { FilePreview } from '@/components/apps/FilePreview';
+import dynamic from 'next/dynamic';
+
+const ContainerTerminal = dynamic(() => import('@/components/apps/ContainerTerminal').then(mod => mod.ContainerTerminal), {
+  ssr: false,
+  loading: () => <div className="h-full w-full bg-[#1e1e1e] animate-pulse" />
+});
 
 const WindowContent = ({ appType, props, windowId }: { appType: string, props?: any, windowId: string }) => {
   switch (appType) {
@@ -24,6 +30,17 @@ const WindowContent = ({ appType, props, windowId }: { appType: string, props?: 
       return <Photos />;
     case 'preview':
       return <FilePreview {...props} windowId={windowId} />;
+    case 'terminal':
+      // If containerId is provided, render ContainerTerminal connected to that container
+      if (props?.containerId) {
+        return <ContainerTerminal containerId={props.containerId} />;
+      }
+      // Otherwise show placeholder
+      return (
+        <div className="flex items-center justify-center h-full text-muted-foreground bg-[#1e1e1e]">
+          Terminal - No container connected
+        </div>
+      );
     default:
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground">

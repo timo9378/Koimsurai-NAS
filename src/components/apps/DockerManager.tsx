@@ -23,18 +23,19 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
-  useContainers,
-  useContainerActions,
   useContainerStats,
   useContainerLogs,
+  useContainerActions,
+  useContainers,
   useImages,
-  useRemoveImage,
-  usePullImage,
   useNetworks,
-  ContainerInfo,
-  ImageInfo,
-  NetworkInfo
+  usePullImage,
+  useRemoveImage,
+  type ContainerInfo,
+  type ImageInfo,
+  type NetworkInfo
 } from '@/features/docker/api/useDocker';
+import { useWindowStore } from '../../store/window-store';
 import dynamic from 'next/dynamic';
 import {
   DropdownMenu,
@@ -54,10 +55,7 @@ const TerminalView = dynamic(() => import('./TerminalView').then(mod => mod.Term
   loading: () => <div className="h-full w-full bg-[#1e1e1e] animate-pulse" />
 });
 
-const ContainerTerminal = dynamic(() => import('./ContainerTerminal').then(mod => mod.ContainerTerminal), {
-  ssr: false,
-  loading: () => <div className="h-full w-full bg-[#1e1e1e] animate-pulse" />
-});
+
 
 type TabType = 'containers' | 'images' | 'networks';
 type ViewMode = 'grid' | 'list';
@@ -67,7 +65,7 @@ const ContainerCard = ({ container }: { container: ContainerInfo }) => {
   const { start, stop, restart, remove } = useContainerActions();
   const { data: stats } = useContainerStats(container.id, container.state === 'running');
   const [showLogs, setShowLogs] = useState(false);
-  const [showTerminal, setShowTerminal] = useState(false);
+  const { openWindow } = useWindowStore();
   const { data: logs, isLoading: isLoadingLogs } = useContainerLogs(container.id, showLogs);
 
   const isRunning = container.state === 'running';
@@ -101,7 +99,7 @@ const ContainerCard = ({ container }: { container: ContainerInfo }) => {
             <DropdownMenuItem onClick={() => setShowLogs(true)}>
               <Terminal className="mr-2 h-4 w-4" /> Logs
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setShowTerminal(true)}>
+            <DropdownMenuItem onClick={() => openWindow('terminal', `Terminal - ${container.names[0]}`, { containerId: container.id })}>
               <Shell className="mr-2 h-4 w-4" /> Terminal
             </DropdownMenuItem>
             <DropdownMenuItem className="text-red-600" onClick={() => remove.mutate(container.id)}>
@@ -164,19 +162,7 @@ const ContainerCard = ({ container }: { container: ContainerInfo }) => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showTerminal} onOpenChange={setShowTerminal}>
-        <DialogContent className="max-w-3xl h-[600px] flex flex-col bg-[#1e1e1e] text-white border-white/10">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Shell className="w-5 h-5" />
-              {container.names[0]} - Terminal
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 bg-black rounded-md overflow-hidden">
-            <ContainerTerminal containerId={container.id} />
-          </div>
-        </DialogContent>
-      </Dialog>
+
     </div>
   );
 };
@@ -186,7 +172,7 @@ const ContainerListItem = ({ container }: { container: ContainerInfo }) => {
   const { start, stop, restart, remove } = useContainerActions();
   const { data: stats } = useContainerStats(container.id, container.state === 'running');
   const [showLogs, setShowLogs] = useState(false);
-  const [showTerminal, setShowTerminal] = useState(false);
+  const { openWindow } = useWindowStore();
   const { data: logs, isLoading: isLoadingLogs } = useContainerLogs(container.id, showLogs);
 
   const isRunning = container.state === 'running';
@@ -256,7 +242,7 @@ const ContainerListItem = ({ container }: { container: ContainerInfo }) => {
               <DropdownMenuItem onClick={() => setShowLogs(true)}>
                 <Terminal className="mr-2 h-4 w-4" /> Logs
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setShowTerminal(true)}>
+              <DropdownMenuItem onClick={() => openWindow('terminal', `Terminal - ${container.names[0]}`, { containerId: container.id })}>
                 <Shell className="mr-2 h-4 w-4" /> Terminal
               </DropdownMenuItem>
               <DropdownMenuItem className="text-red-600" onClick={() => remove.mutate(container.id)}>
@@ -281,19 +267,7 @@ const ContainerListItem = ({ container }: { container: ContainerInfo }) => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showTerminal} onOpenChange={setShowTerminal}>
-        <DialogContent className="max-w-3xl h-[600px] flex flex-col bg-[#1e1e1e] text-white border-white/10">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Shell className="w-5 h-5" />
-              {container.names[0]} - Terminal
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 bg-black rounded-md overflow-hidden">
-            <ContainerTerminal containerId={container.id} />
-          </div>
-        </DialogContent>
-      </Dialog>
+
     </>
   );
 };

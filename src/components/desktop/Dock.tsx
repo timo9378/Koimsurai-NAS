@@ -31,6 +31,7 @@ interface DockItemProps {
   isOpen: boolean;
   windows: WindowState[];
   onClick: () => void;
+  onRightClick: () => void;
   onCloseWindow: (id: string) => void;
   onFocusWindow: (id: string) => void;
 }
@@ -67,11 +68,11 @@ const DockPreview = ({
             <div className="w-1 h-1 rounded-full bg-green-400" />
             <span className="text-[8px] text-white/70 ml-1 truncate">{window.title}</span>
           </div>
-          
+
           {/* Content Preview Placeholder */}
           <div className="p-2 flex items-center justify-center h-[calc(100%-16px)] overflow-hidden">
             {window.appType === 'preview' && window.props?.url ? (
-               // eslint-disable-next-line @next/next/no-img-element
+              // eslint-disable-next-line @next/next/no-img-element
               <img src={window.props.url} alt="preview" className="w-full h-full object-contain opacity-80" />
             ) : window.appType === 'finder' && window.appState?.currentPath ? (
               <div className="flex flex-col items-center justify-center gap-1">
@@ -145,7 +146,7 @@ const DockSettings = () => {
   );
 };
 
-const DockItem = ({ mouseX, icon: Icon, label, appType, isOpen, windows, onClick, onCloseWindow, onFocusWindow }: DockItemProps) => {
+const DockItem = ({ mouseX, icon: Icon, label, appType, isOpen, windows, onClick, onRightClick, onCloseWindow, onFocusWindow }: DockItemProps) => {
   const ref = useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = useState(false);
 
@@ -183,6 +184,10 @@ const DockItem = ({ mouseX, icon: Icon, label, appType, isOpen, windows, onClick
               style={{ width }}
               className="aspect-square rounded-xl bg-white/10 border border-white/20 backdrop-blur-md flex items-center justify-center cursor-pointer hover:bg-white/20 transition-colors relative z-10"
               onClick={onClick}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                onRightClick();
+              }}
               whileTap={{ scale: 0.9 }}
               data-context-type="dock-icon"
               data-context-id={appType}
@@ -238,12 +243,12 @@ export const Dock = () => {
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!dockRef.current) return;
-    
+
     const dockRect = dockRef.current.getBoundingClientRect();
     const buffer = 50; // Buffer zone
-    
+
     let isInDockArea = false;
-    
+
     if (dockPosition === 'bottom') {
       isInDockArea = (
         e.clientY >= dockRect.top - buffer &&
@@ -266,7 +271,7 @@ export const Dock = () => {
         e.clientY <= dockRect.bottom
       );
     }
-    
+
     if (!isInDockArea && isDockHovered) {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       timeoutRef.current = setTimeout(() => {
@@ -291,7 +296,7 @@ export const Dock = () => {
   const getPositionClasses = () => {
     const baseClass = "fixed z-50 transition-all duration-300 ease-in-out";
     const hideOffset = "120px";
-    
+
     if (dockPosition === 'left') {
       return cn(
         baseClass,
@@ -323,7 +328,7 @@ export const Dock = () => {
   const getTriggerZone = () => {
     const zoneClass = "fixed z-40 transition-all";
     const activeSize = isAnyMaximized ? "6" : "0";
-    
+
     if (dockPosition === 'left') {
       return (
         <div
@@ -362,7 +367,7 @@ export const Dock = () => {
         onMouseLeave={(e) => {
           const rect = dockRef.current?.getBoundingClientRect();
           if (!rect) return;
-          
+
           let shouldHide = false;
           if (dockPosition === 'bottom') {
             shouldHide = e.clientY > rect.bottom;
@@ -371,7 +376,7 @@ export const Dock = () => {
           } else if (dockPosition === 'right') {
             shouldHide = e.clientX < rect.left;
           }
-          
+
           if (shouldHide) {
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
             timeoutRef.current = setTimeout(() => {
@@ -388,27 +393,50 @@ export const Dock = () => {
             getDockContainerClasses()
           )}
         >
-          {apps.map((app) => (
-            <DockItem
-              key={app.id}
-              mouseX={mouseX}
-              icon={app.icon}
-              label={app.label}
-              appType={app.type}
-              isOpen={windows.some(w => w.appType === app.type)}
-              windows={windows}
-              onClick={() => openWindow(app.type)}
-              onCloseWindow={closeWindow}
-              onFocusWindow={focusWindow}
-            />
-          ))}
-          
+          {apps.map((app) => {
+            const appWindows = windows.filter(w => w.appType === app.type);
+            const multiInstanceApps = ['finder', 'terminal', 'preview', 'photos'];
+            const canMultiInstance = multiInstanceApps.includes(app.type);
+
+            return (
+              <DockItem
+                key={app.id}
+                mouseX={mouseX}
+                icon={app.icon}
+                label={app.label}
+                appType={app.type}
+                isOpen={appWindows.length > 0}
+                windows={windows}
+                onClick={() => {
+                  // Windows-style: left click focuses if window exists, opens new if none
+                  if (appWindows.length > 0) {
+                    // Find the frontmost (highest zIndex) window of this type
+                    const frontWindow = appWindows.reduce((prev, curr) =>
+                      prev.zIndex > curr.zIndex ? prev : curr
+                    );
+                    focusWindow(frontWindow.id);
+                  } else {
+                    openWindow(app.type);
+                  }
+                }}
+                onRightClick={() => {
+                  // Right click: always open new window for multi-instance apps
+                  if (canMultiInstance) {
+                    openWindow(app.type);
+                  }
+                }}
+                onCloseWindow={closeWindow}
+                onFocusWindow={focusWindow}
+              />
+            );
+          })}
+
           {/* Separator */}
           <div className={cn(
             "bg-white/20",
             dockPosition === 'bottom' ? "w-[1px] h-12" : "h-[1px] w-12"
           )} />
-          
+
           {/* Settings Apps with Popover for Settings */}
           {settingsApps.map((app) => (
             app.id === 'settings' ? (
@@ -423,6 +451,7 @@ export const Dock = () => {
                       isOpen={windows.some(w => w.appType === app.type)}
                       windows={windows}
                       onClick={() => setIsSettingsOpen(true)}
+                      onRightClick={() => setIsSettingsOpen(true)}
                       onCloseWindow={closeWindow}
                       onFocusWindow={focusWindow}
                     />
@@ -448,7 +477,18 @@ export const Dock = () => {
                 appType={app.type}
                 isOpen={windows.some(w => w.appType === app.type)}
                 windows={windows}
-                onClick={() => openWindow(app.type)}
+                onClick={() => {
+                  const appWindows = windows.filter(w => w.appType === app.type);
+                  if (appWindows.length > 0) {
+                    const frontWindow = appWindows.reduce((prev, curr) =>
+                      prev.zIndex > curr.zIndex ? prev : curr
+                    );
+                    focusWindow(frontWindow.id);
+                  } else {
+                    openWindow(app.type);
+                  }
+                }}
+                onRightClick={() => openWindow(app.type)}
                 onCloseWindow={closeWindow}
                 onFocusWindow={focusWindow}
               />
