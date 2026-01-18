@@ -73,6 +73,8 @@ interface FileListProps {
   renameValue: string;
   isTrashMode: boolean;
   isDragging: boolean;
+  sortBy?: 'name' | 'size' | 'modified';
+  sortDirection?: 'asc' | 'desc';
   onFileClick: (file: FileInfo, e: React.MouseEvent) => void;
   onFileDoubleClick: (file: FileInfo) => void;
   onSelectionClear: () => void;
@@ -93,6 +95,7 @@ interface FileListProps {
   onUpload?: () => void;
   onRefresh?: () => void;
   onViewModeChange?: (mode: 'grid' | 'list') => void;
+  onSortChange?: (field: 'name' | 'size' | 'modified') => void;
 }
 
 export const FileList = ({
@@ -105,6 +108,8 @@ export const FileList = ({
   renameValue,
   isTrashMode,
   isDragging,
+  sortBy = 'name',
+  sortDirection = 'asc',
   onFileClick,
   onFileDoubleClick,
   onSelectionClear,
@@ -124,7 +129,8 @@ export const FileList = ({
   onUpload,
   onRefresh,
   onViewModeChange,
-  onSelectionChange, // New prop
+  onSortChange,
+  onSelectionChange,
 }: FileListProps & { onSelectionChange?: (selected: Set<string>) => void }) => {
   const renameInputRef = useRef<HTMLInputElement>(null);
   const [contextMenuKey, setContextMenuKey] = React.useState(0);
@@ -140,6 +146,7 @@ export const FileList = ({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    // Only start selection if clicking on empty space (not on a file)
     if (e.button === 0 && e.target === e.currentTarget) {
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {
@@ -155,38 +162,37 @@ export const FileList = ({
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (selectionBox?.isSelecting && containerRef.current) {
+  // Use document-level listeners for selection to work even when mouse leaves container
+  React.useEffect(() => {
+    if (!selectionBox?.isSelecting) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!containerRef.current) return;
+
       const rect = containerRef.current.getBoundingClientRect();
       const currentX = e.clientX - rect.left;
       const currentY = e.clientY - rect.top + containerRef.current.scrollTop;
 
       setSelectionBox(prev => prev ? ({ ...prev, currentX, currentY }) : null);
+    };
 
-      // Calculate selection intersection
-      const left = Math.min(selectionBox.startX, currentX);
-      const top = Math.min(selectionBox.startY, currentY);
-      const width = Math.abs(currentX - selectionBox.startX);
-      const height = Math.abs(currentY - selectionBox.startY);
-
-      // Select files intersecting with box
-      // This requires refs to file elements or calculating their positions based on grid
-      // For simplicity, we can use document.elementsFromPoint or similar if we had coordinates
-      // But in React, we might need to know where each item is.
-
-      // Alternative: Use a ref map for file items
-    }
-  };
-
-  const handleMouseUp = () => {
-    if (selectionBox?.isSelecting) {
+    const handleMouseUp = () => {
       setSelectionBox(null);
-    }
-  };
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [selectionBox?.isSelecting]);
 
   // We need to track file element positions for selection
   const fileRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
+  // Calculate selection intersection whenever selectionBox changes
   React.useEffect(() => {
     if (selectionBox?.isSelecting && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
@@ -224,7 +230,7 @@ export const FileList = ({
         onSelectionChange(newSelected);
       }
     }
-  }, [selectionBox, files, onSelectionChange]);
+  }, [selectionBox?.currentX, selectionBox?.currentY, selectionBox?.isSelecting, files, onSelectionChange]);
 
   return (
     <ContextMenu key={contextMenuKey}>
@@ -234,9 +240,6 @@ export const FileList = ({
           className="flex-1 overflow-auto p-4 relative h-full w-full select-none"
           onClick={onSelectionClear}
           onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
           onPointerDown={(e) => {
             if (e.button === 2) {
               document.dispatchEvent(new PointerEvent('pointerdown', {
@@ -380,14 +383,42 @@ export const FileList = ({
           ) : (
             <div className="w-full text-sm text-gray-700 dark:text-gray-200">
               <div className="grid grid-cols-[1fr_100px_150px] gap-4 px-4 py-2 border-b border-white/10 font-medium text-gray-500 sticky top-0 bg-white/80 dark:bg-black/80 backdrop-blur-sm z-10">
-                <div>Name</div>
-                <div>Size</div>
-                <div>Date Modified</div>
+                <button
+                  onClick={() => onSortChange?.('name')}
+                  className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-300 text-left"
+                >
+                  Name
+                  {sortBy === 'name' && (
+                    <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => onSortChange?.('size')}
+                  className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-300 text-left"
+                >
+                  Size
+                  {sortBy === 'size' && (
+                    <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => onSortChange?.('modified')}
+                  className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-300 text-left"
+                >
+                  Date Modified
+                  {sortBy === 'modified' && (
+                    <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </button>
               </div>
               {files?.map((file) => (
                 <ContextMenu key={file.name}>
                   <ContextMenuTrigger>
                     <div
+                      ref={(el) => {
+                        if (el) fileRefs.current.set(file.name, el);
+                        else fileRefs.current.delete(file.name);
+                      }}
                       onClick={(e) => { e.stopPropagation(); onFileClick(file, e); }}
                       onDoubleClick={(e) => { e.stopPropagation(); onFileDoubleClick(file); }}
                       className={cn(

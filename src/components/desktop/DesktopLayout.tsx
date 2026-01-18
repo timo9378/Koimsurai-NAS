@@ -33,7 +33,7 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
   });
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [maximizePreview, setMaximizePreview] = useState(false);
-  
+
   const containerRef = useRef<HTMLDivElement>(null);
   const { handleUploadFiles } = useFileUpload(); // Use the hook
   const { snapWindow, maximizeWindow } = useWindowStore();
@@ -48,7 +48,7 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
     const handleDragMove = (e: Event) => {
       const customEvent = e as CustomEvent<{ x: number; y: number }>;
       const y = customEvent.detail.y;
-      
+
       // Show maximize preview if dragged to top
       if (y < 50) {
         setMaximizePreview(true);
@@ -56,16 +56,16 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
         setMaximizePreview(false);
       }
     };
-    
+
     const handleDragEnd = (e: Event) => {
       const customEvent = e as CustomEvent<{ x: number; y: number; windowId: string }>;
       const { x, y, windowId } = customEvent.detail;
-      
+
       setMaximizePreview(false);
-      
+
       const screenWidth = window.innerWidth;
       const screenHeight = window.innerHeight;
-      
+
       // Maximize if dropped at top (fixed: use snapWindow with 'maximize' state)
       if (y < 50) {
         maximizeWindow(windowId);
@@ -85,10 +85,10 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
         });
       }
     };
-    
+
     window.addEventListener('window-drag-move', handleDragMove);
     window.addEventListener('window-drag-end', handleDragEnd);
-    
+
     return () => {
       window.removeEventListener('window-drag-move', handleDragMove);
       window.removeEventListener('window-drag-end', handleDragEnd);
@@ -102,8 +102,12 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
 
   const handleMouseDown = (e: React.MouseEvent) => {
     // Only start selection if clicking directly on the desktop background
-    // and specifically the left mouse button
-    if (e.target === e.currentTarget && e.button === 0) {
+    // content-wrapper is the div acting as the interactive layer for icons/windows
+    const target = e.target as HTMLElement;
+    const isInteractive = target.closest('button, a, input, [data-context-type="desktop-icon"], .window-container, [data-context-type="topbar"], .desktop-window');
+
+    // Check if we are clicking on background (root or wrapper) AND not on an interactive element
+    if (!isInteractive && e.button === 0) {
       setSelection({
         startX: e.clientX,
         startY: e.clientY,
@@ -121,13 +125,13 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
         currentX: e.clientX,
         currentY: e.clientY,
       }));
-      
+
       // Calculate selection box
       const left = Math.min(selection.startX, e.clientX);
       const top = Math.min(selection.startY, e.clientY);
       const width = Math.abs(e.clientX - selection.startX);
       const height = Math.abs(e.clientY - selection.startY);
-      
+
       // Dispatch event for DesktopIcons to handle selection
       const event = new CustomEvent('desktop-selection-change', {
         detail: {
@@ -152,7 +156,7 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
     const top = Math.min(selection.startY, selection.currentY);
     const width = Math.abs(selection.currentX - selection.startX);
     const height = Math.abs(selection.currentY - selection.startY);
-    
+
     return {
       left: `${left}px`,
       top: `${top}px`,
@@ -195,9 +199,9 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
   const height = Math.abs(selection.currentY - selection.startY);
 
   return (
-    <div 
+    <div
       ref={containerRef}
-      className="relative w-screen h-screen overflow-hidden bg-cover bg-center transition-all duration-500 select-none" 
+      className="relative w-screen h-screen overflow-hidden bg-cover bg-center transition-all duration-500 select-none"
       style={{ backgroundImage: `url(${wallpaper})` }}
       data-context-type="desktop"
       onMouseDown={handleMouseDown}
@@ -209,15 +213,15 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
     >
       {/* Overlay for better contrast */}
       <div className={`absolute inset-0 bg-black/20 pointer-events-none transition-colors duration-300 ${isDraggingFile ? 'bg-blue-500/20' : ''}`} />
-      
+
       {/* Maximize Preview */}
       {maximizePreview && (
         <div className="absolute inset-0 border-4 border-blue-500/50 bg-blue-500/10 pointer-events-none z-[9998] animate-in fade-in duration-200" />
       )}
-      
+
       {/* Selection Box */}
       {selection.isSelecting && (
-        <div 
+        <div
           className="absolute border border-blue-500/50 bg-blue-500/20 z-10 pointer-events-none"
           style={{
             left,
@@ -227,19 +231,19 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
           }}
         />
       )}
-      
+
       <TopBar />
-      
+
       <main className="relative w-full h-full pt-8 pb-20 pointer-events-none">
         <div className="pointer-events-auto w-full h-full">
-            <DesktopIcons />
-            <WindowContainer />
-            {children}
-            {/* Moved UploadStatus here so it is interactive */}
-            <UploadStatus />
+          <DesktopIcons />
+          <WindowContainer />
+          {children}
+          {/* Moved UploadStatus here so it is interactive */}
+          <UploadStatus />
         </div>
       </main>
-      
+
       <GlobalContextMenu onWallpaperChange={handleWallpaperChange} />
     </div>
   );

@@ -79,6 +79,21 @@ export const DesktopIcons = () => {
     });
   };
 
+  // State to track pending folder rename after creation
+  const [pendingRenameFolder, setPendingRenameFolder] = useState<string | null>(null);
+
+  // Watch for new folder to appear in files list, then enter rename mode
+  useEffect(() => {
+    if (pendingRenameFolder && files) {
+      const newFolder = files.find(f => f.name === pendingRenameFolder);
+      if (newFolder) {
+        setRenamingFile(newFolder.path);
+        setRenameValue(newFolder.name);
+        setPendingRenameFolder(null);
+      }
+    }
+  }, [files, pendingRenameFolder]);
+
   // Listen for desktop-create-folder event from GlobalContextMenu
   useEffect(() => {
     const handleCreateFolder = async () => {
@@ -121,15 +136,11 @@ export const DesktopIcons = () => {
           throw new Error('無法創建資料夾,請稍後再試');
         }
 
-        // Refresh the Desktop file list to show the new folder
-        await refetch();
+        // Set pending rename - useEffect will handle entering rename mode when folder appears
+        setPendingRenameFolder(name);
 
-        // After creation, start renaming the new folder
-        setTimeout(() => {
-          const newFolderPath = `Desktop/${name}`;
-          setRenamingFile(newFolderPath);
-          setRenameValue(name);
-        }, 100);
+        // Trigger refetch to get the new folder
+        await refetch();
       } catch (error) {
         console.error('Failed to create folder:', error);
         alert('建立資料夾失敗');

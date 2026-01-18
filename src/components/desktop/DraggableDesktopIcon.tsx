@@ -21,6 +21,7 @@ interface DraggableDesktopIconProps {
 
 const GRID_SIZE = 100; // Size of each grid cell (matches the icon width)
 const GRID_GAP = 8; // Gap between icons
+const DRAG_THRESHOLD = 5; // Minimum pixels to move before drag starts
 
 export const DraggableDesktopIcon = ({
   file,
@@ -40,6 +41,8 @@ export const DraggableDesktopIcon = ({
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
+  const [mouseDownPos, setMouseDownPos] = useState<{ x: number; y: number } | null>(null);
+  const [hasDragStarted, setHasDragStarted] = useState(false);
 
   useEffect(() => {
     if (isRenaming && inputRef.current) {
@@ -50,7 +53,7 @@ export const DraggableDesktopIcon = ({
 
   const getIcon = () => {
     if (file.is_dir) return <Folder className="w-10 h-10 text-blue-500 fill-blue-500/20" />;
-    
+
     const ext = file.name.split('.').pop()?.toLowerCase();
     switch (ext) {
       case 'png':
@@ -81,48 +84,65 @@ export const DraggableDesktopIcon = ({
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (isRenaming || e.button !== 0) return;
-    
+
     const rect = iconRef.current?.getBoundingClientRect();
     if (!rect) return;
 
+    // Store the initial mouse position for drag threshold check
+    setMouseDownPos({ x: e.clientX, y: e.clientY });
     setDragOffset({
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
     });
     setDragPosition({ x: rect.left, y: rect.top });
-    setIsDragging(true);
-    onClick(e);
+    setHasDragStarted(false);
+    // Don't set isDragging yet - wait for threshold
   };
 
   useEffect(() => {
-    if (!isDragging) return;
+    if (!mouseDownPos) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      setDragPosition({
-        x: e.clientX - dragOffset.x,
-        y: e.clientY - dragOffset.y,
-      });
+      const distance = Math.sqrt(
+        Math.pow(e.clientX - mouseDownPos.x, 2) +
+        Math.pow(e.clientY - mouseDownPos.y, 2)
+      );
+
+      // Only start dragging if we've moved past the threshold
+      if (distance >= DRAG_THRESHOLD) {
+        if (!hasDragStarted) {
+          setHasDragStarted(true);
+          setIsDragging(true);
+        }
+        setDragPosition({
+          x: e.clientX - dragOffset.x,
+          y: e.clientY - dragOffset.y,
+        });
+      }
     };
 
     const handleMouseUp = (e: MouseEvent) => {
+      if (hasDragStarted && isDragging) {
+        // Calculate the nearest grid position
+        const desktopPadding = 16;
+        const topBarHeight = 48;
+
+        const relativeX = e.clientX - desktopPadding;
+        const relativeY = e.clientY - topBarHeight - desktopPadding;
+
+        const col = Math.round(relativeX / (GRID_SIZE + GRID_GAP));
+        const row = Math.round(relativeY / (GRID_SIZE + GRID_GAP));
+
+        const newCol = Math.max(0, col);
+        const newRow = Math.max(0, row);
+
+        onPositionChange({ row: newRow, col: newCol });
+      }
+
+      // Reset all drag state
       setIsDragging(false);
-
-      // Calculate the nearest grid position
-      // Account for padding/offset from desktop edge
-      const desktopPadding = 16; // p-4 = 16px
-      const topBarHeight = 48; // Top bar height
-
-      const relativeX = e.clientX - desktopPadding;
-      const relativeY = e.clientY - topBarHeight - desktopPadding;
-
-      const col = Math.round(relativeX / (GRID_SIZE + GRID_GAP));
-      const row = Math.round(relativeY / (GRID_SIZE + GRID_GAP));
-
-      // Ensure non-negative values
-      const newCol = Math.max(0, col);
-      const newRow = Math.max(0, row);
-
-      onPositionChange({ row: newRow, col: newCol });
+      setMouseDownPos(null);
+      setHasDragStarted(false);
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -132,7 +152,7 @@ export const DraggableDesktopIcon = ({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, dragOffset, onPositionChange]);
+  }, [mouseDownPos, hasDragStarted, isDragging, dragOffset, onPositionChange]);
 
   // Calculate the actual position based on grid
   const gridX = position.col * (GRID_SIZE + GRID_GAP);
@@ -152,9 +172,16 @@ export const DraggableDesktopIcon = ({
         transition: isDragging ? 'none' : 'all 0.3s ease-out',
       }}
       onMouseDown={handleMouseDown}
+      onClick={(e) => {
+        // Only handle click if we didn't drag
+        if (!hasDragStarted) {
+          e.stopPropagation();
+          onClick(e);
+        }
+      }}
       onDoubleClick={(e) => {
         e.stopPropagation();
-        if (!isRenaming) onDoubleClick();
+        if (!isRenaming && !hasDragStarted) onDoubleClick();
       }}
       data-context-type="desktop-icon"
       data-context-id={file.path}

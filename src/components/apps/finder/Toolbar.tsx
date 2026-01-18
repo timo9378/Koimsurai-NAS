@@ -21,10 +21,10 @@ interface BreadcrumbsProps {
 
 const Breadcrumbs = ({ path, onNavigate }: BreadcrumbsProps) => {
   const parts = path.split('/').filter(Boolean);
-  
+
   return (
     <div className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-300">
-      <button 
+      <button
         onClick={() => onNavigate('/')}
         className="hover:bg-black/5 dark:hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors"
       >
@@ -35,7 +35,7 @@ const Breadcrumbs = ({ path, onNavigate }: BreadcrumbsProps) => {
         return (
           <React.Fragment key={currentPath}>
             <span className="text-gray-400">/</span>
-            <button 
+            <button
               onClick={() => onNavigate(currentPath)}
               className="hover:bg-black/5 dark:hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors"
             >
@@ -54,12 +54,14 @@ interface ToolbarProps {
   viewMode: 'grid' | 'list';
   historyIndex: number;
   historyLength: number;
+  searchQuery: string;
   onNavigate: (path: string) => void;
   onBack: () => void;
   onForward: () => void;
   onEmptyTrash: () => void;
   onUploadClick: () => void;
   onViewModeChange: (mode: 'grid' | 'list') => void;
+  onSearchChange: (query: string) => void;
 }
 
 export const Toolbar = ({
@@ -68,12 +70,14 @@ export const Toolbar = ({
   viewMode,
   historyIndex,
   historyLength,
+  searchQuery,
   onNavigate,
   onBack,
   onForward,
   onEmptyTrash,
   onUploadClick,
   onViewModeChange,
+  onSearchChange,
 }: ToolbarProps) => {
   return (
     <div className="h-14 flex items-center justify-between px-4 border-b border-white/10 bg-white/40 dark:bg-black/40 backdrop-blur-md shrink-0">
@@ -124,7 +128,7 @@ export const Toolbar = ({
           </button>
         )}
         <div className="flex bg-black/5 dark:bg-white/10 rounded-md p-0.5">
-          <button 
+          <button
             onClick={() => onViewModeChange('grid')}
             className={cn(
               "p-1 rounded transition-all duration-200",
@@ -133,7 +137,7 @@ export const Toolbar = ({
           >
             <LayoutGrid className="w-4 h-4 text-gray-600 dark:text-gray-300" />
           </button>
-          <button 
+          <button
             onClick={() => onViewModeChange('list')}
             className={cn(
               "p-1 rounded transition-all duration-200",
@@ -143,12 +147,14 @@ export const Toolbar = ({
             <ListIcon className="w-4 h-4 text-gray-600 dark:text-gray-300" />
           </button>
         </div>
-        
+
         <div className="relative group">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-blue-500 transition-colors" />
           <input
             type="text"
             placeholder="Search"
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
             className="w-48 h-8 pl-9 pr-3 text-sm bg-black/5 dark:bg-white/10 rounded-md border border-transparent focus:border-blue-500 focus:outline-none text-gray-700 dark:text-gray-200 placeholder:text-gray-500 transition-all focus:w-64 focus:bg-white dark:focus:bg-black focus:shadow-sm"
           />
         </div>

@@ -49,12 +49,18 @@ export const Finder = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [pendingRenameFolder, setPendingRenameFolder] = useState<string | null>(null);
 
   const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [isEmptyTrashConfirmOpen, setIsEmptyTrashConfirmOpen] = useState(false);
   const [isPermanentDeleteConfirmOpen, setIsPermanentDeleteConfirmOpen] = useState(false);
   const [filesToPermanentlyDelete, setFilesToPermanentlyDelete] = useState<string[]>([]);
+
+  // Search and sort state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'name' | 'size' | 'modified'>('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
@@ -107,8 +113,45 @@ export const Finder = () => {
   const createShare = useCreateShare();
   const createFolder = useCreateFolder();
 
-  const currentFiles = isTrashMode ? trashFiles : files;
+  const currentFilesRaw = isTrashMode ? trashFiles : files;
   const isCurrentLoading = isTrashMode ? isTrashLoading : isLoading;
+
+  // Filter and sort files
+  const currentFiles = React.useMemo(() => {
+    if (!currentFilesRaw) return undefined;
+
+    let filtered = currentFilesRaw;
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(f => f.name.toLowerCase().includes(query));
+    }
+
+    // Apply sorting
+    const sorted = [...filtered].sort((a, b) => {
+      // Folders first
+      if (a.is_dir && !b.is_dir) return -1;
+      if (!a.is_dir && b.is_dir) return 1;
+
+      let comparison = 0;
+      switch (sortBy) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'size':
+          comparison = a.size - b.size;
+          break;
+        case 'modified':
+          comparison = new Date(a.modified).getTime() - new Date(b.modified).getTime();
+          break;
+      }
+
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+
+    return sorted;
+  }, [currentFilesRaw, searchQuery, sortBy, sortDirection]);
 
   const handleNavigate = (path: string) => {
     if (path === currentPath && !isTrashMode) return;
@@ -121,9 +164,31 @@ export const Finder = () => {
     setSelectedFiles(new Set());
   };
 
-  // Quick Look (Spacebar) and Delete keys
+  // Watch for new folder to appear in files list, then enter rename mode
+  useEffect(() => {
+    if (pendingRenameFolder && files) {
+      const newFolder = files.find(f => f.name === pendingRenameFolder);
+      if (newFolder) {
+        setRenamingFile(newFolder.name);
+        setRenameValue(newFolder.name);
+        setPendingRenameFolder(null);
+      }
+    }
+  }, [files, pendingRenameFolder]);
+
+  // Quick Look (Spacebar), Delete keys, and Select All (Cmd+A)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Select All - Cmd+A / Ctrl+A
+      if ((e.metaKey || e.ctrlKey) && e.key === 'a' && !renamingFile) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (currentFiles) {
+          setSelectedFiles(new Set(currentFiles.map(f => f.name)));
+        }
+        return;
+      }
+
       // Quick Look - Spacebar
       if (e.code === 'Space') {
         if (selectedFiles.size === 1 && !renamingFile) {
@@ -203,6 +268,17 @@ export const Finder = () => {
   };
 
   const handleFileDoubleClick = (file: FileInfo) => {
+    // In trash mode, don't navigate to folders (paths are invalid)
+    // Only allow preview for files
+    if (isTrashMode) {
+      if (!file.is_dir) {
+        // Preview the file from trash
+        openWindow('preview', file.name, { file: { ...file, path: file.path } });
+      }
+      // Do nothing for folders in trash - they can't be navigated
+      return;
+    }
+
     if (file.is_dir) {
       handleNavigate(currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`);
     } else {
@@ -332,14 +408,11 @@ export const Finder = () => {
         throw new Error('無法創建資料夾,請稍後再試');
       }
 
-      // Refetch to show the new folder immediately
-      await refetch();
+      // Set pending rename - useEffect will handle entering rename mode when folder appears
+      setPendingRenameFolder(name);
 
-      // 等待檔案列表更新後進入重命名模式
-      setTimeout(() => {
-        setRenamingFile(name);
-        setRenameValue(name);
-      }, 100);
+      // Refetch to get the new folder
+      await refetch();
     } catch (error) {
       console.error('Failed to create folder:', error);
       alert('Failed to create folder');
@@ -373,12 +446,14 @@ export const Finder = () => {
           viewMode={viewMode}
           historyIndex={historyIndex}
           historyLength={history.length}
+          searchQuery={searchQuery}
           onNavigate={handleNavigate}
           onBack={handleBack}
           onForward={handleForward}
           onEmptyTrash={() => setIsEmptyTrashConfirmOpen(true)}
           onUploadClick={() => fileInputRef.current?.click()}
           onViewModeChange={setViewMode}
+          onSearchChange={setSearchQuery}
         />
 
         <input
@@ -399,6 +474,8 @@ export const Finder = () => {
           renameValue={renameValue}
           isTrashMode={isTrashMode}
           isDragging={isDragging}
+          sortBy={sortBy}
+          sortDirection={sortDirection}
           onFileClick={handleFileClick}
           onFileDoubleClick={handleFileDoubleClick}
           onSelectionClear={() => setSelectedFiles(new Set())}
@@ -418,6 +495,14 @@ export const Finder = () => {
           onUpload={() => fileInputRef.current?.click()}
           onRefresh={() => isTrashMode ? refetchTrash() : refetch()}
           onViewModeChange={setViewMode}
+          onSortChange={(field) => {
+            if (field === sortBy) {
+              setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+            } else {
+              setSortBy(field);
+              setSortDirection('asc');
+            }
+          }}
           onSelectionChange={setSelectedFiles}
         />
 

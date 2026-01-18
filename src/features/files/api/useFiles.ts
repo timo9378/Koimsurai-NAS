@@ -16,10 +16,10 @@ export const useFiles = ({ path, sortBy = 'name', order = 'asc', page = 1, limit
     queryFn: async () => {
       // Clean path but preserve structure for backend wildcard matching
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      const endpoint = cleanPath === '' 
+      const endpoint = cleanPath === ''
         ? '/files'
         : `/files/${cleanPath}`; // Use path directly, backend handles wildcard routes
-      
+
       const params = new URLSearchParams();
       if (sortBy) params.append('sort_by', sortBy);
       if (order) params.append('order', order);
@@ -57,18 +57,18 @@ export const useUpload = () => {
     mutationFn: async ({ file, path }: { file: File; path: string }) => {
       const formData = new FormData();
       formData.append('file', file);
-      
+
       // Remove leading slash if present to ensure correct path handling
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      
+
       // Construct the full path including the filename
       // If uploading to root (cleanPath is empty), just use filename
       // Otherwise join directory and filename
       // const fullPath = cleanPath ? `${cleanPath}/${file.name}` : file.name;
-      
+
       // Use path directly for backend wildcard routes
       // const endpoint = fullPath ? `/upload/${fullPath}` : `/upload`;
-      
+
       // FIX: Backend likely expects the directory path, not the file path
       // Encode path components to handle special characters (e.g. Chinese)
       const endpoint = cleanPath ? `/upload/${cleanPath.split('/').map(encodeURIComponent).join('/')}` : `/upload`;
@@ -141,8 +141,9 @@ export const useRename = () => {
       // Build new_path as the same directory + newName so the backend receives the full target path
       const dir = cleanPath.includes('/') ? cleanPath.substring(0, cleanPath.lastIndexOf('/')) : '';
       const newPath = dir ? `${dir}/${newName}` : newName;
-      // Use path directly for backend wildcard routes
-      await apiClient.put(`/files/${cleanPath}`, { new_path: newPath });
+      // URL encode path components to handle special characters (dashes, spaces, etc.)
+      const encodedPath = cleanPath.split('/').map(encodeURIComponent).join('/');
+      await apiClient.put(`/files/${encodedPath}`, { new_path: newPath });
     },
     onSuccess: async (_, variables) => {
       await queryClient.invalidateQueries({ queryKey: ['files'] });
@@ -158,13 +159,15 @@ export const useCreateFolder = () => {
       // Backend expects: POST /api/files/folder with body { "path": "parent_path", "folder_name": "name" }
       // Clean the path - remove leading slash
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      
-      await apiClient.post('/files/folder', { 
+
+      await apiClient.post('/files/folder', {
         path: cleanPath,
         folder_name: name
       });
     },
     onSuccess: async (_, variables) => {
+      // Small delay to ensure filesystem consistency before fetching
+      await new Promise(resolve => setTimeout(resolve, 100));
       await queryClient.invalidateQueries({ queryKey: ['files'] });
     },
   });
@@ -180,8 +183,9 @@ export const useDelete = () => {
         throw new Error('Path is required for deletion');
       }
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      // Use path directly for backend wildcard routes
-      await apiClient.delete(`/files/${cleanPath}`);
+      // URL encode path components to handle special characters (dashes, spaces, etc.)
+      const encodedPath = cleanPath.split('/').map(encodeURIComponent).join('/');
+      await apiClient.delete(`/files/${encodedPath}`);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['files'] });
@@ -330,6 +334,21 @@ export const useEmptyTrash = () => {
   });
 };
 
+export const usePermanentDelete = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (filename: string) => {
+      // URL encode the filename to handle special characters
+      const encodedFilename = encodeURIComponent(filename);
+      await apiClient.delete(`/trash/${encodedFilename}`);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['trash'] });
+    },
+  });
+};
+
 export const useFavorites = () => {
   return useQuery({
     queryKey: ['favorites'],
@@ -348,7 +367,7 @@ export const useDownload = () => {
       const response = await apiClient.get(`/download/${cleanPath}`, {
         responseType: 'blob',
       });
-      
+
       // Create a download link and trigger it
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
@@ -424,7 +443,7 @@ export const useSearchAiTags = (query: string, minConfidence?: number, limit?: n
       if (minConfidence) params.append('min_confidence', minConfidence.toString());
       if (limit) params.append('limit', limit.toString());
       params.append('_t', Date.now().toString());
-      
+
       const response = await apiClient.get(`/search/ai-tags?${params.toString()}`);
       return response.data;
     },

@@ -55,10 +55,10 @@ export function LoginScreen() {
       if (isLogin) {
         await loginMutation.mutateAsync({ username, password, remember })
       } else {
-        await registerMutation.mutateAsync({ 
-          username, 
+        await registerMutation.mutateAsync({
+          username,
           password,
-          invite_code: inviteCode 
+          invite_code: inviteCode
         })
         setIsLogin(true)
         setPassword("")
@@ -67,15 +67,15 @@ export function LoginScreen() {
         setError("Registration successful! Please log in.")
         return
       }
-      
+
       window.location.href = '/';
     } catch (err: unknown) {
       console.error("Auth error:", err)
       if (err && typeof err === 'object' && 'response' in err) {
-          const axiosError = err as { response: { data: { message: string } } };
-          setError(axiosError.response?.data?.message || "Authentication failed");
+        const axiosError = err as { response: { data: { message: string } } };
+        setError(axiosError.response?.data?.message || "Authentication failed");
       } else {
-          setError("Authentication failed");
+        setError("Authentication failed");
       }
     }
   }
@@ -90,8 +90,8 @@ export function LoginScreen() {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-between bg-cover bg-center overflow-hidden font-sans text-zinc-100"
-         style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1477346611705-65d1883cee1e?q=80&w=2070&auto=format&fit=crop)' }}>
-      
+      style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1477346611705-65d1883cee1e?q=80&w=2070&auto=format&fit=crop)' }}>
+
       {/* Background Overlay */}
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
 
@@ -123,17 +123,17 @@ export function LoginScreen() {
           transition={{ duration: 0.4, ease: "easeOut" }}
           className="flex flex-col items-center space-y-6 p-8 rounded-3xl bg-black/20 backdrop-blur-xl border border-white/10 shadow-2xl"
         >
-          {/* Avatar */}
-          <div className="relative group">
-            <Avatar className="h-28 w-28 border-4 border-white/10 shadow-xl transition-transform duration-300 group-hover:scale-105">
-              <AvatarImage src="/avatar-placeholder.png" />
-              <AvatarFallback className="bg-zinc-800/80 text-3xl text-zinc-400 backdrop-blur-md">
-                <User />
-              </AvatarFallback>
-            </Avatar>
-            <div className="absolute bottom-0 right-0 w-6 h-6 bg-green-500 rounded-full border-4 border-black/20 shadow-lg" />
+          {/* Logo */}
+          <div className="relative group mb-4">
+            <div className="relative w-40 h-40 transition-transform duration-300 group-hover:scale-105">
+              <img
+                src="/Images/logo.svg"
+                alt="Koimsurai NAS"
+                className="w-full h-full drop-shadow-2xl filter brightness-110"
+              />
+            </div>
           </div>
-          
+
           <div className="text-center space-y-1">
             <h2 className="text-2xl font-semibold tracking-wide drop-shadow-md">
               {isLogin ? (username || "Koimsurai User") : "Create Account"}
@@ -154,7 +154,7 @@ export function LoginScreen() {
                   className="h-11 pl-4 pr-4 border-white/10 bg-black/20 text-zinc-100 placeholder:text-zinc-500 focus-visible:border-white/30 focus-visible:bg-black/40 focus-visible:ring-0 transition-all rounded-xl backdrop-blur-md"
                 />
               </div>
-              
+
               <div className="relative group">
                 <Input
                   type="password"
@@ -277,7 +277,7 @@ export function LoginScreen() {
           <h3 className="text-lg font-semibold text-zinc-200">Koimsurai NAS</h3>
           <p className="text-xs opacity-60">v1.0.0 • System Normal</p>
         </div>
-        
+
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/20 backdrop-blur-md border border-white/5 hover:bg-black/30 transition-colors cursor-pointer">
             <Wifi className="w-4 h-4" />

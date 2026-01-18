@@ -18,6 +18,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Koimsurai NAS",
   description: "Koimsurai NAS Frontend",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/Images/logo.svg",
+  },
 };
 
 export default function RootLayout({

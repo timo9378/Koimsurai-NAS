@@ -109,8 +109,19 @@ export interface UploadSession {
 // System/Docker Models (Inferred from prompt requirements as they weren't in the file list)
 export interface DiskInfo {
   name: string;
+  mount_point: string;
   total_space: number;
   available_space: number;
+  disk_type: string;
+}
+
+export interface GpuInfo {
+  name: string;
+  memory_total: number;
+  memory_used: number;
+  memory_free: number;
+  utilization: number;
+  temperature: number;
 }
 
 export interface SystemStatus {
@@ -120,6 +131,7 @@ export interface SystemStatus {
   total_swap: number;
   used_swap: number;
   disks: DiskInfo[];
+  gpu?: GpuInfo;
 }
 
 export interface DockerContainer {

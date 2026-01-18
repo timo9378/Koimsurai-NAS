@@ -1,21 +1,22 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { 
-  RefreshCw, 
-  FolderPlus, 
-  Clipboard, 
-  Image as ImageIcon, 
-  Maximize2, 
-  Minimize2, 
-  X, 
-  AppWindow, 
+import {
+  RefreshCw,
+  FolderPlus,
+  Clipboard,
+  Image as ImageIcon,
+  Maximize2,
+  Minimize2,
+  X,
+  AppWindow,
   Trash2,
-  Power
+  Power,
+  Upload
 } from 'lucide-react';
 import { useWindowStore } from '@/store/window-store';
 import { cn } from '@/lib/utils';
-import { useDelete } from '@/features/files/api/useFiles';
+import { useDelete, useUpload } from '@/features/files/api/useFiles';
 import { useRescan } from '@/features/system/api/useSystem';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -40,16 +41,18 @@ export const GlobalContextMenu = ({ onWallpaperChange }: GlobalContextMenuProps)
     y: 0,
     type: null,
   });
-  
+
   const menuRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const deleteFile = useDelete();
+  const upload = useUpload();
   const rescan = useRescan();
   const queryClient = useQueryClient();
-  
-  const { 
-    closeWindow, 
-    minimizeWindow, 
-    maximizeWindow, 
+
+  const {
+    closeWindow,
+    minimizeWindow,
+    maximizeWindow,
     restoreWindow,
     windows,
     openWindow
@@ -62,21 +65,42 @@ export const GlobalContextMenu = ({ onWallpaperChange }: GlobalContextMenuProps)
     setMenu(prev => ({ ...prev, isOpen: false }));
   };
 
+  const handleUploadFile = () => {
+    setMenu(prev => ({ ...prev, isOpen: false }));
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      // Default to uploading to Desktop
+      await upload.mutateAsync({ file, path: 'Desktop' });
+    } catch (error) {
+      console.error('Upload failed:', error);
+      alert('上傳失敗');
+    }
+
+    // Reset input
+    e.target.value = '';
+  };
+
   const handleRefresh = () => {
-     queryClient.invalidateQueries({ queryKey: ['files'] });
-     setMenu(prev => ({ ...prev, isOpen: false }));
+    queryClient.invalidateQueries({ queryKey: ['files'] });
+    setMenu(prev => ({ ...prev, isOpen: false }));
   };
 
   const handleRescan = async () => {
-     try {
-       await rescan.mutateAsync();
-       await queryClient.invalidateQueries({ queryKey: ['files'] });
-       alert('Rescan completed');
-     } catch (e) {
-       console.error(e);
-       alert('Rescan failed');
-     }
-     setMenu(prev => ({ ...prev, isOpen: false }));
+    try {
+      await rescan.mutateAsync();
+      await queryClient.invalidateQueries({ queryKey: ['files'] });
+      alert('Rescan completed');
+    } catch (e) {
+      console.error(e);
+      alert('Rescan failed');
+    }
+    setMenu(prev => ({ ...prev, isOpen: false }));
   };
 
   const handleChangeWallpaper = () => {
@@ -102,10 +126,10 @@ export const GlobalContextMenu = ({ onWallpaperChange }: GlobalContextMenuProps)
       if (e.defaultPrevented) return;
 
       e.preventDefault();
-      
+
       const target = e.target as HTMLElement;
       const contextElement = target.closest('[data-context-type]');
-      
+
       if (!contextElement) {
         setMenu({ isOpen: false, x: 0, y: 0, type: null });
         return;
@@ -117,21 +141,21 @@ export const GlobalContextMenu = ({ onWallpaperChange }: GlobalContextMenuProps)
       // Calculate position to prevent overflow
       let newX = e.clientX;
       let newY = e.clientY;
-      
+
       // Estimate menu dimensions (can be dynamic, but fixed for safety)
       const menuWidth = 160;
       const menuHeight = 200; // Approximate max height
-      
+
       if (newX + menuWidth > window.innerWidth) {
         newX = window.innerWidth - menuWidth - 10;
       }
-      
+
       if (newY + menuHeight > window.innerHeight) {
         newY = newY - menuHeight; // Show above cursor
       }
 
       setMenu({ isOpen: false, x: 0, y: 0, type: null });
-      
+
       setTimeout(() => {
         setMenu({
           isOpen: true,
@@ -158,91 +182,103 @@ export const GlobalContextMenu = ({ onWallpaperChange }: GlobalContextMenuProps)
     };
   }, []);
 
-  if (!menu.isOpen) return null;
+  if (!menu.isOpen) return (
+    <input
+      type="file"
+      ref={fileInputRef}
+      onChange={handleFileSelect}
+      className="hidden"
+    />
+  );
 
   const renderMenuItems = () => {
     switch (menu.type) {
       case 'desktop':
         return (
           <>
-            <MenuItem 
-              icon={RefreshCw} 
-              label="重新整理" 
-              onClick={handleRefresh} 
+            <MenuItem
+              icon={RefreshCw}
+              label="重新整理"
+              onClick={handleRefresh}
             />
-            <MenuItem 
-              icon={RefreshCw} 
-              label="重新掃描檔案" 
-              onClick={handleRescan} 
+            <MenuItem
+              icon={RefreshCw}
+              label="重新掃描檔案"
+              onClick={handleRescan}
             />
-            <MenuItem 
-              icon={FolderPlus} 
-              label="新增資料夾" 
-              onClick={handleCreateFolder} 
+            <MenuItem
+              icon={FolderPlus}
+              label="新增資料夾"
+              onClick={handleCreateFolder}
             />
-            <MenuItem 
-              icon={Clipboard} 
-              label="貼上" 
-              onClick={() => console.log('Paste')} 
-              disabled 
+            <MenuItem
+              icon={Upload}
+              label="上傳檔案"
+              onClick={handleUploadFile}
+            />
+            <MenuItem
+              icon={Clipboard}
+              label="貼上"
+              onClick={() => console.log('Paste')}
+              disabled
             />
             <div className="h-px bg-border my-1" />
-            <MenuItem 
-              icon={ImageIcon} 
-              label="更換桌布" 
-              onClick={handleChangeWallpaper} 
+            <MenuItem
+              icon={ImageIcon}
+              label="更換桌布"
+              onClick={handleChangeWallpaper}
             />
           </>
         );
       case 'desktop-icon':
         return (
           <>
-            <MenuItem 
-               icon={AppWindow}
-               label="開啟"
-               onClick={() => {
-                 // Ideally openWindow needs file type.
-                 // For now, let's just allow 'Delete'.
-                 setMenu(prev => ({ ...prev, isOpen: false }));
-               }}
-               disabled
+            <MenuItem
+              icon={AppWindow}
+              label="開啟"
+              onClick={() => {
+                // Ideally openWindow needs file type.
+                // For now, let's just allow 'Delete'.
+                setMenu(prev => ({ ...prev, isOpen: false }));
+              }}
+              disabled
             />
-             <div className="h-px bg-border my-1" />
-            <MenuItem 
-              icon={Trash2} 
-              label="丟到垃圾桶" 
+            <div className="h-px bg-border my-1" />
+            <MenuItem
+              icon={Trash2}
+              label="丟到垃圾桶"
               className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
               onClick={() => {
                 // Dispatch event to let DesktopIcons handle the deletion of selected items
                 const event = new Event('desktop-delete-selected');
                 window.dispatchEvent(event);
                 setMenu(prev => ({ ...prev, isOpen: false }));
-              }} 
+              }}
             />
           </>
         );
       case 'dock-icon':
         return (
           <>
-            <MenuItem 
-              icon={AppWindow} 
-              label="開啟" 
+            <MenuItem
+              icon={AppWindow}
+              label="開啟"
               onClick={() => {
                 if (menu.targetId) openWindow(menu.targetId as any);
                 setMenu(prev => ({ ...prev, isOpen: false }));
-              }} 
+              }}
             />
             <div className="h-px bg-border my-1" />
-            <MenuItem 
-              icon={Power} 
-              label="強制結束" 
+            <MenuItem
+              icon={Power}
+              label="強制結束"
               className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
               onClick={() => {
                 // Find all windows of this app type and close them
                 const appWindows = windows.filter(w => w.appType === menu.targetId);
                 appWindows.forEach(w => closeWindow(w.id));
                 setMenu(prev => ({ ...prev, isOpen: false }));
-              }} 
+              }}
             />
           </>
         );
@@ -253,34 +289,34 @@ export const GlobalContextMenu = ({ onWallpaperChange }: GlobalContextMenuProps)
 
         return (
           <>
-            <MenuItem 
-              icon={Minimize2} 
-              label="最小化" 
+            <MenuItem
+              icon={Minimize2}
+              label="最小化"
               onClick={() => {
                 if (windowId) minimizeWindow(windowId);
                 setMenu(prev => ({ ...prev, isOpen: false }));
-              }} 
+              }}
             />
-            <MenuItem 
-              icon={targetWindow.isMaximized ? Minimize2 : Maximize2} 
-              label={targetWindow.isMaximized ? "還原" : "最大化"} 
+            <MenuItem
+              icon={targetWindow.isMaximized ? Minimize2 : Maximize2}
+              label={targetWindow.isMaximized ? "還原" : "最大化"}
               onClick={() => {
                 if (windowId) {
-                    if (targetWindow.isMaximized) restoreWindow(windowId);
-                    else maximizeWindow(windowId);
+                  if (targetWindow.isMaximized) restoreWindow(windowId);
+                  else maximizeWindow(windowId);
                 }
                 setMenu(prev => ({ ...prev, isOpen: false }));
-              }} 
+              }}
             />
             <div className="h-px bg-border my-1" />
-            <MenuItem 
-              icon={X} 
-              label="關閉" 
+            <MenuItem
+              icon={X}
+              label="關閉"
               className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
               onClick={() => {
                 if (windowId) closeWindow(windowId);
                 setMenu(prev => ({ ...prev, isOpen: false }));
-              }} 
+              }}
             />
           </>
         );

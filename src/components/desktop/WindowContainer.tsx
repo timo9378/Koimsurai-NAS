@@ -55,10 +55,10 @@ const getDockPosition = (appType: AppType) => {
   const iconSize = 40; // Base size
   const gap = 16;
   const paddingX = 16;
-  
+
   const totalWidth = (apps.length * iconSize) + ((apps.length - 1) * gap) + (2 * paddingX);
   const startX = (globalThis.window.innerWidth - totalWidth) / 2;
-  
+
   // Calculate center of the icon
   const targetX = startX + paddingX + (index * (iconSize + gap)) + (iconSize / 2);
   const targetY = globalThis.window.innerHeight - 48; // Center of dock (bottom-4 + h-16/2)
@@ -84,7 +84,7 @@ const Window = ({ window }: { window: WindowState }) => {
   const y = useMotionValue(window.position.y);
   const width = useMotionValue(window.size.width);
   const height = useMotionValue(window.size.height);
-  
+
   const [isDragging, setIsDragging] = React.useState(false);
 
   // Handle maximize/restore/minimize animations manually
@@ -96,11 +96,11 @@ const Window = ({ window }: { window: WindowState }) => {
       const transition: any = { duration: 0.5, ease: [0.2, 0, 0, 1] };
       animate(x, dockPos.x - window.size.width / 2, transition);
       animate(y, dockPos.y - window.size.height / 2, transition);
-      
+
     } else if (window.isMaximized || window.snapState) {
-       // If maximized OR snapped, we should be at specific coordinates.
-       // However, we set these via store updates (position/size).
-       // So we just need to animate to them.
+      // If maximized OR snapped, we should be at specific coordinates.
+      // However, we set these via store updates (position/size).
+      // So we just need to animate to them.
       animate(x, window.position.x, { type: "spring", stiffness: 300, damping: 30 });
       animate(y, window.position.y, { type: "spring", stiffness: 300, damping: 30 });
     } else {
@@ -127,7 +127,7 @@ const Window = ({ window }: { window: WindowState }) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(true);
-    
+
     const startX = e.clientX;
     const startY = e.clientY;
     const startWidth = width.get();
@@ -160,7 +160,7 @@ const Window = ({ window }: { window: WindowState }) => {
 
       width.set(newWidth);
       height.set(newHeight);
-      
+
       if (direction.includes('w') || direction.includes('n')) {
         x.set(newX);
         y.set(newY);
@@ -171,7 +171,7 @@ const Window = ({ window }: { window: WindowState }) => {
       setIsDragging(false);
       updateWindowSize(window.id, { width: width.get(), height: height.get() });
       updateWindowPosition(window.id, { x: x.get(), y: y.get() });
-      
+
       document.removeEventListener('pointermove', onPointerMove);
       document.removeEventListener('pointerup', onPointerUp);
     };
@@ -186,29 +186,29 @@ const Window = ({ window }: { window: WindowState }) => {
       dragControls={dragControls}
       dragMomentum={false}
       dragElastic={0}
-      dragListener={false} 
+      dragListener={false}
       onDragStart={() => {
         setIsDragging(true);
         handleFocus();
       }}
       onDrag={(e, info) => {
         const event = new CustomEvent('window-drag-move', {
-            detail: { x: info.point.x, y: info.point.y }
+          detail: { x: info.point.x, y: info.point.y }
         });
         globalThis.window.dispatchEvent(event);
       }}
       onDragEnd={(e, info) => {
         setIsDragging(false);
-        
+
         const event = new CustomEvent('window-drag-end', {
-            detail: { x: info.point.x, y: info.point.y, windowId: window.id }
+          detail: { x: info.point.x, y: info.point.y, windowId: window.id }
         });
         globalThis.window.dispatchEvent(event);
-        
+
         const screenWidth = globalThis.window.innerWidth;
         // Updated threshold to 50
         const isSnapping = info.point.y < 50 || info.point.x < 50 || info.point.x > screenWidth - 50;
-        
+
         if (!isSnapping) {
           updateWindowPosition(window.id, { x: x.get(), y: y.get() });
         } else {
@@ -237,7 +237,7 @@ const Window = ({ window }: { window: WindowState }) => {
           : { type: "spring", stiffness: 300, damping: 30, duration: 0.4 }
       }
       className={cn(
-        "absolute flex flex-col bg-white/80 dark:bg-black/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-2xl overflow-hidden",
+        "absolute flex flex-col bg-white/80 dark:bg-black/80 backdrop-blur-xl border border-white/20 rounded-xl shadow-2xl overflow-hidden desktop-window",
         useWindowStore.getState().activeWindowId === window.id ? "shadow-[0_20px_50px_rgba(0,0,0,0.3)]" : "shadow-xl",
         (window.isMaximized || window.snapState) && "shadow-2xl border border-white/10",
         window.isMinimized ? "pointer-events-none" : "pointer-events-auto"
@@ -272,96 +272,96 @@ const Window = ({ window }: { window: WindowState }) => {
         }}
         onPointerDown={(e) => {
           if (window.isMaximized || window.snapState) {
-             e.preventDefault();
-             e.stopPropagation();
-             
-             const startX = e.clientX;
-             const startY = e.clientY;
-             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-             const ratioX = (e.clientX - rect.left) / rect.width;
+            e.preventDefault();
+            e.stopPropagation();
 
-             const onPointerMove = (moveEvent: PointerEvent) => {
-                if (moveEvent.clientY - startY > 10) {
-                   restoreWindow(window.id);
-                   
-                   // After restore, window has original size.
-                   // We need to calculate where to place it so the mouse is still relative to the title bar correctly.
-                   // Since state updates are async/zustand might take a tick, we might read 'window.size' here which is still the snapped size?
-                   // No, restoreWindow updates the store. But 'window' prop here is from previous render until re-render.
-                   // We need the 'restored' size. 
-                   // Accessing restoreBounds directly from store or assuming we know it is tricky without a re-render.
-                   
-                   // However, usually we can use the 'restoreBounds' we just cleared? 
-                   // Or simpler: We just let it jump to mouse pointer centered? No that's ugly.
-                   
-                   // Best bet: use the restoreBounds that were present on the window object BEFORE we called restoreWindow.
-                   // window.restoreBounds is available here!
-                   
-                   const restoredWidth = window.restoreBounds?.size.width || 800; // Fallback
-                   const newX = moveEvent.clientX - (restoredWidth * ratioX);
-                   const newY = moveEvent.clientY - 10;
-                   
-                   x.stop();
-                   y.stop();
-                   
-                   x.set(newX);
-                   y.set(newY);
-                   updateWindowPosition(window.id, { x: newX, y: newY });
-                   
-                   setIsDragging(true);
-                   
-                   const startDragX = moveEvent.clientX;
-                   const startDragY = moveEvent.clientY;
-                   const startPosX = newX;
-                   const startPosY = newY;
-                   
-                   const onContinueDragMove = (e: PointerEvent) => {
-                      const deltaX = e.clientX - startDragX;
-                      const deltaY = e.clientY - startDragY;
-                      
-                      x.set(startPosX + deltaX);
-                      y.set(startPosY + deltaY);
-                      
-                      const event = new CustomEvent('window-drag-move', { detail: { x: e.clientX, y: e.clientY } });
-                      globalThis.window.dispatchEvent(event);
-                   };
-                   
-                   const onContinueDragUp = (e: PointerEvent) => {
-                      setIsDragging(false);
-                      const event = new CustomEvent('window-drag-end', { detail: { x: e.clientX, y: e.clientY, windowId: window.id } });
-                      globalThis.window.dispatchEvent(event);
-                      
-                      const screenWidth = globalThis.window.innerWidth;
-                      // Updated threshold to 50
-                      const isSnapping = e.clientY < 50 || e.clientX < 50 || e.clientX > screenWidth - 50;
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            const ratioX = (e.clientX - rect.left) / rect.width;
 
-                      if (!isSnapping) {
-                        updateWindowPosition(window.id, { x: x.get(), y: y.get() });
-                      } else {
-                        x.stop();
-                        y.stop();
-                      }
-                      
-                      document.removeEventListener('pointermove', onContinueDragMove);
-                      document.removeEventListener('pointerup', onContinueDragUp);
-                   };
-                   
-                   document.removeEventListener('pointermove', onPointerMove);
-                   document.removeEventListener('pointerup', onPointerUp);
-                   document.addEventListener('pointermove', onContinueDragMove);
-                   document.addEventListener('pointerup', onContinueDragUp);
-                }
-             };
-             
-             const onPointerUp = () => {
+            const onPointerMove = (moveEvent: PointerEvent) => {
+              if (moveEvent.clientY - startY > 10) {
+                restoreWindow(window.id);
+
+                // After restore, window has original size.
+                // We need to calculate where to place it so the mouse is still relative to the title bar correctly.
+                // Since state updates are async/zustand might take a tick, we might read 'window.size' here which is still the snapped size?
+                // No, restoreWindow updates the store. But 'window' prop here is from previous render until re-render.
+                // We need the 'restored' size. 
+                // Accessing restoreBounds directly from store or assuming we know it is tricky without a re-render.
+
+                // However, usually we can use the 'restoreBounds' we just cleared? 
+                // Or simpler: We just let it jump to mouse pointer centered? No that's ugly.
+
+                // Best bet: use the restoreBounds that were present on the window object BEFORE we called restoreWindow.
+                // window.restoreBounds is available here!
+
+                const restoredWidth = window.restoreBounds?.size.width || 800; // Fallback
+                const newX = moveEvent.clientX - (restoredWidth * ratioX);
+                const newY = moveEvent.clientY - 10;
+
+                x.stop();
+                y.stop();
+
+                x.set(newX);
+                y.set(newY);
+                updateWindowPosition(window.id, { x: newX, y: newY });
+
+                setIsDragging(true);
+
+                const startDragX = moveEvent.clientX;
+                const startDragY = moveEvent.clientY;
+                const startPosX = newX;
+                const startPosY = newY;
+
+                const onContinueDragMove = (e: PointerEvent) => {
+                  const deltaX = e.clientX - startDragX;
+                  const deltaY = e.clientY - startDragY;
+
+                  x.set(startPosX + deltaX);
+                  y.set(startPosY + deltaY);
+
+                  const event = new CustomEvent('window-drag-move', { detail: { x: e.clientX, y: e.clientY } });
+                  globalThis.window.dispatchEvent(event);
+                };
+
+                const onContinueDragUp = (e: PointerEvent) => {
+                  setIsDragging(false);
+                  const event = new CustomEvent('window-drag-end', { detail: { x: e.clientX, y: e.clientY, windowId: window.id } });
+                  globalThis.window.dispatchEvent(event);
+
+                  const screenWidth = globalThis.window.innerWidth;
+                  // Updated threshold to 50
+                  const isSnapping = e.clientY < 50 || e.clientX < 50 || e.clientX > screenWidth - 50;
+
+                  if (!isSnapping) {
+                    updateWindowPosition(window.id, { x: x.get(), y: y.get() });
+                  } else {
+                    x.stop();
+                    y.stop();
+                  }
+
+                  document.removeEventListener('pointermove', onContinueDragMove);
+                  document.removeEventListener('pointerup', onContinueDragUp);
+                };
+
                 document.removeEventListener('pointermove', onPointerMove);
                 document.removeEventListener('pointerup', onPointerUp);
-             };
-             
-             document.addEventListener('pointermove', onPointerMove);
-             document.addEventListener('pointerup', onPointerUp);
+                document.addEventListener('pointermove', onContinueDragMove);
+                document.addEventListener('pointerup', onContinueDragUp);
+              }
+            };
+
+            const onPointerUp = () => {
+              document.removeEventListener('pointermove', onPointerMove);
+              document.removeEventListener('pointerup', onPointerUp);
+            };
+
+            document.addEventListener('pointermove', onPointerMove);
+            document.addEventListener('pointerup', onPointerUp);
           } else {
-             dragControls.start(e);
+            dragControls.start(e);
           }
         }}
       >
@@ -399,11 +399,11 @@ const Window = ({ window }: { window: WindowState }) => {
             {window.isMaximized ? <Minimize2 className="w-2 h-2" /> : <Maximize2 className="w-2 h-2" />}
           </button>
         </div>
-        
+
         <div className="text-sm font-medium text-black/80 dark:text-white/80">
           {window.title}
         </div>
-        
+
         <div className="w-14" />
       </div>
 
@@ -450,11 +450,11 @@ export const WindowContainer = () => {
     const handleDragEnd = (e: Event) => {
       const customEvent = e as CustomEvent;
       const { windowId } = customEvent.detail;
-      
+
       if (windowId && previewState !== 'none') {
         const screenWidth = window.innerWidth;
         const screenHeight = window.innerHeight;
-        
+
         // 統一使用與預覽一致的邊距
         if (previewState === 'maximize') {
           const bounds = {
@@ -463,17 +463,17 @@ export const WindowContainer = () => {
           };
           maximizeWindow(windowId, bounds);
         } else if (previewState === 'left') {
-           const bounds = {
-             position: { x: 12, y: 48 },
-             size: { width: screenWidth / 2 - 24, height: screenHeight - 96 }
-           };
-           snapWindow(windowId, 'left', bounds);
+          const bounds = {
+            position: { x: 12, y: 48 },
+            size: { width: screenWidth / 2 - 24, height: screenHeight - 96 }
+          };
+          snapWindow(windowId, 'left', bounds);
         } else if (previewState === 'right') {
-           const bounds = {
-             position: { x: screenWidth / 2 + 12, y: 48 },
-             size: { width: screenWidth / 2 - 24, height: screenHeight - 96 }
-           };
-           snapWindow(windowId, 'right', bounds);
+          const bounds = {
+            position: { x: screenWidth / 2 + 12, y: 48 },
+            size: { width: screenWidth / 2 - 24, height: screenHeight - 96 }
+          };
+          snapWindow(windowId, 'right', bounds);
         }
       }
       setPreviewState('none');
@@ -482,7 +482,7 @@ export const WindowContainer = () => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('window-drag-move', handleDragMove);
     window.addEventListener('window-drag-end', handleDragEnd);
-    
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('window-drag-move', handleDragMove);
@@ -551,16 +551,16 @@ export const WindowContainer = () => {
 
       <AnimatePresence>
         {previewState !== 'none' && (
-            <motion.div 
-                className="absolute"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={getPreviewStyle()}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ type: "spring", stiffness: 400, damping: 30 }}
-            />
+          <motion.div
+            className="absolute"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={getPreviewStyle()}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+          />
         )}
       </AnimatePresence>
-      
+
       <div className="relative w-full h-full pointer-events-none">
         {windows.map((window) => (
           <Window key={window.id} window={window} />
