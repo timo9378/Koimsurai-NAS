@@ -362,10 +362,118 @@ export const Finder = () => {
 
     if (isTrashMode) return;
 
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
-      // Use hook
-      await handleUploadFiles(files, currentPath);
+    const items = e.dataTransfer.items;
+    if (!items || items.length === 0) return;
+
+    // Helper to read all files from a directory entry recursively
+    const readEntriesRecursively = async (entry: FileSystemEntry, basePath: string): Promise<{ file: File; relativePath: string }[]> => {
+      if (entry.isFile) {
+        const fileEntry = entry as FileSystemFileEntry;
+        return new Promise((resolve, reject) => {
+          fileEntry.file(
+            (file) => resolve([{ file, relativePath: basePath }]),
+            reject
+          );
+        });
+      } else if (entry.isDirectory) {
+        const dirEntry = entry as FileSystemDirectoryEntry;
+        const reader = dirEntry.createReader();
+        const entries: FileSystemEntry[] = [];
+
+        // Read all entries (may require multiple calls for large directories)
+        const readEntries = (): Promise<FileSystemEntry[]> => new Promise((resolve, reject) => {
+          reader.readEntries(resolve, reject);
+        });
+
+        let batch = await readEntries();
+        while (batch.length > 0) {
+          entries.push(...batch);
+          batch = await readEntries();
+        }
+
+        const allFiles: { file: File; relativePath: string }[] = [];
+        for (const childEntry of entries) {
+          const childPath = basePath ? `${basePath}/${childEntry.name}` : childEntry.name;
+          const childFiles = await readEntriesRecursively(childEntry, childPath);
+          allFiles.push(...childFiles);
+        }
+        return allFiles;
+      }
+      return [];
+    };
+
+    try {
+      const allFilesWithPaths: { file: File; relativePath: string }[] = [];
+      const dirsToCreate = new Set<string>();
+
+      // Process all dropped items
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const entry = item.webkitGetAsEntry?.();
+        if (entry) {
+          if (entry.isDirectory) {
+            // Collect directory path to create
+            dirsToCreate.add(entry.name);
+          }
+          const filesFromEntry = await readEntriesRecursively(entry, entry.isDirectory ? entry.name : '');
+
+          // Collect all subdirectories that need to be created
+          filesFromEntry.forEach(({ relativePath }) => {
+            const parts = relativePath.split('/');
+            if (parts.length > 1) {
+              // Add all parent directories
+              let dirPath = '';
+              for (let j = 0; j < parts.length - 1; j++) {
+                dirPath = dirPath ? `${dirPath}/${parts[j]}` : parts[j];
+                dirsToCreate.add(dirPath);
+              }
+            }
+          });
+
+          allFilesWithPaths.push(...filesFromEntry);
+        }
+      }
+
+      // Create directories first (sorted by depth to create parents first)
+      const sortedDirs = Array.from(dirsToCreate).sort((a, b) => a.split('/').length - b.split('/').length);
+      for (const dir of sortedDirs) {
+        // Split into parent path and folder name
+        const dirParts = dir.split('/');
+        const folderName = dirParts.pop() || dir;
+        const parentDir = dirParts.join('/');
+        const fullParentPath = currentPath
+          ? (parentDir ? `${currentPath}/${parentDir}` : currentPath)
+          : parentDir;
+        try {
+          await createFolder.mutateAsync({ path: fullParentPath, name: folderName });
+        } catch (err: any) {
+          // Ignore if directory already exists (409 Conflict)
+          if (err?.response?.status !== 409) {
+            console.warn(`Failed to create directory ${dir}:`, err);
+          }
+        }
+      }
+
+      // Now upload files with their correct relative paths
+      for (const { file, relativePath } of allFilesWithPaths) {
+        const targetDir = relativePath.includes('/')
+          ? relativePath.substring(0, relativePath.lastIndexOf('/'))
+          : '';
+        const uploadPath = currentPath
+          ? (targetDir ? `${currentPath}/${targetDir}` : currentPath)
+          : targetDir;
+        await handleUploadFiles([file], uploadPath);
+      }
+
+      // Refresh file list
+      await queryClient.invalidateQueries({ queryKey: ['files'] });
+    } catch (error) {
+      console.error('Folder upload failed:', error);
+      // Fallback to simple file upload
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0) {
+        await handleUploadFiles(files, currentPath);
+      }
     }
   };
 

@@ -111,6 +111,12 @@ export const Dashboard = () => {
             </div>
           </div>
         </div>
+        {systemStatus?.cpu_temp && (
+          <div className="flex items-center gap-2 text-orange-400">
+            <Thermometer className="w-5 h-5" />
+            <span className="text-xl font-semibold">{systemStatus.cpu_temp.toFixed(0)}°C</span>
+          </div>
+        )}
       </div>
       <div className="flex-1 min-h-[200px]">
         <ResponsiveContainer width="100%" height="100%">

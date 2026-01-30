@@ -48,34 +48,79 @@ import { Job } from '@/types/api';
 import { Progress } from "@/components/ui/progress"
 import { useWindowStore } from '@/store/window-store';
 
+import { useUploadStore } from '@/store/upload-store';
+import { useTransferStore, formatSpeed } from '@/store/transfer-store';
+
 const TaskManager = () => {
-  const { data: tasks } = useQuery({
+  const { data: backendTasks } = useQuery({
     queryKey: ['jobs'],
     queryFn: async () => {
       const res = await apiClient.get<Job[]>('/api/tasks');
       return res.data;
     },
-    refetchInterval: 2000, // Fallback if WS fails
+    refetchInterval: 2000,
   });
 
-  const activeTasks = tasks?.filter(t => t.status === 'processing' || t.status === 'pending') || [];
-  const recentTasks = tasks?.slice(0, 5) || [];
+  // Get upload tasks from store
+  const uploadTasks = useUploadStore((state) => Object.values(state.tasks));
+  const { uploadSpeed, downloadSpeed } = useTransferStore();
+
+  // Combine backend jobs and frontend upload tasks
+  const allTasks = [
+    ...uploadTasks.map((t) => ({
+      id: t.id,
+      job_type: 'upload',
+      status: t.status === 'uploading' ? 'processing' : t.status,
+      progress: t.progress,
+      error: t.error,
+      file_name: t.file.name,
+    })),
+    ...(backendTasks?.slice(0, 5) || []).map((t) => ({
+      id: String(t.id),
+      job_type: t.job_type,
+      status: t.status,
+      progress: t.progress,
+      error: t.error,
+      file_name: null,
+    })),
+  ];
+
+  const activeTasks = allTasks.filter((t) => t.status === 'processing' || t.status === 'pending');
+  const displayTasks = allTasks.slice(0, 8);
 
   return (
     <div className="w-80 p-4">
+      {/* Speed indicator at top */}
+      {(uploadSpeed > 0 || downloadSpeed > 0) && (
+        <div className="flex items-center gap-4 mb-3 pb-3 border-b border-white/10">
+          {downloadSpeed > 0 && (
+            <div className="flex items-center gap-1 text-sm">
+              <span className="text-green-400">↓</span>
+              <span>{formatSpeed(downloadSpeed)}</span>
+            </div>
+          )}
+          {uploadSpeed > 0 && (
+            <div className="flex items-center gap-1 text-sm">
+              <span className="text-blue-400">↑</span>
+              <span>{formatSpeed(uploadSpeed)}</span>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <span className="font-semibold">Background Tasks</span>
         {activeTasks.length > 0 && (
           <span className="text-xs text-blue-500 animate-pulse">{activeTasks.length} running</span>
         )}
       </div>
-      <div className="space-y-3 max-h-[300px] overflow-y-auto">
-        {recentTasks.length === 0 ? (
+      <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar">
+        {displayTasks.length === 0 ? (
           <div className="text-center text-muted-foreground py-4 text-sm">
             No active tasks
           </div>
         ) : (
-          recentTasks.map((task) => (
+          displayTasks.map((task) => (
             <div key={task.id} className="bg-black/5 dark:bg-white/5 rounded-lg p-3 border border-black/5 dark:border-white/5">
               <div className="flex items-start gap-3">
                 <div className="mt-1">
@@ -83,27 +128,29 @@ const TaskManager = () => {
                     <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
                   ) : task.status === 'completed' ? (
                     <CheckCircle2 className="w-4 h-4 text-green-500" />
-                  ) : task.status === 'failed' ? (
+                  ) : task.status === 'error' ? (
                     <XCircle className="w-4 h-4 text-red-500" />
                   ) : (
                     <Activity className="w-4 h-4 text-muted-foreground" />
                   )}
                 </div>
-                <div className="flex-1 space-y-2">
+                <div className="flex-1 min-w-0 space-y-2">
                   <div className="flex justify-between items-start">
-                    <span className="text-sm font-medium capitalize">{task.job_type.replace('_', ' ')}</span>
-                    <span className="text-[10px] text-muted-foreground capitalize">{task.status}</span>
+                    <span className="text-sm font-medium capitalize truncate">
+                      {task.file_name || task.job_type.replace('_', ' ')}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground capitalize ml-2 shrink-0">{task.status}</span>
                   </div>
                   {task.status === 'processing' && (
                     <div className="h-1.5 w-full bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-blue-500 transition-all duration-500"
+                        className="h-full bg-blue-500 transition-all duration-300"
                         style={{ width: `${task.progress}%` }}
                       />
                     </div>
                   )}
                   {task.error && (
-                    <p className="text-xs text-red-500">{task.error}</p>
+                    <p className="text-xs text-red-500 truncate">{task.error}</p>
                   )}
                 </div>
               </div>
@@ -290,6 +337,7 @@ export const TopBar = () => {
   const { data: systemStatus } = useSystemStatus();
   const { theme, setTheme } = useTheme();
   const { windows, activeWindowId, showDesktop, toggleShowDesktop } = useWindowStore();
+  const { uploadSpeed, downloadSpeed } = useTransferStore();
 
   const activeWindow = windows.find(w => w.id === activeWindowId);
   const menuConfig = getMenuItemsForApp(activeWindow?.appType || null);
@@ -312,7 +360,7 @@ export const TopBar = () => {
         hour12: true
       }));
     };
-    
+
     updateTime();
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
@@ -358,25 +406,25 @@ export const TopBar = () => {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        
+
         {/* Show Desktop Button */}
-        <button 
-           className={cn(
-             "p-1 hover:bg-white/10 rounded-md transition-colors",
-             showDesktop && "text-blue-400 bg-white/10"
-           )}
-           onClick={toggleShowDesktop}
-           title="Show Desktop"
+        <button
+          className={cn(
+            "p-1 hover:bg-white/10 rounded-md transition-colors",
+            showDesktop && "text-blue-400 bg-white/10"
+          )}
+          onClick={toggleShowDesktop}
+          title="Show Desktop"
         >
           <div className="w-4 h-4 border-2 border-current rounded-[2px] relative flex items-center justify-center">
-             <div className="w-2 h-0.5 bg-current" />
+            <div className="w-2 h-0.5 bg-current" />
           </div>
         </button>
-        
+
         <span className="hidden sm:inline hover:bg-white/10 px-2 py-0.5 rounded cursor-default transition-colors font-bold">
           {menuConfig.appName}
         </span>
-        
+
         {menuConfig.menus.map((menu, index) => (
           <DropdownMenu key={index}>
             <DropdownMenuTrigger className="outline-none">
@@ -399,17 +447,37 @@ export const TopBar = () => {
       </div>
 
       <div className="flex items-center gap-2">
-        {/* Network Speed Widget */}
-        <div className="hidden md:flex items-center gap-3 px-3 py-0.5 mr-2 text-xs text-white/70 border-r border-white/10">
-          <div className="flex items-center gap-1">
-            <span className="text-green-400">↓</span>
-            <span>12.5 MB/s</span>
+        {/* System Monitoring Widget */}
+        {systemStatus && (
+          <div className="hidden lg:flex items-center gap-3 px-3 py-0.5 mr-2 text-xs text-white/70 border-r border-white/10">
+            <div className="flex items-center gap-1" title="CPU Usage">
+              <Cpu className="w-3 h-3" />
+              <span>{Math.round(systemStatus.cpu_usage)}%</span>
+            </div>
+            <div className="flex items-center gap-1" title="RAM Usage">
+              <Activity className="w-3 h-3" />
+              <span>{Math.round((systemStatus.used_memory / systemStatus.total_memory) * 100)}%</span>
+            </div>
           </div>
-          <div className="flex items-center gap-1">
-            <span className="text-blue-400">↑</span>
-            <span>5.2 MB/s</span>
+        )}
+
+        {/* Network Speed Widget - Shows actual transfer speeds */}
+        {(uploadSpeed > 0 || downloadSpeed > 0) && (
+          <div className="hidden md:flex items-center gap-3 px-3 py-0.5 mr-2 text-xs text-white/70 border-r border-white/10">
+            {downloadSpeed > 0 && (
+              <div className="flex items-center gap-1">
+                <span className="text-green-400">↓</span>
+                <span>{formatSpeed(downloadSpeed)}</span>
+              </div>
+            )}
+            {uploadSpeed > 0 && (
+              <div className="flex items-center gap-1">
+                <span className="text-blue-400">↑</span>
+                <span>{formatSpeed(uploadSpeed)}</span>
+              </div>
+            )}
           </div>
-        </div>
+        )}
 
         <div
           className="hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer transition-colors"
@@ -422,7 +490,7 @@ export const TopBar = () => {
           <Battery className="w-4 h-4" />
           <span className="text-xs">100%</span>
         </div>
-        
+
         <div className="hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer transition-colors">
           <Wifi className="w-4 h-4" />
         </div>

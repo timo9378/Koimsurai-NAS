@@ -126,6 +126,7 @@ export interface GpuInfo {
 
 export interface SystemStatus {
   cpu_usage: number;
+  cpu_temp?: number;
   total_memory: number;
   used_memory: number;
   total_swap: number;
