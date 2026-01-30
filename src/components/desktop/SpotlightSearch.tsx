@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Command } from 'cmdk';
-import { Search, File, Image, Film, Music, Folder, AppWindow } from 'lucide-react';
+import { Search, AppWindow } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { FileTypeIcon } from '@/lib/file-icons';
 import { apiClient } from '@/lib/api-client';
 import { useWindowStore } from '@/store/window-store';
 import { FileInfo } from '@/types/api';
@@ -101,7 +102,7 @@ export const SpotlightSearch = ({
                 onSelect={() => handleSelect(file.path, 'file')}
                 className="flex items-center gap-3 px-3 py-2 rounded-lg aria-selected:bg-blue-500/20 aria-selected:text-blue-500 cursor-pointer"
               >
-                {file.is_dir ? <Folder className="w-4 h-4" /> : <File className="w-4 h-4" />}
+                <FileTypeIcon filename={file.name} isDir={file.is_dir} mimeType={file.mime_type ?? undefined} size="sm" />
                 <div className="flex flex-col">
                   <span className="text-sm font-medium">{file.name}</span>
                   <span className="text-xs text-muted-foreground">{file.path}</span>
@@ -119,7 +120,7 @@ export const SpotlightSearch = ({
                 onSelect={() => handleSelect(item.path, 'file')}
                 className="flex items-center gap-3 px-3 py-2 rounded-lg aria-selected:bg-purple-500/20 aria-selected:text-purple-500 cursor-pointer"
               >
-                <Image className="w-4 h-4" />
+                <FileTypeIcon filename={item.name || ''} isDir={false} size="sm" />
                 <div className="flex flex-col">
                   <span className="text-sm font-medium">{item.name}</span>
                   <span className="text-xs text-muted-foreground">

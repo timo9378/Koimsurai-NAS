@@ -2,10 +2,7 @@
 
 import React, { useRef } from 'react';
 import {
-  File,
-  Folder,
   Upload,
-  Move,
   Trash2,
   Download,
   Share2,
@@ -20,10 +17,13 @@ import {
   RefreshCw,
   LayoutGrid,
   List as ListIcon,
+  Move,
+  Folder,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FileInfo } from '@/types/api';
 import { useThumbnail } from '@/features/files/api/useFiles';
+import { FileTypeIcon } from '@/lib/file-icons';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -45,22 +45,31 @@ const FileIcon = ({ file, currentPath }: { file: FileInfo; currentPath?: string 
 
   const { data: thumbnail } = useThumbnail(thumbnailPath, 'medium');
 
-  if (file.is_dir) {
-    return <Folder className="w-12 h-12 text-blue-500 fill-blue-500/20" />;
-  }
-
+  // 圖片檔案：優先顯示縮圖
   if (isImage && thumbnail) {
     return <img src={thumbnail} alt={file.name} className="w-12 h-12 object-cover rounded shadow-sm" />;
   }
 
-  return <File className="w-12 h-12 text-gray-500" />;
+  // 其他檔案類型：使用 FileTypeIcon
+  return (
+    <FileTypeIcon
+      filename={file.name}
+      isDir={file.is_dir}
+      mimeType={file.mime_type ?? undefined}
+      size="xl"
+    />
+  );
 };
 
 const SmallFileIcon = ({ file }: { file: FileInfo }) => {
-  if (file.is_dir) {
-    return <Folder className="w-4 h-4 text-blue-500 fill-blue-500/20" />;
-  }
-  return <File className="w-4 h-4 text-gray-500" />;
+  return (
+    <FileTypeIcon
+      filename={file.name}
+      isDir={file.is_dir}
+      mimeType={file.mime_type ?? undefined}
+      size="sm"
+    />
+  );
 };
 
 interface FileListProps {

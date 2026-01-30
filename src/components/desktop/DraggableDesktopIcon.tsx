@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { FileIcon, Folder, FileText, Image, Film, Music, Box } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FileInfo } from '@/types/api';
+import { FileTypeIcon } from '@/lib/file-icons';
 
 interface DraggableDesktopIconProps {
   file: FileInfo;
@@ -52,34 +52,14 @@ export const DraggableDesktopIcon = ({
   }, [isRenaming]);
 
   const getIcon = () => {
-    if (file.is_dir) return <Folder className="w-10 h-10 text-blue-500 fill-blue-500/20" />;
-
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    switch (ext) {
-      case 'png':
-      case 'jpg':
-      case 'jpeg':
-      case 'gif':
-      case 'webp':
-        return <Image className="w-10 h-10 text-purple-500" />;
-      case 'mp4':
-      case 'mov':
-      case 'avi':
-        return <Film className="w-10 h-10 text-red-500" />;
-      case 'mp3':
-      case 'wav':
-        return <Music className="w-10 h-10 text-green-500" />;
-      case 'txt':
-      case 'md':
-      case 'json':
-        return <FileText className="w-10 h-10 text-slate-500" />;
-      case 'zip':
-      case 'tar':
-      case 'gz':
-        return <Box className="w-10 h-10 text-yellow-500" />;
-      default:
-        return <FileIcon className="w-10 h-10 text-gray-500" />;
-    }
+    return (
+      <FileTypeIcon
+        filename={file.name}
+        isDir={file.is_dir}
+        mimeType={file.mime_type ?? undefined}
+        size="lg"
+      />
+    );
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
