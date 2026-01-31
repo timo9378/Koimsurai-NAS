@@ -68,7 +68,14 @@ export function AudioPlayer({
   const progressBarRef = useRef<HTMLDivElement>(null);
   const volumeBarRef = useRef<HTMLDivElement>(null);
   
-  const { setAudioState, updateProgress, toggleMiniPlayer } = useAudioPlayerStore();
+  const { 
+    registerAudio, 
+    unregisterAudio, 
+    setAudioState, 
+    updateProgress, 
+    toggleMiniPlayer,
+    currentSrc: globalCurrentSrc,
+  } = useAudioPlayerStore();
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -80,7 +87,6 @@ export function AudioPlayer({
   const [isDraggingProgress, setIsDraggingProgress] = useState(false);
   const [isDraggingVolume, setIsDraggingVolume] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [showVolumeSlider, setShowVolumeSlider] = useState(false);
 
   // Initialize volume from sessionStorage
   useEffect(() => {
@@ -104,31 +110,30 @@ export function AudioPlayer({
     sessionStorage.setItem(MUTED_STORAGE_KEY, isMuted.toString());
   }, [volume, isMuted, isInitialized]);
 
-  // Sync with global audio player store
+  // Sync with global audio player store - register this audio
   useEffect(() => {
-    setAudioState({
-      isActive: true,
-      currentSrc: src,
-      currentTitle: title || null,
-      currentArtist: artist || null,
-      currentAlbumArt: albumArt || null,
-      windowId: windowId || null,
-    });
+    const audio = audioRef.current;
+    if (!audio) return;
+    
+    // Register this audio element with the store
+    registerAudio(src, audio, windowId || undefined, title || undefined, artist || undefined, albumArt || undefined);
 
     // Cleanup when component unmounts
     return () => {
-      // Only clear if this is the current playing source
-      const currentStore = useAudioPlayerStore.getState();
-      if (currentStore.currentSrc === src) {
-        setAudioState({
-          isActive: false,
-          isPlaying: false,
-          currentSrc: null,
-        });
-        toggleMiniPlayer(false);
-      }
+      unregisterAudio(src);
     };
-  }, [src, title, artist, albumArt, windowId, setAudioState, toggleMiniPlayer]);
+  }, [src, title, artist, albumArt, windowId, registerAudio, unregisterAudio]);
+
+  // Stop this audio if another audio starts playing
+  useEffect(() => {
+    if (globalCurrentSrc && globalCurrentSrc !== src && isPlaying) {
+      const audio = audioRef.current;
+      if (audio) {
+        audio.pause();
+        setIsPlaying(false);
+      }
+    }
+  }, [globalCurrentSrc, src, isPlaying]);
 
   // Listen to window minimize state to show mini player
   const windows = useWindowStore((state) => state.windows);
@@ -515,12 +520,8 @@ export function AudioPlayer({
           </button>
         </div>
 
-        {/* Volume Control */}
-        <div 
-          className="flex items-center justify-center gap-2 mt-4"
-          onMouseEnter={() => setShowVolumeSlider(true)}
-          onMouseLeave={() => !isDraggingVolume && setShowVolumeSlider(false)}
-        >
+        {/* Volume Control - Always visible */}
+        <div className="flex items-center justify-center gap-2 mt-4">
           <button
             onClick={toggleMute}
             className="p-2 rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-colors"
@@ -530,25 +531,18 @@ export function AudioPlayer({
           </button>
           
           <div 
-            className={cn(
-              "overflow-hidden transition-all duration-200",
-              showVolumeSlider || isDraggingVolume ? "w-24 opacity-100" : "w-0 opacity-0"
-            )}
+            ref={volumeBarRef}
+            className="relative w-24 h-1.5 bg-white/10 rounded-full cursor-pointer"
+            onMouseDown={handleVolumeMouseDown}
           >
-            <div 
-              ref={volumeBarRef}
-              className="relative h-1.5 bg-white/10 rounded-full cursor-pointer"
-              onMouseDown={handleVolumeMouseDown}
-            >
-              <div
-                className="absolute inset-y-0 left-0 bg-white rounded-full pointer-events-none"
-                style={{ width: `${displayVolume * 100}%` }}
-              />
-              <div
-                className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-lg pointer-events-none"
-                style={{ left: `calc(${displayVolume * 100}% - 6px)` }}
-              />
-            </div>
+            <div
+              className="absolute inset-y-0 left-0 bg-white rounded-full pointer-events-none"
+              style={{ width: `${displayVolume * 100}%` }}
+            />
+            <div
+              className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-lg pointer-events-none"
+              style={{ left: `calc(${displayVolume * 100}% - 6px)` }}
+            />
           </div>
         </div>
       </div>
