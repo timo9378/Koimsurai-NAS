@@ -30,17 +30,11 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
   const isImage = file.mime_type?.startsWith('image/');
   const isVideo = file.mime_type?.startsWith('video/');
   const isAudio = file.mime_type?.startsWith('audio/') ||
-    file.name.match(/\.(mp3|wav|flac|aac|ogg|m4a|wma|opus)$/i);
+    !!file.name.match(/\.(mp3|wav|flac|aac|ogg|m4a|wma|opus)$/i);
   const isPdf = file.mime_type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-  const isOffice = file.name.match(/\.(docx?|xlsx?|pptx?)$/i);
+  const isOffice = !!file.name.match(/\.(docx?|xlsx?|pptx?)$/i);
   const isText = file.mime_type?.startsWith('text/') ||
-    file.name.endsWith('.json') ||
-    file.name.endsWith('.md') ||
-    file.name.endsWith('.ts') ||
-    file.name.endsWith('.tsx') ||
-    file.name.endsWith('.js') ||
-    file.name.endsWith('.css') ||
-    file.name.endsWith('.html');
+    !!file.name.match(/\.(txt|json|md|ts|tsx|js|jsx|css|html|xml|yaml|yml|toml|ini|cfg|conf|sh|bash|zsh|py|rb|rs|go|java|c|cpp|h|hpp|sql|log|env|gitignore|dockerignore|editorconfig|prettierrc|eslintrc)$/i);
 
   // Construct URLs with proper encoding
   // We use the /api/download endpoint which maps to the backend's download_file handler
@@ -48,7 +42,8 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
 
   // Remove leading slash for the API call as per useFiles.ts pattern
   const cleanPath = file.path.startsWith('/') ? file.path.slice(1) : file.path;
-  const encodedPath = encodeURIComponent(cleanPath);
+  // Encode each path segment separately to handle special characters (e.g. Chinese, spaces)
+  const encodedPath = cleanPath.split('/').map(encodeURIComponent).join('/');
 
   // The download endpoint: /api/download/{encoded_path}
   const fileUrl = `/api/download/${encodedPath}`;
@@ -59,15 +54,21 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
   const videoUrl = fileUrl;
 
   // Fetch text content
-  const { data: textContent, isLoading: isTextLoading } = useQuery({
+  const { data: textContent, isLoading: isTextLoading, error: textError } = useQuery({
     queryKey: ['file-content', file.path],
     queryFn: async () => {
       if (!isText) return null;
-      // For text, we can use the same download URL to get the content
-      const res = await apiClient.get(fileUrl, { responseType: 'text' });
-      return res.data;
+      // For text, we need to fetch the raw content
+      // Use responseType: 'text' to get the raw text and transformResponse to prevent JSON parsing
+      const res = await apiClient.get(fileUrl, { 
+        responseType: 'text',
+        transformResponse: [(data) => data], // Prevent automatic JSON parsing
+      });
+      // Ensure we return a string
+      return typeof res.data === 'string' ? res.data : String(res.data ?? '');
     },
     enabled: isText,
+    retry: 1,
   });
 
   return (

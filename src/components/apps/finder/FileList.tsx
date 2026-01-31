@@ -31,6 +31,12 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const FileIcon = ({ file, currentPath }: { file: FileInfo; currentPath?: string }) => {
   const isImage = file.mime_type?.startsWith('image/');
@@ -393,7 +399,7 @@ export const FileList = ({
             </div>
           ) : (
             <div className="w-full text-sm text-gray-700 dark:text-gray-200">
-              <div className="grid grid-cols-[1fr_100px_150px] gap-4 px-4 py-2 border-b border-white/10 font-medium text-gray-500 sticky top-0 bg-white/80 dark:bg-black/80 backdrop-blur-sm z-10">
+              <div className="grid grid-cols-[minmax(200px,1fr)_80px_120px] gap-2 px-4 py-2 border-b border-white/10 font-medium text-gray-500 sticky top-0 bg-white/80 dark:bg-black/80 backdrop-blur-sm z-10">
                 <button
                   onClick={() => onSortChange?.('name')}
                   className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-300 text-left"
@@ -422,6 +428,7 @@ export const FileList = ({
                   )}
                 </button>
               </div>
+              <TooltipProvider delayDuration={300}>
               {files?.map((file) => (
                 <ContextMenu key={file.name}>
                   <ContextMenuTrigger>
@@ -433,14 +440,16 @@ export const FileList = ({
                       onClick={(e) => { e.stopPropagation(); onFileClick(file, e); }}
                       onDoubleClick={(e) => { e.stopPropagation(); onFileDoubleClick(file); }}
                       className={cn(
-                        "grid grid-cols-[1fr_100px_150px] gap-4 px-4 py-1.5 cursor-pointer transition-colors duration-150",
+                        "grid grid-cols-[minmax(200px,1fr)_80px_120px] gap-2 px-4 py-1.5 cursor-pointer transition-colors duration-150",
                         selectedFiles.has(file.name)
                           ? "bg-blue-500 text-white"
                           : "hover:bg-blue-500/10 even:bg-black/5 dark:even:bg-white/5"
                       )}
                     >
-                      <div className="flex items-center gap-2">
-                        <SmallFileIcon file={file} />
+                      <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+                        <div className="shrink-0">
+                          <SmallFileIcon file={file} />
+                        </div>
                         {renamingFile === file.name ? (
                           <input
                             ref={renameInputRef}
@@ -453,16 +462,31 @@ export const FileList = ({
                               if (e.key === 'Escape') onRenameCancel();
                             }}
                             onClick={(e) => e.stopPropagation()}
-                            className="text-sm px-1 rounded bg-white dark:bg-black border border-blue-500 focus:outline-none text-black dark:text-white flex-1"
+                            className="text-sm px-1 rounded bg-white dark:bg-black border border-blue-500 focus:outline-none text-black dark:text-white flex-1 min-w-0"
                           />
                         ) : (
-                          <span className="truncate">{file.name}</span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="truncate cursor-default">{file.name}</span>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" align="start">
+                              <div className="space-y-1">
+                                <div className="font-medium">{file.name}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  Size: {file.is_dir ? 'Folder' : `${(file.size / 1024).toFixed(1)} KB`}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  Modified: {new Date(file.modified).toLocaleString()}
+                                </div>
+                              </div>
+                            </TooltipContent>
+                          </Tooltip>
                         )}
                       </div>
-                      <div className={cn("text-xs", selectedFiles.has(file.name) ? "text-blue-100" : "text-gray-500")}>
+                      <div className={cn("text-xs shrink-0 flex items-center", selectedFiles.has(file.name) ? "text-blue-100" : "text-gray-500")}>
                         {file.is_dir ? '--' : `${(file.size / 1024).toFixed(1)} KB`}
                       </div>
-                      <div className={cn("text-xs", selectedFiles.has(file.name) ? "text-blue-100" : "text-gray-500")}>
+                      <div className={cn("text-xs shrink-0 flex items-center", selectedFiles.has(file.name) ? "text-blue-100" : "text-gray-500")}>
                         {new Date(file.modified).toLocaleDateString()}
                       </div>
                     </div>
@@ -516,6 +540,7 @@ export const FileList = ({
                   </ContextMenuContent>
                 </ContextMenu>
               ))}
+              </TooltipProvider>
             </div>
           )}
         </div>

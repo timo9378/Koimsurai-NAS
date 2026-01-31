@@ -42,7 +42,7 @@ import { useSystemStatus } from '@/features/system/api/useSystem';
 import { Switch } from "@/components/ui/switch"
 import { Slider } from "@/components/ui/slider"
 import { SpotlightSearch } from './SpotlightSearch';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { Job } from '@/types/api';
 import { Progress } from "@/components/ui/progress"
@@ -219,18 +219,34 @@ const ControlCenter = () => {
 };
 
 import { formatDistanceToNow } from 'date-fns';
+import { X } from 'lucide-react';
 
 interface AuditLog {
   id: number;
   user_id: number;
   action: string;
-  resource: string;
+  target: string;
   details: string | null;
   created_at: string;
 }
 
+// Map action types to display info
+const getActionInfo = (action: string) => {
+  const actionMap: Record<string, { icon: React.ComponentType<{ className?: string }>; color: string; label: string }> = {
+    'create_file': { icon: Activity, color: 'bg-green-500/20 text-green-600', label: 'Create File' },
+    'delete_file': { icon: Activity, color: 'bg-red-500/20 text-red-600', label: 'Delete File' },
+    'upload_file': { icon: Activity, color: 'bg-blue-500/20 text-blue-600', label: 'Upload File' },
+    'create_folder': { icon: Activity, color: 'bg-purple-500/20 text-purple-600', label: 'Create Folder' },
+    'rename_file': { icon: Activity, color: 'bg-yellow-500/20 text-yellow-600', label: 'Rename' },
+    'move_file': { icon: Activity, color: 'bg-orange-500/20 text-orange-600', label: 'Move' },
+  };
+  return actionMap[action] || { icon: Activity, color: 'bg-blue-500/20 text-blue-600', label: action.replace(/_/g, ' ') };
+};
+
 const NotificationCenter = () => {
-  const { data: logs } = useQuery({
+  const queryClient = useQueryClient();
+  
+  const { data: logs, refetch } = useQuery({
     queryKey: ['audit-logs'],
     queryFn: async () => {
       const res = await apiClient.get<AuditLog[]>('/audit/logs');
@@ -238,40 +254,96 @@ const NotificationCenter = () => {
     },
   });
 
-  const notifications = logs?.slice(0, 10) || [];
+  const clearAllMutation = useMutation({
+    mutationFn: async () => {
+      await apiClient.delete('/audit/logs');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
+    },
+  });
+
+  const deleteOneMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiClient.delete(`/audit/logs/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
+    },
+  });
+
+  const notifications = logs?.slice(0, 20) || [];
+
+  const handleClearAll = () => {
+    if (notifications.length > 0) {
+      clearAllMutation.mutate();
+    }
+  };
+
+  const handleDeleteOne = (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    deleteOneMutation.mutate(id);
+  };
 
   return (
     <div className="w-80 p-4">
       <div className="flex items-center justify-between mb-4">
         <span className="font-semibold">Notifications</span>
-        <span className="text-xs text-blue-500 cursor-pointer">Clear All</span>
+        <button 
+          onClick={handleClearAll}
+          disabled={notifications.length === 0 || clearAllMutation.isPending}
+          className={cn(
+            "text-xs transition-colors",
+            notifications.length === 0 
+              ? "text-muted-foreground cursor-not-allowed" 
+              : "text-blue-500 hover:text-blue-600 cursor-pointer"
+          )}
+        >
+          {clearAllMutation.isPending ? 'Clearing...' : 'Clear All'}
+        </button>
       </div>
-      <div className="space-y-3 max-h-[400px] overflow-y-auto">
+      <div className="space-y-2 max-h-[400px] overflow-y-auto">
         {notifications.length === 0 ? (
-          <div className="text-center text-muted-foreground py-4 text-sm">
+          <div className="text-center text-muted-foreground py-8 text-sm">
             No new notifications
           </div>
         ) : (
-          notifications.map((log) => (
-            <div key={log.id} className="bg-black/5 dark:bg-white/5 rounded-lg p-3 border border-black/5 dark:border-white/5">
-              <div className="flex items-start gap-3">
-                <div className="p-1.5 bg-blue-500/20 text-blue-600 rounded-md">
-                  <Activity className="w-4 h-4" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex justify-between items-start">
-                    <span className="text-sm font-medium capitalize">{log.action.replace('_', ' ')}</span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
-                    </span>
+          notifications.map((log) => {
+            const actionInfo = getActionInfo(log.action);
+            const IconComponent = actionInfo.icon;
+            return (
+              <div 
+                key={log.id} 
+                className="bg-black/5 dark:bg-white/5 rounded-lg p-3 border border-black/5 dark:border-white/5 group hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+              >
+                <div className="flex items-start gap-3">
+                  <div className={cn("p-1.5 rounded-md shrink-0", actionInfo.color)}>
+                    <IconComponent className="w-4 h-4" />
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {log.resource} {log.details ? `- ${log.details}` : ''}
-                  </p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start gap-2">
+                      <span className="text-sm font-medium capitalize truncate">{actionInfo.label}</span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-[10px] text-muted-foreground">
+                          {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
+                        </span>
+                        <button
+                          onClick={(e) => handleDeleteOne(log.id, e)}
+                          className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-black/10 dark:hover:bg-white/10 rounded transition-all"
+                          title="Dismiss"
+                        >
+                          <X className="w-3 h-3 text-muted-foreground hover:text-foreground" />
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 truncate" title={log.target}>
+                      {log.target} {log.details ? `- ${log.details}` : ''}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
