@@ -19,6 +19,7 @@ import { FileInfo } from '@/types/api';
 import { useUploadStore } from '@/store/upload-store';
 import { useWindowStore } from '@/store/window-store';
 import { useFileUpload } from '@/features/files/hooks/useFileUpload'; // Updated import
+import { useUserTags, useFilesByTag } from '@/hooks/use-tags';
 import {
   Dialog,
   DialogContent,
@@ -36,10 +37,15 @@ import { Sidebar } from './finder/Sidebar';
 import { Toolbar } from './finder/Toolbar';
 import { FileList } from './finder/FileList';
 import { UploadStatus } from '@/components/desktop/UploadStatus';
+import { ShareDialog, UploadLinkDialog, TagDialog } from '@/components/dialogs';
 
 type ViewMode = 'grid' | 'list';
 
-export const Finder = () => {
+interface FinderProps {
+  windowId?: string;
+}
+
+export const Finder = ({ windowId }: FinderProps) => {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [currentPath, setCurrentPath] = useState('/');
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
@@ -57,6 +63,18 @@ export const Finder = () => {
   const [isPermanentDeleteConfirmOpen, setIsPermanentDeleteConfirmOpen] = useState(false);
   const [filesToPermanentlyDelete, setFilesToPermanentlyDelete] = useState<string[]>([]);
 
+  // Share dialog state
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [shareFile, setShareFile] = useState<FileInfo | null>(null);
+  
+  // Upload link dialog state
+  const [isUploadLinkDialogOpen, setIsUploadLinkDialogOpen] = useState(false);
+
+  // Tag state
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
+  const [tagTargetFile, setTagTargetFile] = useState<FileInfo | null>(null);
+
   // Search and sort state
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'size' | 'modified'>('name');
@@ -70,25 +88,33 @@ export const Finder = () => {
 
   const { handleUploadFiles, resumeUpload } = useFileUpload(); // Use hook
 
+  // Tag hooks
+  const { data: userTags = [] } = useUserTags();
+  const { data: taggedFiles = [] } = useFilesByTag(selectedTag);
+
 
   useEffect(() => {
+    if (!windowId) return;
+    
     const state = useWindowStore.getState();
-    const finderWindow = state.windows.find(w => w.appType === 'finder');
+    const finderWindow = state.windows.find(w => w.id === windowId);
 
     if (finderWindow) {
       if (JSON.stringify(finderWindow.appState?.currentPath) !== JSON.stringify(history)) {
-        updateWindowAppState(finderWindow.id, { currentPath: history });
+        updateWindowAppState(windowId, { currentPath: history });
       }
     }
-  }, [history, updateWindowAppState]);
+  }, [history, updateWindowAppState, windowId]);
 
   // Listen for external navigation requests (e.g., from desktop folder double-click)
   useEffect(() => {
-    const finderWindow = windows.find(w => w.appType === 'finder');
+    if (!windowId) return;
+    
+    const finderWindow = windows.find(w => w.id === windowId);
     if (finderWindow?.appState?.navigateTo) {
       const targetPath = finderWindow.appState.navigateTo;
       // Clear the navigateTo state to prevent re-triggering
-      updateWindowAppState(finderWindow.id, { navigateTo: undefined });
+      updateWindowAppState(windowId, { navigateTo: undefined });
       // Navigate to the target path
       setIsTrashMode(false);
       const newHistory = history.slice(0, historyIndex + 1);
@@ -98,7 +124,7 @@ export const Finder = () => {
       setCurrentPath(targetPath);
       setSelectedFiles(new Set());
     }
-  }, [windows, updateWindowAppState, history, historyIndex]);
+  }, [windows, updateWindowAppState, history, historyIndex, windowId]);
 
   const { data: files, isLoading, refetch } = useFiles({ path: currentPath });
   const { data: trashFiles, isLoading: isTrashLoading, refetch: refetchTrash } = useTrash();
@@ -116,11 +142,31 @@ export const Finder = () => {
   const currentFilesRaw = isTrashMode ? trashFiles : files;
   const isCurrentLoading = isTrashMode ? isTrashLoading : isLoading;
 
+  // Convert tagged files to FileInfo format when in tag filter mode
+  const tagFilteredFiles = React.useMemo((): FileInfo[] | undefined => {
+    if (!selectedTag || taggedFiles.length === 0) return undefined;
+    
+    // Convert TaggedFile to FileInfo (minimal info for display)
+    return taggedFiles.map(tf => ({
+      name: tf.name,
+      path: tf.path,
+      is_dir: tf.is_dir,
+      size: 0,
+      modified: '',
+      mime_type: null,
+      metadata: null,
+      tags: [{ name: selectedTag, color: null }],
+      is_starred: false,
+    }));
+  }, [selectedTag, taggedFiles]);
+
   // Filter and sort files
   const currentFiles = React.useMemo(() => {
-    if (!currentFilesRaw) return undefined;
+    // When filtering by tag, use the tagged files
+    const sourceFiles = selectedTag ? tagFilteredFiles : currentFilesRaw;
+    if (!sourceFiles) return undefined;
 
-    let filtered = currentFilesRaw;
+    let filtered = sourceFiles;
 
     // Apply search filter
     if (searchQuery.trim()) {
@@ -151,11 +197,12 @@ export const Finder = () => {
     });
 
     return sorted;
-  }, [currentFilesRaw, searchQuery, sortBy, sortDirection]);
+  }, [selectedTag, tagFilteredFiles, currentFilesRaw, searchQuery, sortBy, sortDirection]);
 
   const handleNavigate = (path: string) => {
-    if (path === currentPath && !isTrashMode) return;
+    if (path === currentPath && !isTrashMode && !selectedTag) return;
     setIsTrashMode(false);
+    setSelectedTag(null); // Clear tag filter when navigating
     const newHistory = history.slice(0, historyIndex + 1);
     newHistory.push(path);
     setHistory(newHistory);
@@ -179,6 +226,11 @@ export const Finder = () => {
   // Quick Look (Spacebar), Delete keys, and Select All (Cmd+A)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip keyboard handling when dialogs are open
+      if (isShareDialogOpen || isUploadLinkDialogOpen || isCreateFolderOpen || isEmptyTrashConfirmOpen || isPermanentDeleteConfirmOpen || isTagDialogOpen) {
+        return;
+      }
+
       // Select All - Cmd+A / Ctrl+A
       if ((e.metaKey || e.ctrlKey) && e.key === 'a' && !renamingFile) {
         e.preventDefault();
@@ -232,7 +284,56 @@ export const Finder = () => {
 
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [selectedFiles, currentFiles, renamingFile, openWindow, currentPath, deleteFile]);
+  }, [selectedFiles, currentFiles, renamingFile, openWindow, currentPath, deleteFile, isShareDialogOpen, isUploadLinkDialogOpen, isCreateFolderOpen, isEmptyTrashConfirmOpen, isPermanentDeleteConfirmOpen, isTagDialogOpen]);
+
+  // Mouse back/forward button navigation
+  const finderContainerRef = React.useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    const handleMouseButton = (e: MouseEvent) => {
+      // Button 3 = Back button (mouse button 4)
+      // Button 4 = Forward button (mouse button 5)
+      if (e.button !== 3 && e.button !== 4) {
+        return;
+      }
+      
+      // Always prevent browser navigation for side buttons when in Finder
+      if (!finderContainerRef.current?.contains(e.target as Node)) {
+        return;
+      }
+      
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Skip navigation when dialogs are open
+      if (isShareDialogOpen || isUploadLinkDialogOpen || isCreateFolderOpen || isEmptyTrashConfirmOpen || isPermanentDeleteConfirmOpen || isTagDialogOpen) {
+        return;
+      }
+      
+      // Only handle on mousedown for actual navigation
+      if (e.type === 'mousedown') {
+        if (e.button === 3 && historyIndex > 0) {
+          setHistoryIndex(historyIndex - 1);
+          setCurrentPath(history[historyIndex - 1]);
+        } else if (e.button === 4 && historyIndex < history.length - 1) {
+          setHistoryIndex(historyIndex + 1);
+          setCurrentPath(history[historyIndex + 1]);
+        }
+      }
+    };
+    
+    // We need to intercept all these events to fully prevent browser back/forward
+    const events = ['mousedown', 'mouseup', 'auxclick'] as const;
+    events.forEach(event => {
+      window.addEventListener(event, handleMouseButton, { capture: true });
+    });
+    
+    return () => {
+      events.forEach(event => {
+        window.removeEventListener(event, handleMouseButton, { capture: true });
+      });
+    };
+  }, [historyIndex, history, isShareDialogOpen, isUploadLinkDialogOpen, isCreateFolderOpen, isEmptyTrashConfirmOpen, isPermanentDeleteConfirmOpen, isTagDialogOpen]);
 
   const handleTrashMode = () => {
     setIsTrashMode(true);
@@ -316,16 +417,45 @@ export const Finder = () => {
   };
 
   const handleShare = async (file: FileInfo) => {
-    if (confirm(`Create share link for ${file.name}?`)) {
-      try {
-        const result = await createShare.mutateAsync({
-          file_path: file.path || (currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`)
-        });
-        prompt('Share Link Created:', `${window.location.origin}/s/${result.id}`);
-      } catch (error) {
-        alert('Failed to create share link');
-      }
-    }
+    setShareFile(file);
+    setIsShareDialogOpen(true);
+  };
+
+  const handleCreateShareLink = async (options: {
+    file_path: string;
+    password?: string;
+    expires_in_seconds?: number;
+  }) => {
+    const result = await createShare.mutateAsync({
+      file_path: options.file_path,
+      password: options.password,
+      expires: options.expires_in_seconds
+    });
+    return result;
+  };
+
+  const handleCreateUploadLink = async (options: {
+    target_path: string;
+    password?: string;
+    expires_in_seconds?: number;
+    max_files?: number;
+    max_file_size?: number;
+  }) => {
+    // TODO: Implement upload link API
+    const response = await fetch('/api/upload-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        target_path: options.target_path,
+        password: options.password,
+        expires_in_seconds: options.expires_in_seconds,
+        max_files: options.max_files,
+        max_file_size: options.max_file_size,
+      }),
+    });
+    if (!response.ok) throw new Error('Failed to create upload link');
+    return response.json();
   };
 
   const handleFavoriteClick = (fav: FileInfo) => {
@@ -537,14 +667,25 @@ export const Finder = () => {
   };
 
   return (
-    <div className="flex h-full bg-white/50 dark:bg-black/50 backdrop-blur-xl rounded-lg overflow-hidden border border-white/20 shadow-2xl">
+    <div 
+      ref={finderContainerRef}
+      className="flex h-full bg-white/50 dark:bg-black/50 backdrop-blur-xl rounded-lg overflow-hidden border border-white/20 shadow-2xl"
+    >
       <Sidebar
         currentPath={currentPath}
         isTrashMode={isTrashMode}
         favorites={favorites}
+        tags={userTags}
+        selectedTag={selectedTag}
         onNavigate={handleNavigate}
         onTrashMode={handleTrashMode}
         onFavoriteClick={handleFavoriteClick}
+        onTagClick={(tagName) => {
+          setSelectedTag(tagName);
+          setIsTrashMode(false);
+          setSelectedFiles(new Set());
+        }}
+        onManageTags={() => setIsTagDialogOpen(true)}
       />
 
       <div className="flex-1 flex flex-col min-w-0 bg-white/40 dark:bg-black/40 relative">
@@ -560,6 +701,7 @@ export const Finder = () => {
           onForward={handleForward}
           onEmptyTrash={() => setIsEmptyTrashConfirmOpen(true)}
           onUploadClick={() => fileInputRef.current?.click()}
+          onCreateUploadLink={() => setIsUploadLinkDialogOpen(true)}
           onViewModeChange={setViewMode}
           onSearchChange={setSearchQuery}
         />
@@ -599,6 +741,10 @@ export const Finder = () => {
           onShare={handleShare}
           onToggleStar={(path) => toggleStar.mutate(path)}
           onRenameStart={handleRenameStart}
+          onTag={(file) => {
+            setTagTargetFile(file);
+            setIsTagDialogOpen(true);
+          }}
           onCreateFolder={() => handleCreateFolder()}
           onUpload={() => fileInputRef.current?.click()}
           onRefresh={() => isTrashMode ? refetchTrash() : refetch()}
@@ -731,6 +877,34 @@ export const Finder = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Share Dialog */}
+      <ShareDialog
+        isOpen={isShareDialogOpen}
+        onClose={() => {
+          setIsShareDialogOpen(false);
+          setShareFile(null);
+        }}
+        fileName={shareFile?.name || ''}
+        filePath={shareFile?.path || (shareFile ? (currentPath === '/' ? `/${shareFile.name}` : `${currentPath}/${shareFile.name}`) : '')}
+        isDirectory={shareFile?.is_dir}
+        onCreateShare={handleCreateShareLink}
+      />
+
+      {/* Upload Link Dialog */}
+      <UploadLinkDialog
+        isOpen={isUploadLinkDialogOpen}
+        onClose={() => setIsUploadLinkDialogOpen(false)}
+        targetPath={currentPath}
+        onCreateUploadLink={handleCreateUploadLink}
+      />
+
+      {/* Tag Dialog */}
+      <TagDialog
+        open={isTagDialogOpen}
+        onOpenChange={setIsTagDialogOpen}
+        file={tagTargetFile}
+      />
     </div>
   );
 };

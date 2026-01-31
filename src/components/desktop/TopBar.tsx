@@ -233,7 +233,7 @@ const NotificationCenter = () => {
   const { data: logs } = useQuery({
     queryKey: ['audit-logs'],
     queryFn: async () => {
-      const res = await apiClient.get<AuditLog[]>('/api/audit/logs');
+      const res = await apiClient.get<AuditLog[]>('/audit/logs');
       return res.data;
     },
   });

@@ -100,6 +100,7 @@ interface FileListProps {
   onShare?: (file: FileInfo) => void;
   onToggleStar?: (path: string) => void;
   onRenameStart?: (file: FileInfo) => void;
+  onTag?: (file: FileInfo) => void;
   onCreateFolder?: () => void;
   onUpload?: () => void;
   onRefresh?: () => void;
@@ -134,6 +135,7 @@ export const FileList = ({
   onShare,
   onToggleStar,
   onRenameStart,
+  onTag,
   onCreateFolder,
   onUpload,
   onRefresh,
@@ -359,7 +361,7 @@ export const FileList = ({
                           {file.is_starred ? "Remove from Favorites" : "Add to Favorites"}
                         </ContextMenuItem>
                         <ContextMenuSeparator />
-                        <ContextMenuItem>
+                        <ContextMenuItem onClick={() => onTag?.(file)}>
                           <Tags className="mr-2 h-4 w-4" /> Tags...
                         </ContextMenuItem>
                         <ContextMenuItem>

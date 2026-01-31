@@ -21,7 +21,7 @@ const ContainerTerminal = dynamic(() => import('@/components/apps/ContainerTermi
 const WindowContent = ({ appType, props, windowId }: { appType: string, props?: any, windowId: string }) => {
   switch (appType) {
     case 'finder':
-      return <Finder />;
+      return <Finder windowId={windowId} />;
     case 'dashboard':
       return <Dashboard />;
     case 'docker':

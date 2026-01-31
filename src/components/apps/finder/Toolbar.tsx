@@ -9,6 +9,7 @@ import {
   Upload,
   Search,
   Trash2,
+  FolderUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -60,6 +61,7 @@ interface ToolbarProps {
   onForward: () => void;
   onEmptyTrash: () => void;
   onUploadClick: () => void;
+  onCreateUploadLink?: () => void;
   onViewModeChange: (mode: 'grid' | 'list') => void;
   onSearchChange: (query: string) => void;
 }
@@ -76,6 +78,7 @@ export const Toolbar = ({
   onForward,
   onEmptyTrash,
   onUploadClick,
+  onCreateUploadLink,
   onViewModeChange,
   onSearchChange,
 }: ToolbarProps) => {
@@ -119,13 +122,24 @@ export const Toolbar = ({
 
       <div className="flex items-center gap-3">
         {!isTrashMode && (
-          <button
-            onClick={onUploadClick}
-            className="p-1.5 rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-            title="Upload"
-          >
-            <Upload className="w-4 h-4 text-gray-600 dark:text-gray-300" />
-          </button>
+          <>
+            <button
+              onClick={onUploadClick}
+              className="p-1.5 rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+              title="Upload"
+            >
+              <Upload className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+            </button>
+            {onCreateUploadLink && (
+              <button
+                onClick={onCreateUploadLink}
+                className="p-1.5 rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                title="Create Upload Link"
+              >
+                <FolderUp className="w-4 h-4 text-purple-500 dark:text-purple-400" />
+              </button>
+            )}
+          </>
         )}
         <div className="flex bg-black/5 dark:bg-white/10 rounded-md p-0.5">
           <button
@@ -151,10 +165,19 @@ export const Toolbar = ({
         <div className="relative group">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-blue-500 transition-colors" />
           <input
-            type="text"
+            type="search"
+            name={`finder-search-${Date.now()}`}
             placeholder="Search"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
+            autoComplete="new-password"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            data-form-type="other"
+            data-lpignore="true"
+            data-1p-ignore="true"
+            aria-autocomplete="none"
             className="w-48 h-8 pl-9 pr-3 text-sm bg-black/5 dark:bg-white/10 rounded-md border border-transparent focus:border-blue-500 focus:outline-none text-gray-700 dark:text-gray-200 placeholder:text-gray-500 transition-all focus:w-64 focus:bg-white dark:focus:bg-black focus:shadow-sm"
           />
         </div>

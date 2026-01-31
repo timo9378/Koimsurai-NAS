@@ -4,6 +4,7 @@ import "./globals.css";
 import Providers from "./providers";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { SocketProvider } from "@/components/providers/socket-provider";
+import { GlobalMiniPlayer } from "@/components/ui/global-mini-player";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -43,6 +44,7 @@ export default function RootLayout({
           >
             <SocketProvider>
               {children}
+              <GlobalMiniPlayer />
             </SocketProvider>
           </ThemeProvider>
         </Providers>

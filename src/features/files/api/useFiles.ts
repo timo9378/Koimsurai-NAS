@@ -415,7 +415,11 @@ export const useCreateShare = () => {
   return useMutation({
     mutationFn: async (data: { file_path: string; password?: string; expires?: number }) => {
       const cleanPath = data.file_path.startsWith('/') ? data.file_path.slice(1) : data.file_path;
-      const response = await apiClient.post('/share', { ...data, file_path: cleanPath });
+      const response = await apiClient.post('/share', { 
+        file_path: cleanPath,
+        password: data.password,
+        expires_in_seconds: data.expires,
+      });
       return response.data;
     },
   });

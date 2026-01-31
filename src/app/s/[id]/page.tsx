@@ -131,8 +131,8 @@ export default function SharePage() {
     
     try {
       const url = password 
-        ? `/s/${shareId}?pwd=${encodeURIComponent(password)}`
-        : `/s/${shareId}`;
+        ? `/api/share/${shareId}/download?pwd=${encodeURIComponent(password)}`
+        : `/api/share/${shareId}/download`;
       
       const response = await fetch(url);
       
@@ -433,12 +433,14 @@ export default function SharePage() {
                         <Share2 className="w-4 h-4" />
                         <span>分享於 {formatDate(shareInfo.created_at)}</span>
                       </div>
-                      {shareInfo.expires_at && (
-                        <div className="flex items-center gap-2 text-white/50 text-sm">
-                          <Clock className="w-4 h-4" />
-                          <span>{getTimeRemaining(shareInfo.expires_at)}</span>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2 text-white/50 text-sm">
+                        <Clock className="w-4 h-4" />
+                        <span>
+                          {shareInfo.expires_at 
+                            ? getTimeRemaining(shareInfo.expires_at)
+                            : '永不過期'}
+                        </span>
+                      </div>
                       {shareInfo.is_password_protected && (
                         <div className="flex items-center gap-2 text-green-400/80 text-sm">
                           <CheckCircle2 className="w-4 h-4" />

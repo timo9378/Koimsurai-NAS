@@ -8,6 +8,8 @@ import { apiClient } from '@/lib/api-client';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useWindowStore } from '@/store/window-store';
+import { VideoPlayer } from '@/components/ui/video-player';
+import { AudioPlayer } from '@/components/ui/audio-player';
 
 interface FilePreviewProps {
   file: FileInfo;
@@ -27,6 +29,8 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
   const { updateWindowSize } = useWindowStore();
   const isImage = file.mime_type?.startsWith('image/');
   const isVideo = file.mime_type?.startsWith('video/');
+  const isAudio = file.mime_type?.startsWith('audio/') ||
+    file.name.match(/\.(mp3|wav|flac|aac|ogg|m4a|wma|opus)$/i);
   const isPdf = file.mime_type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
   const isOffice = file.name.match(/\.(docx?|xlsx?|pptx?)$/i);
   const isText = file.mime_type?.startsWith('text/') ||
@@ -133,32 +137,21 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
             }}
           />
         ) : isVideo ? (
-          <div className="w-full h-full flex flex-col bg-black rounded-lg overflow-hidden shadow-2xl">
-            <video
+          <div className="w-full h-full rounded-lg overflow-hidden shadow-2xl">
+            <VideoPlayer
               src={videoUrl}
-              controls
-              className="w-full h-full"
-              controlsList="nodownload"
-              crossOrigin="use-credentials"
-              style={{
-                objectFit: 'contain',
-              }}
+              title={file.name}
               onError={(e) => console.error('Video playback error:', e)}
             />
-            {/* Custom overlay for better UX - optional */}
-            <style jsx global>{`
-              video::-webkit-media-controls-panel {
-                background-image: linear-gradient(transparent, rgba(0,0,0,0.7)) !important;
-              }
-              video::-webkit-media-controls-play-button {
-                background-color: rgba(255,255,255,0.9);
-                border-radius: 50%;
-              }
-              video::-webkit-media-controls-timeline {
-                background-color: rgba(255,255,255,0.2);
-                border-radius: 4px;
-              }
-            `}</style>
+          </div>
+        ) : isAudio ? (
+          <div className="w-full max-w-md mx-auto h-full flex items-center justify-center">
+            <AudioPlayer
+              src={fileUrl}
+              title={file.name.replace(/\.[^/.]+$/, '')}
+              windowId={windowId}
+              onError={(e) => console.error('Audio playback error:', e)}
+            />
           </div>
         ) : isText ? (
           isTextLoading ? (

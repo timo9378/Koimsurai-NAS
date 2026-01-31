@@ -33,6 +33,18 @@ export interface Tag {
   color: string | null;
 }
 
+export interface UserTag {
+  name: string;
+  color: string | null;
+  count: number;
+}
+
+export interface TaggedFile {
+  path: string;
+  name: string;
+  is_dir: boolean;
+}
+
 export interface FileInfo {
   name: string;
   path: string; // Added path for convenience
