@@ -2,10 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  Wifi,
-  Battery,
   Search,
-  Command,
   LogOut,
   Settings,
   Bell,
@@ -20,7 +17,8 @@ import {
   CheckCircle2,
   XCircle,
   Moon,
-  Sun
+  Sun,
+  Box,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from 'next-themes';
@@ -38,9 +36,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { useLogout } from '@/features/auth/api/useAuth';
-import { useSystemStatus } from '@/features/system/api/useSystem';
-import { Switch } from "@/components/ui/switch"
-import { Slider } from "@/components/ui/slider"
+import { useSystemStatus, useRescan, useDockerContainers } from '@/features/system/api/useSystem';
 import { SpotlightSearch } from './SpotlightSearch';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
@@ -52,13 +48,19 @@ import { useUploadStore } from '@/store/upload-store';
 import { useTransferStore, formatSpeed } from '@/store/transfer-store';
 
 const TaskManager = () => {
-  const { data: backendTasks } = useQuery({
+  const { data: backendTasks, refetch, isLoading } = useQuery({
     queryKey: ['jobs'],
     queryFn: async () => {
-      const res = await apiClient.get<Job[]>('/api/tasks');
-      return res.data;
+      try {
+        const res = await apiClient.get<Job[]>('/tasks');
+        return Array.isArray(res.data) ? res.data : [];
+      } catch {
+        return [];
+      }
     },
-    refetchInterval: 2000,
+    retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: 30000,
   });
 
   // Get upload tasks from store
@@ -110,9 +112,19 @@ const TaskManager = () => {
 
       <div className="flex items-center justify-between mb-4">
         <span className="font-semibold">Background Tasks</span>
-        {activeTasks.length > 0 && (
-          <span className="text-xs text-blue-500 animate-pulse">{activeTasks.length} running</span>
-        )}
+        <div className="flex items-center gap-2">
+          {activeTasks.length > 0 && (
+            <span className="text-xs text-blue-500 animate-pulse">{activeTasks.length} running</span>
+          )}
+          <button
+            onClick={() => refetch()}
+            disabled={isLoading}
+            className="p-1 hover:bg-white/10 rounded transition-colors"
+            title="Refresh"
+          >
+            <RefreshCw className={cn("w-3 h-3", isLoading && "animate-spin")} />
+          </button>
+        </div>
       </div>
       <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar">
         {displayTasks.length === 0 ? (
@@ -163,58 +175,136 @@ const TaskManager = () => {
 };
 
 const ControlCenter = () => {
-  return (
-    <div className="w-80 p-4 grid grid-cols-2 gap-3">
-      <div className="col-span-2 bg-black/20 dark:bg-white/10 rounded-xl p-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-500 rounded-full text-white">
-            <Wifi className="w-4 h-4" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">Wi-Fi</span>
-            <span className="text-xs text-muted-foreground">Koimsurai-5G</span>
-          </div>
-        </div>
-        <Switch checked />
-      </div>
+  const { data: systemStatus } = useSystemStatus();
+  const rescanMutation = useRescan();
+  const { data: containers = [] } = useDockerContainers();
+  const openWindow = useWindowStore((state) => state.openWindow);
 
-      <div className="col-span-2 bg-black/20 dark:bg-white/10 rounded-xl p-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
+
+  const usedMemoryPercent = systemStatus 
+    ? Math.round((systemStatus.used_memory / systemStatus.total_memory) * 100) 
+    : 0;
+  
+  const containerList = Array.isArray(containers) ? containers : [];
+  const runningContainers = containerList.filter(c => c.status === 'running');
+  const totalContainers = containerList.length;
+  
+  // Calculate total disk usage from disks array
+  const totalDiskUsed = systemStatus?.disks?.reduce((acc, disk) => acc + (disk.total_space - disk.available_space), 0) || 0;
+  const totalDiskSize = systemStatus?.disks?.reduce((acc, disk) => acc + disk.total_space, 0) || 0;
+  const diskUsagePercent = totalDiskSize > 0 ? Math.round((totalDiskUsed / totalDiskSize) * 100) : 0;
+
+  return (
+    <div className="w-80 p-4 space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar">
+      {/* System Status */}
+      <div className="bg-black/20 dark:bg-white/10 rounded-xl p-4">
+        <div className="flex items-center gap-3 mb-3">
           <div className="p-2 bg-blue-500 rounded-full text-white">
             <Activity className="w-4 h-4" />
           </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">Performance</span>
-            <span className="text-xs text-muted-foreground">Balanced</span>
+          <span className="text-sm font-medium">System</span>
+        </div>
+        <div className="space-y-2">
+          {/* CPU */}
+          <div className="flex justify-between text-xs">
+            <span className="text-muted-foreground">CPU</span>
+            <span className="font-medium">{systemStatus?.cpu_usage?.toFixed(1) || 0}%</span>
+          </div>
+          
+          {/* RAM */}
+          <div className="flex justify-between text-xs">
+            <span className="text-muted-foreground">RAM</span>
+            <span className="font-medium">{usedMemoryPercent}%</span>
+          </div>
+
+          {/* Storage */}
+          <div className="flex justify-between text-xs">
+            <span className="text-muted-foreground">Storage</span>
+            <span className="font-medium">{diskUsagePercent}%</span>
+          </div>
+
+          {/* GPU if available */}
+          {systemStatus?.gpu && (
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">GPU</span>
+              <span className="font-medium">{systemStatus.gpu.utilization?.toFixed(0) || 0}%</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Docker Containers - Click to open Docker app */}
+      <button
+        onClick={() => openWindow('docker', 'Docker')}
+        className="w-full bg-black/20 dark:bg-white/10 rounded-xl p-4 hover:bg-black/30 dark:hover:bg-white/15 transition-colors text-left"
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-cyan-500 rounded-full text-white">
+            <Box className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="text-sm font-medium block">Docker</span>
+            <span className="text-[10px] text-muted-foreground">
+              {runningContainers.length}/{totalContainers} running
+            </span>
           </div>
         </div>
-        <Switch checked />
-      </div>
+      </button>
 
-      <div className="bg-black/20 dark:bg-white/10 rounded-xl p-3 flex flex-col gap-2">
-        <div className="p-2 bg-orange-500 w-fit rounded-full text-white">
-          <HardDrive className="w-4 h-4" />
+      {/* Quick Actions */}
+      <div className="bg-black/20 dark:bg-white/10 rounded-xl p-4">
+        <span className="text-sm font-medium mb-3 block">Quick Actions</span>
+        <div className="flex gap-2">
+          <button
+            onClick={() => rescanMutation.mutate()}
+            disabled={rescanMutation.isPending}
+            className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-xs font-medium transition-colors"
+          >
+            <RefreshCw className={cn("w-3 h-3", rescanMutation.isPending && "animate-spin")} />
+            {rescanMutation.isPending ? 'Scanning...' : 'Rescan Files'}
+          </button>
         </div>
-        <span className="text-sm font-medium">SMB</span>
-        <span className="text-xs text-muted-foreground">On</span>
-      </div>
-
-      <div className="bg-black/20 dark:bg-white/10 rounded-xl p-3 flex flex-col gap-2">
-        <div className="p-2 bg-green-500 w-fit rounded-full text-white">
-          <Cpu className="w-4 h-4" />
-        </div>
-        <span className="text-sm font-medium">Docker</span>
-        <span className="text-xs text-muted-foreground">Running</span>
-      </div>
-
-      <div className="col-span-2 bg-black/20 dark:bg-white/10 rounded-xl p-3 space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium">Fan Speed</span>
-          <span className="text-xs text-muted-foreground">Auto</span>
-        </div>
-        <Slider defaultValue={[50]} max={100} step={1} />
       </div>
     </div>
+  );
+};
+
+const ControlCenterPopover = () => {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <div className="hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer transition-colors">
+          <Sliders className="w-4 h-4" />
+        </div>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0 mr-2 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-white/20" align="end" sideOffset={8}>
+        {open && <ControlCenter />}
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+const TaskManagerPopover = () => {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <div className="hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer transition-colors">
+          <Activity className="w-4 h-4" />
+        </div>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0 mr-2 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-white/20" align="end" sideOffset={8}>
+        {open && <TaskManager />}
+      </PopoverContent>
+    </Popover>
   );
 };
 
@@ -558,26 +648,6 @@ export const TopBar = () => {
           {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
         </div>
 
-        <div className="flex items-center gap-2 hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer transition-colors">
-          <Battery className="w-4 h-4" />
-          <span className="text-xs">100%</span>
-        </div>
-
-        <div className="hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer transition-colors">
-          <Wifi className="w-4 h-4" />
-        </div>
-
-        <Popover>
-          <PopoverTrigger asChild>
-            <div className="hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer transition-colors">
-              <RefreshCw className="w-4 h-4" />
-            </div>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0 mr-2 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-white/20" align="end" sideOffset={8}>
-            <TaskManager />
-          </PopoverContent>
-        </Popover>
-
         <div
           className="hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer transition-colors"
           onClick={() => setIsSearchOpen(true)}
@@ -585,16 +655,7 @@ export const TopBar = () => {
           <Search className="w-4 h-4" />
         </div>
 
-        <Popover>
-          <PopoverTrigger asChild>
-            <div className="hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer transition-colors">
-              <Sliders className="w-4 h-4" />
-            </div>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0 mr-2 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-white/20" align="end" sideOffset={8}>
-            <ControlCenter />
-          </PopoverContent>
-        </Popover>
+        <ControlCenterPopover />
 
         <Popover>
           <PopoverTrigger asChild>

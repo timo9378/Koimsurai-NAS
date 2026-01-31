@@ -396,6 +396,8 @@ export const useThumbnail = (path: string, size: 'small' | 'medium' | 'large' = 
     },
     enabled: !!path,
     staleTime: Infinity, // Thumbnails rarely change
+    retry: false, // Don't retry on 404 - thumbnail may not exist yet
+    retryOnMount: false,
   });
 };
 

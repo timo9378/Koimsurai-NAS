@@ -45,7 +45,9 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
   // Encode each path segment separately to handle special characters (e.g. Chinese, spaces)
   const encodedPath = cleanPath.split('/').map(encodeURIComponent).join('/');
 
-  // The download endpoint: /api/download/{encoded_path}
+  // The download endpoint: /download/{encoded_path} (without /api prefix since apiClient adds it)
+  const apiPath = `/download/${encodedPath}`;
+  // Full URL for direct usage (img src, video src, etc.)
   const fileUrl = `/api/download/${encodedPath}`;
 
   // For video, we use the same endpoint as it supports Range requests
@@ -60,7 +62,8 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
       if (!isText) return null;
       // For text, we need to fetch the raw content
       // Use responseType: 'text' to get the raw text and transformResponse to prevent JSON parsing
-      const res = await apiClient.get(fileUrl, { 
+      // Use apiPath (without /api prefix) since apiClient already has baseURL: '/api'
+      const res = await apiClient.get(apiPath, { 
         responseType: 'text',
         transformResponse: [(data) => data], // Prevent automatic JSON parsing
       });
@@ -157,19 +160,28 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
         ) : isText ? (
           isTextLoading ? (
             <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+          ) : textError ? (
+            <div className="flex flex-col items-center gap-4 text-gray-500">
+              <File className="w-24 h-24 opacity-20" />
+              <div className="text-center">
+                <p className="text-lg font-medium text-gray-900 dark:text-white">無法載入檔案內容</p>
+                <p className="text-sm">請嘗試下載檔案後開啟</p>
+              </div>
+            </div>
           ) : (
             <div className="w-full h-full border border-gray-200 dark:border-white/10 rounded-lg overflow-hidden shadow-sm">
               <Editor
                 height="100%"
-                defaultLanguage={file.name.split('.').pop()}
-                value={textContent || ''}
+                defaultLanguage={file.name.split('.').pop() || 'plaintext'}
+                value={textContent ?? ''}
                 theme="vs-dark"
                 options={{
-                  readOnly: true,
+                  readOnly: false,
                   minimap: { enabled: false },
                   fontSize: 14,
                   scrollBeyondLastLine: false,
                   padding: { top: 16, bottom: 16 },
+                  wordWrap: 'on',
                 }}
               />
             </div>

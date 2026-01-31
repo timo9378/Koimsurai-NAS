@@ -159,44 +159,117 @@ export const FileList = ({
     }
   }, [renamingFile]);
 
-  const [selectionBox, setSelectionBox] = React.useState<{ startX: number; startY: number; currentX: number; currentY: number; isSelecting: boolean } | null>(null);
+  const [selectionBox, setSelectionBox] = React.useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const isSelectingRef = useRef(false);
+  
+  // We need to track file element positions for selection
+  const fileRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  const calculateAndApplySelection = React.useCallback((box: { startX: number; startY: number; currentX: number; currentY: number }) => {
+    if (!containerRef.current || !files || !onSelectionChange) return;
+    
+    const rect = containerRef.current.getBoundingClientRect();
+    const scroll = containerRef.current.scrollTop;
+
+    const boxLeft = Math.min(box.startX, box.currentX);
+    const boxTop = Math.min(box.startY, box.currentY);
+    const boxRight = Math.max(box.startX, box.currentX);
+    const boxBottom = Math.max(box.startY, box.currentY);
+
+    const newSelected = new Set<string>();
+
+    files.forEach(file => {
+      const el = fileRefs.current.get(file.name);
+      if (el) {
+        const elRect = el.getBoundingClientRect();
+        const elLeft = elRect.left - rect.left;
+        const elTop = elRect.top - rect.top + scroll;
+        const elRight = elLeft + elRect.width;
+        const elBottom = elTop + elRect.height;
+
+        const isIntersecting = !(boxLeft > elRight ||
+          boxRight < elLeft ||
+          boxTop > elBottom ||
+          boxBottom < elTop);
+
+        if (isIntersecting) {
+          newSelected.add(file.name);
+        }
+      }
+    });
+    
+    onSelectionChange(newSelected);
+  }, [files, onSelectionChange]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     // Only start selection if clicking on empty space (not on a file)
     if (e.button === 0 && e.target === e.currentTarget) {
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {
-        setSelectionBox({
-          startX: e.clientX - rect.left,
-          startY: e.clientY - rect.top + (containerRef.current?.scrollTop || 0),
-          currentX: e.clientX - rect.left,
-          currentY: e.clientY - rect.top + (containerRef.current?.scrollTop || 0),
-          isSelecting: true
-        });
+        const startX = e.clientX - rect.left;
+        const startY = e.clientY - rect.top + (containerRef.current?.scrollTop || 0);
+        isSelectingRef.current = true;
+        setSelectionBox({ startX, startY, currentX: startX, currentY: startY });
         onSelectionClear();
       }
     }
   };
 
-  // Use document-level listeners for selection to work even when mouse leaves container
+  const handleMouseMove = React.useCallback((e: MouseEvent) => {
+    if (!isSelectingRef.current || !containerRef.current) return;
+
+    const rect = containerRef.current.getBoundingClientRect();
+    const currentX = e.clientX - rect.left;
+    const currentY = e.clientY - rect.top + containerRef.current.scrollTop;
+
+    setSelectionBox(prev => {
+      if (!prev) return null;
+      return { ...prev, currentX, currentY };
+    });
+  }, []);
+
+  // Apply selection when selectionBox changes (real-time feedback)
+  const lastSelectionBoxRef = React.useRef(selectionBox);
   React.useEffect(() => {
-    if (!selectionBox?.isSelecting) return;
+    if (selectionBox) {
+      lastSelectionBoxRef.current = selectionBox;
+      calculateAndApplySelection(selectionBox);
+    }
+  }, [selectionBox, calculateAndApplySelection]);
 
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!containerRef.current) return;
+  // Track if we just finished a selection (to prevent click from clearing it)
+  const justFinishedSelectingRef = React.useRef(false);
 
-      const rect = containerRef.current.getBoundingClientRect();
-      const currentX = e.clientX - rect.left;
-      const currentY = e.clientY - rect.top + containerRef.current.scrollTop;
-
-      setSelectionBox(prev => prev ? ({ ...prev, currentX, currentY }) : null);
-    };
-
-    const handleMouseUp = () => {
+  const handleMouseUp = React.useCallback(() => {
+    if (isSelectingRef.current) {
+      // Apply final selection before clearing
+      if (lastSelectionBoxRef.current) {
+        calculateAndApplySelection(lastSelectionBoxRef.current);
+      }
+      isSelectingRef.current = false;
+      justFinishedSelectingRef.current = true;
+      // Reset after a short delay to allow click event to be ignored
+      setTimeout(() => {
+        justFinishedSelectingRef.current = false;
+      }, 50);
       setSelectionBox(null);
-    };
+    }
+  }, [calculateAndApplySelection]);
 
+  const handleContainerClick = React.useCallback((e: React.MouseEvent) => {
+    // Don't clear selection if we just finished a box selection
+    if (justFinishedSelectingRef.current) {
+      return;
+    }
+    // Only clear if clicking on the container itself, not on a file
+    if (e.target === e.currentTarget) {
+      onSelectionClear();
+    }
+  }, [onSelectionClear]);
+
+  // Add/remove document event listeners
+  React.useEffect(() => {
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
 
@@ -204,50 +277,7 @@ export const FileList = ({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [selectionBox?.isSelecting]);
-
-  // We need to track file element positions for selection
-  const fileRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-
-  // Calculate selection intersection whenever selectionBox changes
-  React.useEffect(() => {
-    if (selectionBox?.isSelecting && containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const scroll = containerRef.current.scrollTop;
-
-      const boxLeft = Math.min(selectionBox.startX, selectionBox.currentX);
-      const boxTop = Math.min(selectionBox.startY, selectionBox.currentY);
-      const boxRight = Math.max(selectionBox.startX, selectionBox.currentX);
-      const boxBottom = Math.max(selectionBox.startY, selectionBox.currentY);
-
-      const newSelected = new Set<string>();
-
-      files?.forEach(file => {
-        const el = fileRefs.current.get(file.name);
-        if (el) {
-          const elRect = el.getBoundingClientRect();
-          // Convert elRect to be relative to container content (including scroll)
-          const elLeft = elRect.left - rect.left;
-          const elTop = elRect.top - rect.top + scroll;
-          const elRight = elLeft + elRect.width;
-          const elBottom = elTop + elRect.height;
-
-          const isIntersecting = !(boxLeft > elRight ||
-            boxRight < elLeft ||
-            boxTop > elBottom ||
-            boxBottom < elTop);
-
-          if (isIntersecting) {
-            newSelected.add(file.name);
-          }
-        }
-      });
-
-      if (onSelectionChange) {
-        onSelectionChange(newSelected);
-      }
-    }
-  }, [selectionBox?.currentX, selectionBox?.currentY, selectionBox?.isSelecting, files, onSelectionChange]);
+  }, [handleMouseMove, handleMouseUp]);
 
   return (
     <ContextMenu key={contextMenuKey}>
@@ -255,7 +285,7 @@ export const FileList = ({
         <div
           ref={containerRef}
           className="flex-1 overflow-auto p-4 relative h-full w-full select-none"
-          onClick={onSelectionClear}
+          onClick={handleContainerClick}
           onMouseDown={handleMouseDown}
           onPointerDown={(e) => {
             if (e.button === 2) {
@@ -273,7 +303,7 @@ export const FileList = ({
           onDragLeave={onDragLeave}
           onDrop={onDrop}
         >
-          {selectionBox?.isSelecting && (
+          {selectionBox && (
             <div
               className="absolute border border-blue-500/50 bg-blue-500/20 z-50 pointer-events-none"
               style={{
