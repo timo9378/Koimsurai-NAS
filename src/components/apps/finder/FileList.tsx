@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useRef, useCallback } from 'react';
+import { Virtuoso, VirtuosoGrid } from 'react-virtuoso';
 import {
   Upload,
   Trash2,

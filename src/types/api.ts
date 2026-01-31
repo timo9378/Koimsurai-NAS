@@ -43,6 +43,8 @@ export interface TaggedFile {
   path: string;
   name: string;
   is_dir: boolean;
+  size: number;
+  modified: string;
 }
 
 export interface FileInfo {
@@ -136,6 +138,14 @@ export interface GpuInfo {
   temperature: number;
 }
 
+export interface ProcessInfo {
+  pid: number;
+  name: string;
+  cpu_usage: number;
+  memory_bytes: number;
+  memory_percent: number;
+}
+
 export interface SystemStatus {
   cpu_usage: number;
   cpu_temp?: number;
@@ -145,6 +155,7 @@ export interface SystemStatus {
   used_swap: number;
   disks: DiskInfo[];
   gpu?: GpuInfo;
+  top_processes: ProcessInfo[];
 }
 
 export interface DockerContainer {

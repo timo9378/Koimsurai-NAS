@@ -38,8 +38,32 @@ import { Toolbar } from './finder/Toolbar';
 import { FileList } from './finder/FileList';
 import { UploadStatus } from '@/components/desktop/UploadStatus';
 import { ShareDialog, UploadLinkDialog, TagDialog } from '@/components/dialogs';
+import { X, Plus } from 'lucide-react';
 
 type ViewMode = 'grid' | 'list';
+
+// Tab state interface
+interface TabState {
+  id: string;
+  path: string;
+  history: string[];
+  historyIndex: number;
+  isTrashMode: boolean;
+  selectedTag: string | null;
+  selectedFiles: Set<string>;
+  searchQuery: string;
+}
+
+const createTab = (path: string = '/'): TabState => ({
+  id: crypto.randomUUID(),
+  path,
+  history: [path],
+  historyIndex: 0,
+  isTrashMode: false,
+  selectedTag: null,
+  selectedFiles: new Set(),
+  searchQuery: '',
+});
 
 interface FinderProps {
   windowId?: string;
@@ -47,11 +71,78 @@ interface FinderProps {
 
 export const Finder = ({ windowId }: FinderProps) => {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [currentPath, setCurrentPath] = useState('/');
-  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
-  const [history, setHistory] = useState<string[]>(['/']);
-  const [historyIndex, setHistoryIndex] = useState(0);
-  const [isTrashMode, setIsTrashMode] = useState(false);
+  
+  // Multi-tab state
+  const [tabs, setTabs] = useState<TabState[]>(() => [createTab('/')]);
+  const [activeTabId, setActiveTabId] = useState<string>(() => tabs[0]?.id || '');
+  
+  // Get current tab
+  const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
+  
+  // Derived state from active tab
+  const currentPath = activeTab?.path || '/';
+  const history = activeTab?.history || ['/'];
+  const historyIndex = activeTab?.historyIndex || 0;
+  const isTrashMode = activeTab?.isTrashMode || false;
+  const selectedTag = activeTab?.selectedTag || null;
+  const selectedFiles = activeTab?.selectedFiles || new Set<string>();
+  const searchQuery = activeTab?.searchQuery || '';
+  
+  // Update current tab helper
+  const updateActiveTab = (updates: Partial<TabState>) => {
+    setTabs(prev => prev.map(tab => 
+      tab.id === activeTabId ? { ...tab, ...updates } : tab
+    ));
+  };
+  
+  // Setter wrappers for backward compatibility
+  const setCurrentPath = (path: string) => updateActiveTab({ path });
+  const setHistory = (h: string[] | ((prev: string[]) => string[])) => {
+    setTabs(prev => prev.map(tab => 
+      tab.id === activeTabId 
+        ? { ...tab, history: typeof h === 'function' ? h(tab.history) : h }
+        : tab
+    ));
+  };
+  const setHistoryIndex = (idx: number | ((prev: number) => number)) => {
+    setTabs(prev => prev.map(tab => 
+      tab.id === activeTabId 
+        ? { ...tab, historyIndex: typeof idx === 'function' ? idx(tab.historyIndex) : idx }
+        : tab
+    ));
+  };
+  const setIsTrashMode = (mode: boolean) => updateActiveTab({ isTrashMode: mode });
+  const setSelectedTag = (tag: string | null) => updateActiveTab({ selectedTag: tag });
+  const setSelectedFiles = (files: Set<string> | ((prev: Set<string>) => Set<string>)) => {
+    setTabs(prev => prev.map(tab => 
+      tab.id === activeTabId 
+        ? { ...tab, selectedFiles: typeof files === 'function' ? files(tab.selectedFiles) : files }
+        : tab
+    ));
+  };
+  const setSearchQuery = (query: string) => updateActiveTab({ searchQuery: query });
+  
+  // Tab management functions
+  const addTab = (path: string = '/') => {
+    const newTab = createTab(path);
+    setTabs(prev => [...prev, newTab]);
+    setActiveTabId(newTab.id);
+  };
+  
+  const closeTab = (tabId: string) => {
+    if (tabs.length <= 1) return; // Don't close last tab
+    
+    const tabIndex = tabs.findIndex(t => t.id === tabId);
+    const newTabs = tabs.filter(t => t.id !== tabId);
+    setTabs(newTabs);
+    
+    // If we're closing the active tab, switch to adjacent tab
+    if (tabId === activeTabId) {
+      const newIndex = Math.min(tabIndex, newTabs.length - 1);
+      setActiveTabId(newTabs[newIndex].id);
+    }
+  };
+  
   const [isDragging, setIsDragging] = useState(false);
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -70,13 +161,11 @@ export const Finder = ({ windowId }: FinderProps) => {
   // Upload link dialog state
   const [isUploadLinkDialogOpen, setIsUploadLinkDialogOpen] = useState(false);
 
-  // Tag state
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  // Tag dialog state (moved selectedTag to tab state)
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
   const [tagTargetFile, setTagTargetFile] = useState<FileInfo | null>(null);
 
-  // Search and sort state
-  const [searchQuery, setSearchQuery] = useState('');
+  // Sort state (global across tabs)
   const [sortBy, setSortBy] = useState<'name' | 'size' | 'modified'>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
@@ -90,7 +179,7 @@ export const Finder = ({ windowId }: FinderProps) => {
 
   // Tag hooks
   const { data: userTags = [] } = useUserTags();
-  const { data: taggedFiles = [] } = useFilesByTag(selectedTag);
+  const { data: taggedFiles = [], isLoading: isTagLoading } = useFilesByTag(selectedTag);
 
 
   useEffect(() => {
@@ -140,25 +229,29 @@ export const Finder = ({ windowId }: FinderProps) => {
   const createFolder = useCreateFolder();
 
   const currentFilesRaw = isTrashMode ? trashFiles : files;
-  const isCurrentLoading = isTrashMode ? isTrashLoading : isLoading;
+  const isCurrentLoading = selectedTag ? isTagLoading : (isTrashMode ? isTrashLoading : isLoading);
 
   // Convert tagged files to FileInfo format when in tag filter mode
   const tagFilteredFiles = React.useMemo((): FileInfo[] | undefined => {
-    if (!selectedTag || taggedFiles.length === 0) return undefined;
+    if (!selectedTag) return undefined;
     
-    // Convert TaggedFile to FileInfo (minimal info for display)
-    return taggedFiles.map(tf => ({
-      name: tf.name,
-      path: tf.path,
-      is_dir: tf.is_dir,
-      size: 0,
-      modified: '',
-      mime_type: null,
-      metadata: null,
-      tags: [{ name: selectedTag, color: null }],
-      is_starred: false,
-    }));
-  }, [selectedTag, taggedFiles]);
+    // Convert TaggedFile to FileInfo (return empty array if no files, not undefined)
+    return taggedFiles.map(tf => {
+      // Find the tag color from userTags
+      const tagInfo = userTags.find(t => t.name === selectedTag);
+      return {
+        name: tf.name,
+        path: tf.path,
+        is_dir: tf.is_dir,
+        size: tf.size,
+        modified: tf.modified,
+        mime_type: null,
+        metadata: null,
+        tags: [{ name: selectedTag, color: tagInfo?.color || null }],
+        is_starred: false,
+      };
+    });
+  }, [selectedTag, taggedFiles, userTags]);
 
   // Filter and sort files
   const currentFiles = React.useMemo(() => {
@@ -689,6 +782,65 @@ export const Finder = ({ windowId }: FinderProps) => {
       />
 
       <div className="flex-1 flex flex-col min-w-0 bg-white/40 dark:bg-black/40 relative">
+        {/* Tab Bar */}
+        <div className="h-9 flex items-center bg-white/30 dark:bg-black/30 border-b border-white/10 shrink-0">
+          <div className="flex-1 flex items-center gap-0.5 px-1 overflow-x-auto scrollbar-none">
+            {tabs.map((tab) => {
+              const isActive = tab.id === activeTabId;
+              const tabName = tab.isTrashMode 
+                ? 'Trash' 
+                : tab.selectedTag 
+                  ? tab.selectedTag 
+                  : tab.path === '/' 
+                    ? 'Home' 
+                    : tab.path.split('/').filter(Boolean).pop() || 'Home';
+              
+              return (
+                <div
+                  key={tab.id}
+                  onClick={() => setActiveTabId(tab.id)}
+                  className={cn(
+                    "group flex items-center gap-1.5 h-7 px-3 rounded-md cursor-pointer transition-all duration-150 min-w-0 max-w-[180px]",
+                    isActive
+                      ? "bg-white/60 dark:bg-white/10 shadow-sm"
+                      : "hover:bg-white/40 dark:hover:bg-white/5"
+                  )}
+                >
+                  <span className={cn(
+                    "text-xs truncate",
+                    isActive 
+                      ? "text-gray-800 dark:text-gray-200 font-medium" 
+                      : "text-gray-600 dark:text-gray-400"
+                  )}>
+                    {tabName}
+                  </span>
+                  {tabs.length > 1 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        closeTab(tab.id);
+                      }}
+                      className={cn(
+                        "shrink-0 p-0.5 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors",
+                        isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                      )}
+                    >
+                      <X className="w-3 h-3 text-gray-500" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <button
+            onClick={() => addTab('/')}
+            className="shrink-0 p-1.5 mr-1 rounded hover:bg-white/40 dark:hover:bg-white/10 transition-colors"
+            title="New Tab"
+          >
+            <Plus className="w-4 h-4 text-gray-500" />
+          </button>
+        </div>
+        
         <Toolbar
           currentPath={currentPath}
           isTrashMode={isTrashMode}

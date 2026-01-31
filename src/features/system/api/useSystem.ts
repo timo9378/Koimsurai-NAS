@@ -17,7 +17,8 @@ export const useSystemStatus = () => {
     },
     retry: false,
     refetchOnWindowFocus: false,
-    staleTime: 10000,
+    staleTime: 2000,
+    refetchInterval: 3000,
   });
 };
 

@@ -136,11 +136,21 @@ export const DesktopIcons = () => {
           throw new Error('無法創建資料夾,請稍後再試');
         }
 
-        // Set pending rename - useEffect will handle entering rename mode when folder appears
-        setPendingRenameFolder(name);
-
-        // Trigger refetch to get the new folder
-        await refetch();
+        // Wait a bit for the mutation's onSuccess to complete
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // Trigger refetch to get the new folder and wait for it
+        const { data: updatedFiles } = await refetch();
+        
+        // Only set pending rename after we've confirmed the folder exists
+        if (updatedFiles?.some(f => f.name === name)) {
+          setPendingRenameFolder(name);
+        } else {
+          // If folder doesn't appear yet, try one more refetch
+          await new Promise(resolve => setTimeout(resolve, 200));
+          await refetch();
+          setPendingRenameFolder(name);
+        }
       } catch (error) {
         console.error('Failed to create folder:', error);
         alert('建立資料夾失敗');

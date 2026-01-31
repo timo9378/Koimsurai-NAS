@@ -164,11 +164,37 @@ export const useCreateFolder = () => {
         path: cleanPath,
         folder_name: name
       });
+      
+      // Return the path for use in onSuccess
+      return { path, cleanPath };
     },
-    onSuccess: async (_, variables) => {
+    onSuccess: async (result, variables) => {
       // Small delay to ensure filesystem consistency before fetching
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Invalidate all files queries
       await queryClient.invalidateQueries({ queryKey: ['files'] });
+      
+      // Also invalidate specific path queries (both with and without leading slash)
+      const pathVariants = [
+        variables.path,
+        `/${variables.path}`.replace('//', '/'),
+        variables.path.replace(/^\//, '')
+      ];
+      
+      for (const p of pathVariants) {
+        await queryClient.invalidateQueries({ 
+          queryKey: ['files', p],
+          exact: false 
+        });
+      }
+      
+      // Force refetch all active files queries
+      await queryClient.refetchQueries({ 
+        queryKey: ['files'], 
+        type: 'active',
+        exact: false
+      });
     },
   });
 };

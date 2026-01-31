@@ -96,10 +96,19 @@ export const useWindowStore = create(
         const id = crypto.randomUUID();
         const defaultTitle = title || appType.charAt(0).toUpperCase() + appType.slice(1);
 
+        // Default sizes for different app types
+        const defaultSizes: Partial<Record<AppType, { width: number; height: number }>> = {
+          calculator: { width: 320, height: 500 },
+          terminal: { width: 700, height: 500 },
+          photos: { width: 1000, height: 700 },
+          preview: { width: 900, height: 700 },
+          settings: { width: 600, height: 500 },
+        };
+
         // Restore from history if available
         const history = windowHistory[appType];
         const position = history ? history.position : { x: 100 + windows.length * 20, y: 100 + windows.length * 20 };
-        const size = history ? history.size : { width: 800, height: 600 };
+        const size = history ? history.size : (defaultSizes[appType] || { width: 800, height: 600 });
 
         const newWindow: WindowState = {
           id,

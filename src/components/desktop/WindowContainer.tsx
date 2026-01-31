@@ -11,11 +11,17 @@ import { Dashboard } from '@/components/apps/Dashboard';
 import { DockerManager } from '@/components/apps/DockerManager';
 import { Photos } from '@/components/apps/Photos';
 import { FilePreview } from '@/components/apps/FilePreview';
+import { Calculator } from '@/components/apps/Calculator';
 import dynamic from 'next/dynamic';
 
 const ContainerTerminal = dynamic(() => import('@/components/apps/ContainerTerminal').then(mod => mod.ContainerTerminal), {
   ssr: false,
   loading: () => <div className="h-full w-full bg-[#1e1e1e] animate-pulse" />
+});
+
+const Terminal = dynamic(() => import('@/components/apps/Terminal').then(mod => mod.Terminal), {
+  ssr: false,
+  loading: () => <div className="h-full w-full bg-[#1a1a2e] animate-pulse" />
 });
 
 const WindowContent = ({ appType, props, windowId }: { appType: string, props?: any, windowId: string }) => {
@@ -35,12 +41,10 @@ const WindowContent = ({ appType, props, windowId }: { appType: string, props?: 
       if (props?.containerId) {
         return <ContainerTerminal containerId={props.containerId} />;
       }
-      // Otherwise show placeholder
-      return (
-        <div className="flex items-center justify-center h-full text-muted-foreground bg-[#1e1e1e]">
-          Terminal - No container connected
-        </div>
-      );
+      // Otherwise render standalone Terminal
+      return <Terminal windowId={windowId} />;
+    case 'calculator':
+      return <Calculator windowId={windowId} />;
     default:
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground">
