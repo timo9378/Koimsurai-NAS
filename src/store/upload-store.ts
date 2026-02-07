@@ -13,7 +13,7 @@ export interface UploadTask {
 interface UploadStore {
   tasks: Record<string, UploadTask>;
   isExpanded: boolean;
-  
+
   addTask: (task: UploadTask) => void;
   updateTask: (id: string, updates: Partial<UploadTask>) => void;
   removeTask: (id: string) => void;
@@ -33,12 +33,15 @@ export const useUploadStore = create<UploadStore>((set) => ({
     })),
 
   updateTask: (id, updates) =>
-    set((state) => ({
-      tasks: {
-        ...state.tasks,
-        [id]: { ...state.tasks[id], ...updates },
-      },
-    })),
+    set((state) => {
+      if (!state.tasks[id]) return state;
+      return {
+        tasks: {
+          ...state.tasks,
+          [id]: { ...state.tasks[id], ...updates },
+        },
+      };
+    }),
 
   removeTask: (id) =>
     set((state) => {
