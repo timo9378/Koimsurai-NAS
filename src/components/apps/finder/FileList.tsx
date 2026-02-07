@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, forwardRef } from 'react';
 import { Virtuoso, VirtuosoGrid } from 'react-virtuoso';
 import {
   Upload,
@@ -114,6 +114,25 @@ interface FileListProps {
   onViewModeChange?: (mode: 'grid' | 'list') => void;
   onSortChange?: (field: 'name' | 'size' | 'modified') => void;
 }
+
+// VirtuosoGrid custom components — defined outside the component to avoid re-renders
+const gridComponents = {
+  List: forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ style, children, ...props }, ref) => (
+    <div
+      ref={ref}
+      {...props}
+      style={style}
+      className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-4 content-start"
+    >
+      {children}
+    </div>
+  )),
+  Item: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+    <div {...props} style={{ display: 'contents' }}>
+      {children}
+    </div>
+  ),
+};
 
 export const FileList = ({
   files,
@@ -285,7 +304,7 @@ export const FileList = ({
       <ContextMenuTrigger className="flex-1 flex flex-col min-h-0 h-full w-full">
         <div
           ref={containerRef}
-          className="flex-1 overflow-auto p-4 relative h-full w-full select-none"
+          className="flex-1 overflow-hidden p-4 relative h-full w-full select-none"
           onClick={handleContainerClick}
           onMouseDown={handleMouseDown}
           onPointerDown={(e) => {
@@ -326,8 +345,12 @@ export const FileList = ({
           {isLoading ? (
             <div className="flex items-center justify-center h-full text-gray-500">Loading...</div>
           ) : viewMode === 'grid' ? (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-4 content-start">
-              {files?.map((file) => (
+            <VirtuosoGrid
+              style={{ height: '100%', width: '100%' }}
+              data={files ?? []}
+              overscan={200}
+              components={gridComponents}
+              itemContent={(index, file) => (
                 <ContextMenu key={file.name}>
                   <ContextMenuTrigger>
                     <div
@@ -426,8 +449,8 @@ export const FileList = ({
                     )}
                   </ContextMenuContent>
                 </ContextMenu>
-              ))}
-            </div>
+              )}
+            />
           ) : (
             <div className="w-full text-sm text-gray-700 dark:text-gray-200">
               <div className="grid grid-cols-[minmax(200px,1fr)_80px_120px] gap-2 px-4 py-2 border-b border-white/10 font-medium text-gray-500 sticky top-0 bg-white/80 dark:bg-black/80 backdrop-blur-sm z-10">
@@ -460,7 +483,11 @@ export const FileList = ({
                 </button>
               </div>
               <TooltipProvider delayDuration={300}>
-              {files?.map((file) => (
+              <Virtuoso
+                style={{ height: '100%' }}
+                data={files ?? []}
+                overscan={200}
+                itemContent={(index, file) => (
                 <ContextMenu key={file.name}>
                   <ContextMenuTrigger>
                     <div
@@ -570,7 +597,8 @@ export const FileList = ({
                     )}
                   </ContextMenuContent>
                 </ContextMenu>
-              ))}
+              )}
+              />
               </TooltipProvider>
             </div>
           )}
