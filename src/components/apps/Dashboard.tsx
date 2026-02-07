@@ -115,17 +115,17 @@ export const Dashboard = () => {
       <div className="flex flex-col h-full overflow-auto custom-scrollbar">
         {/* Alerts Section */}
         {(memoryPercent > 90 || (systemStatus?.cpu_usage || 0) > 90) && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-4">
-            <div className="flex items-center gap-2 text-red-400 mb-2">
+          <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-xl p-4 mb-4">
+            <div className="flex items-center gap-2 text-red-600 dark:text-red-400 mb-2">
               <AlertTriangle className="w-5 h-5" />
               <span className="font-semibold">Resource Alerts</span>
             </div>
             <div className="space-y-1 text-sm">
               {(systemStatus?.cpu_usage || 0) > 90 && (
-                <div className="text-red-300">• System CPU usage is critical ({systemStatus?.cpu_usage.toFixed(1)}%)</div>
+                <div className="text-red-500 dark:text-red-300">• System CPU usage is critical ({systemStatus?.cpu_usage.toFixed(1)}%)</div>
               )}
               {memoryPercent > 90 && (
-                <div className="text-red-300">• System memory usage is critical ({memoryPercent.toFixed(1)}%)</div>
+                <div className="text-red-500 dark:text-red-300">• System memory usage is critical ({memoryPercent.toFixed(1)}%)</div>
               )}
             </div>
           </div>
@@ -134,68 +134,68 @@ export const Dashboard = () => {
         {/* Main Stats Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           {/* CPU */}
-          <div className="bg-white/5 rounded-xl p-4">
+          <div className="bg-gray-100 dark:bg-white/5 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
-              <Cpu className="w-4 h-4 text-blue-400" />
-              <span className="text-xs text-zinc-400">CPU</span>
+              <Cpu className="w-4 h-4 text-blue-500 dark:text-blue-400" />
+              <span className="text-xs text-gray-500 dark:text-zinc-400">CPU</span>
             </div>
-            <div className="text-2xl font-bold text-white">{systemStatus?.cpu_usage.toFixed(1) || '--'}%</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">{systemStatus?.cpu_usage.toFixed(1) || '--'}%</div>
             {systemStatus?.cpu_temp && (
-              <div className="text-xs text-orange-400 mt-1">{systemStatus.cpu_temp.toFixed(0)}°C</div>
+              <div className="text-xs text-orange-500 dark:text-orange-400 mt-1">{systemStatus.cpu_temp.toFixed(0)}°C</div>
             )}
-            <div className="h-1.5 bg-white/10 rounded-full mt-2 overflow-hidden">
+            <div className="h-1.5 bg-gray-200 dark:bg-white/10 rounded-full mt-2 overflow-hidden">
               <div className="h-full bg-blue-500 transition-all" style={{ width: `${systemStatus?.cpu_usage || 0}%` }} />
             </div>
           </div>
 
           {/* Memory */}
-          <div className="bg-white/5 rounded-xl p-4">
+          <div className="bg-gray-100 dark:bg-white/5 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
-              <Activity className="w-4 h-4 text-purple-400" />
-              <span className="text-xs text-zinc-400">Memory</span>
+              <Activity className="w-4 h-4 text-purple-500 dark:text-purple-400" />
+              <span className="text-xs text-gray-500 dark:text-zinc-400">Memory</span>
             </div>
-            <div className="text-2xl font-bold text-white">{memoryPercent.toFixed(1)}%</div>
-            <div className="text-xs text-zinc-500 mt-1">{formatBytes(systemStatus?.used_memory || 0)} / {formatBytes(systemStatus?.total_memory || 0)}</div>
-            <div className="h-1.5 bg-white/10 rounded-full mt-2 overflow-hidden">
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">{memoryPercent.toFixed(1)}%</div>
+            <div className="text-xs text-gray-500 dark:text-zinc-500 mt-1">{formatBytes(systemStatus?.used_memory || 0)} / {formatBytes(systemStatus?.total_memory || 0)}</div>
+            <div className="h-1.5 bg-gray-200 dark:bg-white/10 rounded-full mt-2 overflow-hidden">
               <div className="h-full bg-purple-500 transition-all" style={{ width: `${memoryPercent}%` }} />
             </div>
           </div>
 
           {/* Swap */}
-          <div className="bg-white/5 rounded-xl p-4">
+          <div className="bg-gray-100 dark:bg-white/5 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
-              <HardDrive className="w-4 h-4 text-cyan-400" />
-              <span className="text-xs text-zinc-400">Swap</span>
+              <HardDrive className="w-4 h-4 text-cyan-500 dark:text-cyan-400" />
+              <span className="text-xs text-gray-500 dark:text-zinc-400">Swap</span>
             </div>
-            <div className="text-2xl font-bold text-white">{swapPercent.toFixed(1)}%</div>
-            <div className="text-xs text-zinc-500 mt-1">{formatBytes(systemStatus?.used_swap || 0)} / {formatBytes(systemStatus?.total_swap || 0)}</div>
-            <div className="h-1.5 bg-white/10 rounded-full mt-2 overflow-hidden">
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">{swapPercent.toFixed(1)}%</div>
+            <div className="text-xs text-gray-500 dark:text-zinc-500 mt-1">{formatBytes(systemStatus?.used_swap || 0)} / {formatBytes(systemStatus?.total_swap || 0)}</div>
+            <div className="h-1.5 bg-gray-200 dark:bg-white/10 rounded-full mt-2 overflow-hidden">
               <div className="h-full bg-cyan-500 transition-all" style={{ width: `${swapPercent}%` }} />
             </div>
           </div>
 
           {/* GPU */}
           {systemStatus?.gpu ? (
-            <div className="bg-white/5 rounded-xl p-4">
+            <div className="bg-gray-100 dark:bg-white/5 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
-                <GpuIcon className="w-4 h-4 text-green-400" />
-                <span className="text-xs text-zinc-400">GPU</span>
+                <GpuIcon className="w-4 h-4 text-green-500 dark:text-green-400" />
+                <span className="text-xs text-gray-500 dark:text-zinc-400">GPU</span>
               </div>
-              <div className="text-2xl font-bold text-white">{systemStatus.gpu.utilization}%</div>
-              <div className="text-xs text-orange-400 mt-1">{systemStatus.gpu.temperature}°C • {formatBytes(systemStatus.gpu.memory_used)}</div>
-              <div className="h-1.5 bg-white/10 rounded-full mt-2 overflow-hidden">
+              <div className="text-2xl font-bold text-gray-900 dark:text-white">{systemStatus.gpu.utilization}%</div>
+              <div className="text-xs text-orange-500 dark:text-orange-400 mt-1">{systemStatus.gpu.temperature}°C • {formatBytes(systemStatus.gpu.memory_used)}</div>
+              <div className="h-1.5 bg-gray-200 dark:bg-white/10 rounded-full mt-2 overflow-hidden">
                 <div className="h-full bg-green-500 transition-all" style={{ width: `${systemStatus.gpu.utilization}%` }} />
               </div>
             </div>
           ) : (
-            <div className="bg-white/5 rounded-xl p-4">
+            <div className="bg-gray-100 dark:bg-white/5 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
-                <HardDrive className="w-4 h-4 text-orange-400" />
-                <span className="text-xs text-zinc-400">Storage</span>
+                <HardDrive className="w-4 h-4 text-orange-500 dark:text-orange-400" />
+                <span className="text-xs text-gray-500 dark:text-zinc-400">Storage</span>
               </div>
-              <div className="text-2xl font-bold text-white">{diskPercent.toFixed(1)}%</div>
-              <div className="text-xs text-zinc-500 mt-1">{formatBytes(totalDiskUsed)} / {formatBytes(totalDiskSize)}</div>
-              <div className="h-1.5 bg-white/10 rounded-full mt-2 overflow-hidden">
+              <div className="text-2xl font-bold text-gray-900 dark:text-white">{diskPercent.toFixed(1)}%</div>
+              <div className="text-xs text-gray-500 dark:text-zinc-500 mt-1">{formatBytes(totalDiskUsed)} / {formatBytes(totalDiskSize)}</div>
+              <div className="h-1.5 bg-gray-200 dark:bg-white/10 rounded-full mt-2 overflow-hidden">
                 <div className="h-full bg-orange-500 transition-all" style={{ width: `${diskPercent}%` }} />
               </div>
             </div>
@@ -205,17 +205,17 @@ export const Dashboard = () => {
         {/* Second Row: Top Processes + Storage */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 min-h-0">
           {/* Top Processes by CPU */}
-          <div className="bg-white/5 rounded-xl p-4 flex flex-col min-h-0">
+          <div className="bg-gray-100 dark:bg-white/5 rounded-xl p-4 flex flex-col min-h-0">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <Activity className="w-4 h-4 text-blue-400" />
-                <span className="text-sm font-medium text-white">Top Processes</span>
+                <Activity className="w-4 h-4 text-blue-500 dark:text-blue-400" />
+                <span className="text-sm font-medium text-gray-900 dark:text-white">Top Processes</span>
               </div>
-              <span className="text-xs text-zinc-400">by CPU usage</span>
+              <span className="text-xs text-gray-500 dark:text-zinc-400">by CPU usage</span>
             </div>
 
             {/* Header */}
-            <div className="grid grid-cols-12 gap-2 text-[10px] text-zinc-500 mb-2 px-2">
+            <div className="grid grid-cols-12 gap-2 text-[10px] text-gray-500 dark:text-zinc-500 mb-2 px-2">
               <div className="col-span-5">Process</div>
               <div className="col-span-2 text-right">PID</div>
               <div className="col-span-2 text-right">CPU</div>
@@ -224,7 +224,7 @@ export const Dashboard = () => {
 
             <div className="flex-1 overflow-auto custom-scrollbar space-y-1">
               {topProcesses.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-zinc-500 text-xs">
+                <div className="flex items-center justify-center h-full text-gray-400 dark:text-zinc-500 text-xs">
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
                   Loading processes...
                 </div>
@@ -234,18 +234,18 @@ export const Dashboard = () => {
                     key={`${proc.pid}-${i}`} 
                     className={cn(
                       "grid grid-cols-12 gap-2 text-xs px-2 py-1.5 rounded-lg",
-                      proc.cpu_usage > 50 ? "bg-red-500/10" : proc.cpu_usage > 20 ? "bg-orange-500/10" : "bg-white/5"
+                      proc.cpu_usage > 50 ? "bg-red-50 dark:bg-red-500/10" : proc.cpu_usage > 20 ? "bg-orange-50 dark:bg-orange-500/10" : "bg-gray-50 dark:bg-white/5"
                     )}
                   >
-                    <div className="col-span-5 text-white truncate" title={proc.name}>{proc.name}</div>
-                    <div className="col-span-2 text-right text-zinc-400">{proc.pid}</div>
+                    <div className="col-span-5 text-gray-900 dark:text-white truncate" title={proc.name}>{proc.name}</div>
+                    <div className="col-span-2 text-right text-gray-500 dark:text-zinc-400">{proc.pid}</div>
                     <div className={cn(
                       "col-span-2 text-right font-medium",
-                      proc.cpu_usage > 50 ? "text-red-400" : proc.cpu_usage > 20 ? "text-orange-400" : "text-white"
+                      proc.cpu_usage > 50 ? "text-red-500 dark:text-red-400" : proc.cpu_usage > 20 ? "text-orange-500 dark:text-orange-400" : "text-gray-900 dark:text-white"
                     )}>
                       {proc.cpu_usage.toFixed(1)}%
                     </div>
-                    <div className="col-span-3 text-right text-zinc-300">{formatBytes(proc.memory_bytes)}</div>
+                    <div className="col-span-3 text-right text-gray-600 dark:text-zinc-300">{formatBytes(proc.memory_bytes)}</div>
                   </div>
                 ))
               )}
@@ -253,13 +253,13 @@ export const Dashboard = () => {
           </div>
 
           {/* Storage Summary */}
-          <div className="bg-white/5 rounded-xl p-4 flex flex-col min-h-0">
+          <div className="bg-gray-100 dark:bg-white/5 rounded-xl p-4 flex flex-col min-h-0">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <HardDrive className="w-4 h-4 text-orange-400" />
-                <span className="text-sm font-medium text-white">Storage Devices</span>
+                <HardDrive className="w-4 h-4 text-orange-500 dark:text-orange-400" />
+                <span className="text-sm font-medium text-gray-900 dark:text-white">Storage Devices</span>
               </div>
-              <span className="text-xs text-zinc-400">{systemStatus?.disks?.length || 0} disks</span>
+              <span className="text-xs text-gray-500 dark:text-zinc-400">{systemStatus?.disks?.length || 0} disks</span>
             </div>
 
             <div className="flex-1 overflow-auto custom-scrollbar space-y-3">
@@ -268,18 +268,18 @@ export const Dashboard = () => {
                 const percent = (used / disk.total_space) * 100;
                 const display = getDiskDisplayName(disk);
                 return (
-                  <div key={i} className="bg-white/5 rounded-lg p-3">
+                  <div key={i} className="bg-white dark:bg-white/5 rounded-lg p-3">
                     <div className="flex justify-between items-center mb-2">
                       <div>
-                        <div className="text-sm text-white font-medium">{display.name}</div>
-                        <div className="text-[10px] text-zinc-500">{display.subtitle} • {disk.mount_point}</div>
+                        <div className="text-sm text-gray-900 dark:text-white font-medium">{display.name}</div>
+                        <div className="text-[10px] text-gray-500 dark:text-zinc-500">{display.subtitle} • {disk.mount_point}</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm text-white">{formatBytes(disk.available_space)} free</div>
-                        <div className="text-[10px] text-zinc-500">of {formatBytes(disk.total_space)}</div>
+                        <div className="text-sm text-gray-900 dark:text-white">{formatBytes(disk.available_space)} free</div>
+                        <div className="text-[10px] text-gray-500 dark:text-zinc-500">of {formatBytes(disk.total_space)}</div>
                       </div>
                     </div>
-                    <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-2 bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
                       <div className={cn("h-full rounded-full bg-gradient-to-r transition-all", getProgressColor(percent))} style={{ width: `${percent}%` }} />
                     </div>
                   </div>
@@ -290,8 +290,8 @@ export const Dashboard = () => {
         </div>
 
         {/* Real-time Chart */}
-        <div className="bg-white/5 rounded-xl p-4 mt-4">
-          <div className="text-sm font-medium text-white mb-3">Resource History</div>
+        <div className="bg-gray-100 dark:bg-white/5 rounded-xl p-4 mt-4">
+          <div className="text-sm font-medium text-gray-900 dark:text-white mb-3">Resource History</div>
           <div className="h-[120px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={history}>
@@ -305,9 +305,9 @@ export const Dashboard = () => {
                     <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.1)" vertical={false} />
-                <XAxis dataKey="time" stroke="rgba(128,128,128,0.3)" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-                <YAxis stroke="rgba(128,128,128,0.3)" domain={[0, 100]} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.15)" vertical={false} />
+                <XAxis dataKey="time" stroke="rgba(128,128,128,0.5)" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                <YAxis stroke="rgba(128,128,128,0.5)" domain={[0, 100]} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
                 <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', fontSize: 12 }} />
                 <Area type="monotone" dataKey="cpu" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorCpuOverview)" name="CPU" />
                 <Area type="monotone" dataKey="ram" stroke="#8b5cf6" strokeWidth={2} fillOpacity={1} fill="url(#colorRamOverview)" name="RAM" />
@@ -317,11 +317,11 @@ export const Dashboard = () => {
           <div className="flex items-center justify-center gap-6 mt-2 text-xs">
             <div className="flex items-center gap-2">
               <div className="w-3 h-1 bg-blue-500 rounded" />
-              <span className="text-zinc-400">CPU</span>
+              <span className="text-gray-500 dark:text-zinc-400">CPU</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-1 bg-purple-500 rounded" />
-              <span className="text-zinc-400">RAM</span>
+              <span className="text-gray-500 dark:text-zinc-400">RAM</span>
             </div>
           </div>
         </div>
@@ -333,18 +333,18 @@ export const Dashboard = () => {
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-500/20 rounded-lg">
-            <Cpu className="w-6 h-6 text-blue-400" />
+          <div className="p-2 bg-blue-100 dark:bg-blue-500/20 rounded-lg">
+            <Cpu className="w-6 h-6 text-blue-500 dark:text-blue-400" />
           </div>
           <div>
-            <div className="text-sm text-zinc-400">CPU Usage</div>
-            <div className="text-3xl font-bold text-white">
+            <div className="text-sm text-gray-500 dark:text-zinc-400">CPU Usage</div>
+            <div className="text-3xl font-bold text-gray-900 dark:text-white">
               {systemStatus ? `${systemStatus.cpu_usage.toFixed(1)}%` : '--'}
             </div>
           </div>
         </div>
         {systemStatus?.cpu_temp && (
-          <div className="flex items-center gap-2 text-orange-400">
+          <div className="flex items-center gap-2 text-orange-500 dark:text-orange-400">
             <Thermometer className="w-5 h-5" />
             <span className="text-xl font-semibold">{systemStatus.cpu_temp.toFixed(0)}°C</span>
           </div>
@@ -374,18 +374,18 @@ export const Dashboard = () => {
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-purple-500/20 rounded-lg">
-            <Activity className="w-6 h-6 text-purple-400" />
+          <div className="p-2 bg-purple-100 dark:bg-purple-500/20 rounded-lg">
+            <Activity className="w-6 h-6 text-purple-500 dark:text-purple-400" />
           </div>
           <div>
-            <div className="text-sm text-zinc-400">Memory Usage</div>
-            <div className="text-3xl font-bold text-white">
+            <div className="text-sm text-gray-500 dark:text-zinc-400">Memory Usage</div>
+            <div className="text-3xl font-bold text-gray-900 dark:text-white">
               {systemStatus ? `${((systemStatus.used_memory / systemStatus.total_memory) * 100).toFixed(1)}%` : '--'}
             </div>
           </div>
         </div>
         {systemStatus && (
-          <div className="text-right text-sm text-zinc-400">
+          <div className="text-right text-sm text-gray-500 dark:text-zinc-400">
             {formatBytes(systemStatus.used_memory)} / {formatBytes(systemStatus.total_memory)}
           </div>
         )}
@@ -413,7 +413,7 @@ export const Dashboard = () => {
   const renderGpuTab = () => {
     if (!systemStatus?.gpu) {
       return (
-        <div className="flex flex-col items-center justify-center h-full text-zinc-400">
+        <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-zinc-400">
           <Monitor className="w-16 h-16 mb-4 opacity-50" />
           <div className="text-lg">No GPU Detected</div>
         </div>
@@ -427,15 +427,15 @@ export const Dashboard = () => {
       <div className="flex flex-col h-full">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-500/20 rounded-lg">
-              <GpuIcon className="w-6 h-6 text-green-400" />
+            <div className="p-2 bg-green-100 dark:bg-green-500/20 rounded-lg">
+              <GpuIcon className="w-6 h-6 text-green-500 dark:text-green-400" />
             </div>
             <div>
-              <div className="text-sm text-zinc-400">{gpu.name}</div>
-              <div className="text-3xl font-bold text-white">{gpu.utilization}%</div>
+              <div className="text-sm text-gray-500 dark:text-zinc-400">{gpu.name}</div>
+              <div className="text-3xl font-bold text-gray-900 dark:text-white">{gpu.utilization}%</div>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-orange-400">
+          <div className="flex items-center gap-2 text-orange-500 dark:text-orange-400">
             <Thermometer className="w-5 h-5" />
             <span className="text-xl font-semibold">{gpu.temperature}°C</span>
           </div>
@@ -460,12 +460,12 @@ export const Dashboard = () => {
         </div>
 
         {/* VRAM Usage */}
-        <div className="bg-white/5 rounded-xl p-4">
+        <div className="bg-gray-100 dark:bg-white/5 rounded-xl p-4">
           <div className="flex justify-between mb-2">
-            <span className="text-sm text-zinc-400">VRAM</span>
-            <span className="text-sm text-white">{formatBytes(gpu.memory_used)} / {formatBytes(gpu.memory_total)}</span>
+            <span className="text-sm text-gray-500 dark:text-zinc-400">VRAM</span>
+            <span className="text-sm text-gray-900 dark:text-white">{formatBytes(gpu.memory_used)} / {formatBytes(gpu.memory_total)}</span>
           </div>
-          <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+          <div className="h-2 bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
             <div className={cn("h-full rounded-full bg-gradient-to-r", getProgressColor(vramPercent))} style={{ width: `${vramPercent}%` }} />
           </div>
         </div>
@@ -476,28 +476,28 @@ export const Dashboard = () => {
   const renderStorageTab = () => (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center gap-3 mb-4">
-        <div className="p-2 bg-orange-500/20 rounded-lg">
-          <HardDrive className="w-6 h-6 text-orange-400" />
+        <div className="p-2 bg-orange-100 dark:bg-orange-500/20 rounded-lg">
+          <HardDrive className="w-6 h-6 text-orange-500 dark:text-orange-400" />
         </div>
-        <div className="text-lg font-semibold text-white">Storage Devices</div>
+        <div className="text-lg font-semibold text-gray-900 dark:text-white">Storage Devices</div>
       </div>
       <div className="flex-1 overflow-auto custom-scrollbar space-y-4">
         {systemStatus?.disks?.map((disk, i) => {
           const percentage = ((disk.total_space - disk.available_space) / disk.total_space) * 100;
           const display = getDiskDisplayName(disk);
           return (
-            <div key={i} className="bg-white/5 rounded-xl p-4">
+            <div key={i} className="bg-gray-100 dark:bg-white/5 rounded-xl p-4">
               <div className="flex justify-between items-start mb-3">
                 <div>
-                  <div className="font-medium text-white">{display.name}</div>
-                  <div className="text-xs text-zinc-500">{display.subtitle}</div>
+                  <div className="font-medium text-gray-900 dark:text-white">{display.name}</div>
+                  <div className="text-xs text-gray-500 dark:text-zinc-500">{display.subtitle}</div>
                 </div>
                 <div className="text-right">
-                  <span className="text-xl font-bold text-white">{formatBytes(disk.available_space)}</span>
-                  <span className="text-zinc-400 text-sm"> / {formatBytes(disk.total_space)}</span>
+                  <span className="text-xl font-bold text-gray-900 dark:text-white">{formatBytes(disk.available_space)}</span>
+                  <span className="text-gray-500 dark:text-zinc-400 text-sm"> / {formatBytes(disk.total_space)}</span>
                 </div>
               </div>
-              <div className="h-3 bg-white/10 rounded-full overflow-hidden">
+              <div className="h-3 bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
                 <div className={cn("h-full rounded-full bg-gradient-to-r transition-all", getProgressColor(percentage))} style={{ width: `${percentage}%` }} />
               </div>
             </div>
@@ -518,9 +518,9 @@ export const Dashboard = () => {
   };
 
   return (
-    <div className="h-full flex flex-col bg-white/20 dark:bg-zinc-950/20 backdrop-blur-3xl">
+    <div className="h-full flex flex-col bg-gray-50/80 dark:bg-zinc-950/20 backdrop-blur-3xl">
       {/* Tab Bar */}
-      <div className="flex border-b border-white/10">
+      <div className="flex border-b border-gray-200 dark:border-white/10">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           return (
@@ -530,8 +530,8 @@ export const Dashboard = () => {
               className={cn(
                 "flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-all",
                 activeTab === tab.id
-                  ? "text-white bg-white/10 border-b-2 border-blue-500"
-                  : "text-zinc-400 hover:text-white hover:bg-white/5"
+                  ? "text-gray-900 dark:text-white bg-white/60 dark:bg-white/10 border-b-2 border-blue-500"
+                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
               )}
             >
               <Icon className="w-4 h-4" />

@@ -122,13 +122,13 @@ const gridComponents = {
       ref={ref}
       {...props}
       style={style}
-      className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-4 content-start"
+      className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-4 p-4 content-start"
     >
       {children}
     </div>
   )),
   Item: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-    <div {...props} style={{ display: 'contents' }}>
+    <div {...props}>
       {children}
     </div>
   ),
@@ -182,15 +182,16 @@ export const FileList = ({
   const [selectionBox, setSelectionBox] = React.useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const isSelectingRef = useRef(false);
-  
-  // We need to track file element positions for selection
-  const fileRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  // Virtuoso 內部捲軸偏移量 — 由 onScroll 回呼更新
+  const scrollOffsetRef = useRef(0);
+  // 穩定化 onSelectionChange ref — 避免 calculateAndApplySelection 依賴不穩定的 callback 造成無限 re-render
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
 
+  // ── 座標計算式框選 ──
+  // 不依賴 DOM refs，直接用 Grid/List 的佈局參數推算每個 item 的邏輯位置
   const calculateAndApplySelection = React.useCallback((box: { startX: number; startY: number; currentX: number; currentY: number }) => {
-    if (!containerRef.current || !files || !onSelectionChange) return;
-    
-    const rect = containerRef.current.getBoundingClientRect();
-    const scroll = containerRef.current.scrollTop;
+    if (!containerRef.current || !files?.length || !onSelectionChangeRef.current) return;
 
     const boxLeft = Math.min(box.startX, box.currentX);
     const boxTop = Math.min(box.startY, box.currentY);
@@ -199,36 +200,54 @@ export const FileList = ({
 
     const newSelected = new Set<string>();
 
-    files.forEach(file => {
-      const el = fileRefs.current.get(file.name);
-      if (el) {
-        const elRect = el.getBoundingClientRect();
-        const elLeft = elRect.left - rect.left;
-        const elTop = elRect.top - rect.top + scroll;
-        const elRight = elLeft + elRect.width;
-        const elBottom = elTop + elRect.height;
+    if (viewMode === 'grid') {
+      // Grid 佈局參數（對應 CSS: minmax(100px,1fr), gap-4, p-4）
+      const GAP = 16;
+      const PADDING = 16;
+      const MIN_COL_W = 100;
+      const containerW = containerRef.current.clientWidth;
+      const availableW = containerW - PADDING * 2;
+      // auto-fill 算法：盡可能多的欄位，每欄至少 MIN_COL_W
+      const cols = Math.max(1, Math.floor((availableW + GAP) / (MIN_COL_W + GAP)));
+      const cellW = (availableW - GAP * (cols - 1)) / cols;
+      // 估算每個 cell 高度（icon 48 + text ~20 + padding 16 ≈ 84）
+      const CELL_H = 84;
 
-        const isIntersecting = !(boxLeft > elRight ||
-          boxRight < elLeft ||
-          boxTop > elBottom ||
-          boxBottom < elTop);
+      files.forEach((file, index) => {
+        const col = index % cols;
+        const row = Math.floor(index / cols);
+        const itemLeft = PADDING + col * (cellW + GAP);
+        const itemTop = PADDING + row * (CELL_H + GAP);
+        const itemRight = itemLeft + cellW;
+        const itemBottom = itemTop + CELL_H;
 
-        if (isIntersecting) {
-          newSelected.add(file.name);
-        }
-      }
-    });
-    
-    onSelectionChange(newSelected);
-  }, [files, onSelectionChange]);
+        const intersects = !(boxLeft > itemRight || boxRight < itemLeft || boxTop > itemBottom || boxBottom < itemTop);
+        if (intersects) newSelected.add(file.name);
+      });
+    } else {
+      // List 佈局：header 36px，每行 32px
+      const HEADER_H = 36;
+      const ROW_H = 32;
+
+      files.forEach((file, index) => {
+        const itemTop = HEADER_H + index * ROW_H;
+        const itemBottom = itemTop + ROW_H;
+
+        const intersects = !(boxTop > itemBottom || boxBottom < itemTop);
+        if (intersects) newSelected.add(file.name);
+      });
+    }
+
+    onSelectionChangeRef.current(newSelected);
+  }, [files, viewMode]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    // Only start selection if clicking on empty space (not on a file)
-    if (e.button === 0 && e.target === e.currentTarget) {
+    // Only start selection if clicking on empty space (not on a file item)
+    if (e.button === 0 && !(e.target as HTMLElement).closest('[data-file-item]')) {
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {
         const startX = e.clientX - rect.left;
-        const startY = e.clientY - rect.top + (containerRef.current?.scrollTop || 0);
+        const startY = e.clientY - rect.top + scrollOffsetRef.current;
         isSelectingRef.current = true;
         setSelectionBox({ startX, startY, currentX: startX, currentY: startY });
         onSelectionClear();
@@ -241,7 +260,7 @@ export const FileList = ({
 
     const rect = containerRef.current.getBoundingClientRect();
     const currentX = e.clientX - rect.left;
-    const currentY = e.clientY - rect.top + containerRef.current.scrollTop;
+    const currentY = e.clientY - rect.top + scrollOffsetRef.current;
 
     setSelectionBox(prev => {
       if (!prev) return null;
@@ -282,8 +301,8 @@ export const FileList = ({
     if (justFinishedSelectingRef.current) {
       return;
     }
-    // Only clear if clicking on the container itself, not on a file
-    if (e.target === e.currentTarget) {
+    // Only clear if clicking on empty space, not on a file item
+    if (!(e.target as HTMLElement).closest('[data-file-item]')) {
       onSelectionClear();
     }
   }, [onSelectionClear]);
@@ -304,7 +323,7 @@ export const FileList = ({
       <ContextMenuTrigger className="flex-1 flex flex-col min-h-0 h-full w-full">
         <div
           ref={containerRef}
-          className="flex-1 overflow-hidden p-4 relative h-full w-full select-none"
+          className="flex-1 overflow-hidden relative h-full w-full select-none"
           onClick={handleContainerClick}
           onMouseDown={handleMouseDown}
           onPointerDown={(e) => {
@@ -323,17 +342,23 @@ export const FileList = ({
           onDragLeave={onDragLeave}
           onDrop={onDrop}
         >
-          {selectionBox && (
-            <div
-              className="absolute border border-blue-500/50 bg-blue-500/20 z-50 pointer-events-none"
-              style={{
-                left: Math.min(selectionBox.startX, selectionBox.currentX),
-                top: Math.min(selectionBox.startY, selectionBox.currentY),
-                width: Math.abs(selectionBox.currentX - selectionBox.startX),
-                height: Math.abs(selectionBox.currentY - selectionBox.startY),
-              }}
-            />
-          )}
+          {selectionBox && (() => {
+            // 框選座標含 scroll offset，但顯示時需轉換回視窗座標
+            const scrollOff = scrollOffsetRef.current;
+            const dispStartY = selectionBox.startY - scrollOff;
+            const dispCurrentY = selectionBox.currentY - scrollOff;
+            return (
+              <div
+                className="absolute border border-blue-500/50 bg-blue-500/20 z-50 pointer-events-none"
+                style={{
+                  left: Math.min(selectionBox.startX, selectionBox.currentX),
+                  top: Math.min(dispStartY, dispCurrentY),
+                  width: Math.abs(selectionBox.currentX - selectionBox.startX),
+                  height: Math.abs(dispCurrentY - dispStartY),
+                }}
+              />
+            );
+          })()}
           {isDragging && (
             <div className="absolute inset-0 z-50 flex items-center justify-center bg-blue-500/10 dark:bg-blue-500/20 backdrop-blur-sm border-2 border-blue-500 border-dashed m-2 rounded-lg pointer-events-none">
               <div className="flex flex-col items-center gap-2 text-blue-600 dark:text-blue-400">
@@ -350,14 +375,12 @@ export const FileList = ({
               data={files ?? []}
               overscan={200}
               components={gridComponents}
+              onScroll={(e) => { scrollOffsetRef.current = (e.target as HTMLElement).scrollTop; }}
               itemContent={(index, file) => (
                 <ContextMenu key={file.name}>
                   <ContextMenuTrigger>
                     <div
-                      ref={(el) => {
-                        if (el) fileRefs.current.set(file.name, el);
-                        else fileRefs.current.delete(file.name);
-                      }}
+                      data-file-item
                       onClick={(e) => { e.stopPropagation(); onFileClick(file, e); }}
                       onDoubleClick={(e) => { e.stopPropagation(); onFileDoubleClick(file); }}
                       className={cn(
@@ -487,14 +510,12 @@ export const FileList = ({
                 style={{ height: '100%' }}
                 data={files ?? []}
                 overscan={200}
+                onScroll={(e) => { scrollOffsetRef.current = (e.target as HTMLElement).scrollTop; }}
                 itemContent={(index, file) => (
                 <ContextMenu key={file.name}>
                   <ContextMenuTrigger>
                     <div
-                      ref={(el) => {
-                        if (el) fileRefs.current.set(file.name, el);
-                        else fileRefs.current.delete(file.name);
-                      }}
+                      data-file-item
                       onClick={(e) => { e.stopPropagation(); onFileClick(file, e); }}
                       onDoubleClick={(e) => { e.stopPropagation(); onFileDoubleClick(file); }}
                       className={cn(

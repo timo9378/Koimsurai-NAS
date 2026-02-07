@@ -540,8 +540,24 @@ export const Finder = ({ windowId }: FinderProps) => {
     }
   };
 
+  // 記錄最後一次點擊的檔案索引（用於 Shift+Click 範圍選取）
+  const lastClickedIndexRef = React.useRef<number>(-1);
+
   const handleFileClick = (file: FileInfo, e: React.MouseEvent) => {
-    if (e.metaKey || e.ctrlKey) {
+    const fileIndex = currentFiles?.findIndex(f => f.name === file.name) ?? -1;
+
+    if (e.shiftKey && lastClickedIndexRef.current >= 0 && currentFiles) {
+      // Shift+Click → 範圍選取（從 lastClickedIndex 到當前 index 的所有檔案）
+      const start = Math.min(lastClickedIndexRef.current, fileIndex);
+      const end = Math.max(lastClickedIndexRef.current, fileIndex);
+      const newSelected = new Set(selectedFiles); // 保留既有選取（配合 Ctrl+Shift 使用）
+      for (let i = start; i <= end; i++) {
+        newSelected.add(currentFiles[i].name);
+      }
+      setSelectedFiles(newSelected);
+      // 不更新 lastClickedIndex，允許連續 Shift+Click 延伸範圍
+    } else if (e.metaKey || e.ctrlKey) {
+      // Ctrl/Cmd+Click → 切換單一檔案
       const newSelected = new Set(selectedFiles);
       if (newSelected.has(file.name)) {
         newSelected.delete(file.name);
@@ -549,8 +565,11 @@ export const Finder = ({ windowId }: FinderProps) => {
         newSelected.add(file.name);
       }
       setSelectedFiles(newSelected);
+      lastClickedIndexRef.current = fileIndex;
     } else {
+      // 普通點擊 → 只選取該檔案
       setSelectedFiles(new Set([file.name]));
+      lastClickedIndexRef.current = fileIndex;
     }
   };
 
@@ -898,7 +917,7 @@ export const Finder = ({ windowId }: FinderProps) => {
 
       <div className="flex-1 flex flex-col min-w-0 bg-white/40 dark:bg-black/40 relative">
         {/* Tab Bar */}
-        <div className="h-9 flex items-center bg-white/30 dark:bg-black/30 border-b border-white/10 shrink-0">
+        <div className="h-9 flex items-center bg-white/30 dark:bg-black/30 shrink-0">
           <div className="flex-1 flex items-center gap-0.5 px-1 overflow-x-auto scrollbar-none">
             {tabs.map((tab) => {
               const isActive = tab.id === activeTabId;
