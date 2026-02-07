@@ -50,6 +50,7 @@ export interface TaggedFile {
 export interface FileInfo {
   name: string;
   path: string; // Added path for convenience
+  original_path?: string; // Original path before deletion (only present for trash items)
   is_dir: boolean;
   size: number; // u64 in Rust
   modified: string;

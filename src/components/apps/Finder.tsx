@@ -470,7 +470,7 @@ export const Finder = ({ windowId }: FinderProps) => {
 
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [selectedFiles, currentFiles, renamingFile, openWindow, currentPath, deleteFile, isShareDialogOpen, isUploadLinkDialogOpen, isCreateFolderOpen, isEmptyTrashConfirmOpen, isPermanentDeleteConfirmOpen, isTagDialogOpen]);
+  }, [selectedFiles, currentFiles, renamingFile, openWindow, currentPath, deleteFile, restoreFromTrash, isShareDialogOpen, isUploadLinkDialogOpen, isCreateFolderOpen, isEmptyTrashConfirmOpen, isPermanentDeleteConfirmOpen, isTagDialogOpen]);
 
   // Mouse back/forward button navigation
   const finderContainerRef = React.useRef<HTMLDivElement>(null);

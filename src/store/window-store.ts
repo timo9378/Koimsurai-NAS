@@ -146,6 +146,15 @@ export const useWindowStore = create(
               }
             }
           }));
+
+          // Clean up persisted Finder tab state from localStorage
+          if (windowToClose.appType === 'finder' && typeof window !== 'undefined') {
+            try {
+              localStorage.removeItem(`finder-tabs-${id}`);
+            } catch {
+              // Silently ignore
+            }
+          }
         }
 
         set((state) => ({
