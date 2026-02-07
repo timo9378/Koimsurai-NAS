@@ -4,6 +4,45 @@ import { useUploadStore } from '@/store/upload-store';
 import { apiClient } from '@/lib/api-client';
 import { FileInfo, UploadSession } from '@/types/api';
 
+// Concurrency-limited upload queue utility
+const createUploadQueue = (concurrency: number) => {
+  let running = 0;
+  const queue: (() => Promise<void>)[] = [];
+
+  const run = async () => {
+    if (running >= concurrency || queue.length === 0) return;
+    running++;
+    const task = queue.shift()!;
+    try {
+      await task();
+    } finally {
+      running--;
+      run(); // Process next in queue
+    }
+  };
+
+  return {
+    add: (task: () => Promise<void>): Promise<void> => {
+      return new Promise<void>((resolve, reject) => {
+        queue.push(async () => {
+          try {
+            await task();
+            resolve();
+          } catch (err) {
+            reject(err);
+          }
+        });
+        run();
+      });
+    },
+    get pending() { return queue.length; },
+    get active() { return running; },
+  };
+};
+
+// Global upload queue: max 4 concurrent uploads
+const uploadQueue = createUploadQueue(4);
+
 export const useFileUpload = () => {
   const queryClient = useQueryClient();
   const uploadFile = useUpload();
@@ -12,53 +51,58 @@ export const useFileUpload = () => {
   const { addTask, updateTask, removeTask, tasks: uploadTasks } = useUploadStore();
 
   const handleUploadFiles = async (files: File[], currentPath: string) => {
-    for (const file of files) {
-      const taskId = `${file.name}-${Date.now()}`;
-      addTask({ id: taskId, file, path: currentPath, progress: 0, status: 'uploading' });
+    const uploadPromises = files.map((file) => {
+      return uploadQueue.add(async () => {
+        const taskId = `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        addTask({ id: taskId, file, path: currentPath, progress: 0, status: 'uploading' });
 
-      try {
-        // Use chunked upload for files > 1MB to bypass Next.js body size limits
-        if (file.size > 1 * 1024 * 1024) {
-          await processChunkedUpload(taskId, file, currentPath);
-        } else {
-          await uploadFile.mutateAsync({
-            file,
-            path: currentPath
-          });
-          updateTask(taskId, { progress: 100, status: 'completed' });
-          await queryClient.invalidateQueries({ queryKey: ['files'] });
-        }
-      } catch (error: any) {
-        if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
-          console.warn(`Network Error for ${file.name}, verifying if upload succeeded...`);
-
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          await queryClient.invalidateQueries({ queryKey: ['files'] });
-
-          try {
-            const cleanPath = currentPath.startsWith('/') ? currentPath.slice(1) : currentPath;
-            const endpoint = cleanPath === '' ? '/files' : `/files/${cleanPath}`;
-            const params = new URLSearchParams();
-            params.append('sort_by', 'name');
-            params.append('_t', Date.now().toString());
-
-            const res = await apiClient.get<FileInfo[]>(`${endpoint}?${params.toString()}`);
-            const freshFiles = res.data;
-
-            if (freshFiles.some(f => f.name === file.name)) {
-              console.log(`File ${file.name} found despite Network Error. Marking as complete.`);
-              updateTask(taskId, { progress: 100, status: 'completed' });
-              continue; // Skip error logging and continue to next file
-            }
-          } catch (verifyError) {
-            console.error('Verification failed', verifyError);
+        try {
+          // Use chunked upload for files > 1MB to bypass Next.js body size limits
+          if (file.size > 1 * 1024 * 1024) {
+            await processChunkedUpload(taskId, file, currentPath);
+          } else {
+            await uploadFile.mutateAsync({
+              file,
+              path: currentPath
+            });
+            updateTask(taskId, { progress: 100, status: 'completed' });
+            await queryClient.invalidateQueries({ queryKey: ['files'] });
           }
-        }
+        } catch (error: any) {
+          if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+            console.warn(`Network Error for ${file.name}, verifying if upload succeeded...`);
 
-        console.error(`Failed to upload ${file.name}:`, error);
-        updateTask(taskId, { status: 'error', error: error.message || 'Upload failed' });
-      }
-    }
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            await queryClient.invalidateQueries({ queryKey: ['files'] });
+
+            try {
+              const cleanPath = currentPath.startsWith('/') ? currentPath.slice(1) : currentPath;
+              const endpoint = cleanPath === '' ? '/files' : `/files/${cleanPath}`;
+              const params = new URLSearchParams();
+              params.append('sort_by', 'name');
+              params.append('_t', Date.now().toString());
+
+              const res = await apiClient.get<FileInfo[]>(`${endpoint}?${params.toString()}`);
+              const freshFiles = res.data;
+
+              if (freshFiles.some(f => f.name === file.name)) {
+                console.log(`File ${file.name} found despite Network Error. Marking as complete.`);
+                updateTask(taskId, { progress: 100, status: 'completed' });
+                return; // Skip error logging
+              }
+            } catch (verifyError) {
+              console.error('Verification failed', verifyError);
+            }
+          }
+
+          console.error(`Failed to upload ${file.name}:`, error);
+          updateTask(taskId, { status: 'error', error: error.message || 'Upload failed' });
+        }
+      });
+    });
+
+    // Wait for all queued uploads to complete
+    await Promise.allSettled(uploadPromises);
   };
 
   const processChunkedUpload = async (taskId: string, file: File, currentPath: string, resumeUploadId?: string, startOffset: number = 0) => {

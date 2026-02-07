@@ -1,11 +1,11 @@
 import axios from 'axios';
 
-// Determine backend URL - in browser, use port 3000 for direct backend access
-// This bypasses Next.js rewrites which have body size limitations for multipart forms
+// Determine backend URL for direct API access (bypassing Next.js rewrites)
+// Priority: NEXT_PUBLIC_API_URL env var > fallback to relative /api path
 const getBackendUrl = () => {
   if (typeof window !== 'undefined') {
-    // In browser: use same hostname with backend port
-    return `${window.location.protocol}//${window.location.hostname}:3000/api`;
+    // In browser: prefer env var, fallback to relative /api (works with reverse proxy)
+    return process.env.NEXT_PUBLIC_API_URL || '/api';
   }
   // Server-side: use environment variable or default
   return process.env.BACKEND_URL ? `${process.env.BACKEND_URL}/api` : 'http://127.0.0.1:3000/api';

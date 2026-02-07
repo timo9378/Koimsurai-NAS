@@ -32,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from '@/lib/utils';
 import { RefreshCw, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { Sidebar } from './finder/Sidebar';
 import { Toolbar } from './finder/Toolbar';
@@ -69,12 +70,62 @@ interface FinderProps {
   windowId?: string;
 }
 
+// Serializable tab state for localStorage persistence
+interface SerializedTabState {
+  id: string;
+  path: string;
+  history: string[];
+  historyIndex: number;
+  isTrashMode: boolean;
+  selectedTag: string | null;
+  searchQuery: string;
+}
+
+const TABS_STORAGE_KEY = 'finder-tabs';
+
+const loadPersistedTabs = (windowId?: string): { tabs: TabState[]; activeTabId: string } | null => {
+  if (!windowId || typeof window === 'undefined') return null;
+  try {
+    const stored = localStorage.getItem(`${TABS_STORAGE_KEY}-${windowId}`);
+    if (!stored) return null;
+    const parsed = JSON.parse(stored) as { tabs: SerializedTabState[]; activeTabId: string };
+    if (!parsed.tabs?.length) return null;
+    // Restore tabs with empty selectedFiles (Set is not serializable)
+    const tabs: TabState[] = parsed.tabs.map(t => ({
+      ...t,
+      selectedFiles: new Set<string>(),
+    }));
+    return { tabs, activeTabId: parsed.activeTabId };
+  } catch {
+    return null;
+  }
+};
+
+const persistTabs = (windowId: string | undefined, tabs: TabState[], activeTabId: string) => {
+  if (!windowId || typeof window === 'undefined') return;
+  try {
+    const serialized: { tabs: SerializedTabState[]; activeTabId: string } = {
+      tabs: tabs.map(({ selectedFiles, ...rest }) => rest),
+      activeTabId,
+    };
+    localStorage.setItem(`${TABS_STORAGE_KEY}-${windowId}`, JSON.stringify(serialized));
+  } catch {
+    // Silently ignore storage errors
+  }
+};
+
 export const Finder = ({ windowId }: FinderProps) => {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   
-  // Multi-tab state
-  const [tabs, setTabs] = useState<TabState[]>(() => [createTab('/')]);
-  const [activeTabId, setActiveTabId] = useState<string>(() => tabs[0]?.id || '');
+  // Multi-tab state (restored from localStorage if available)
+  const [tabs, setTabs] = useState<TabState[]>(() => {
+    const persisted = loadPersistedTabs(windowId);
+    return persisted?.tabs || [createTab('/')];
+  });
+  const [activeTabId, setActiveTabId] = useState<string>(() => {
+    const persisted = loadPersistedTabs(windowId);
+    return persisted?.activeTabId || tabs[0]?.id || '';
+  });
   
   // Get current tab
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
@@ -142,6 +193,11 @@ export const Finder = ({ windowId }: FinderProps) => {
       setActiveTabId(newTabs[newIndex].id);
     }
   };
+
+  // Persist tabs to localStorage whenever they change
+  useEffect(() => {
+    persistTabs(windowId, tabs, activeTabId);
+  }, [tabs, activeTabId, windowId]);
   
   const [isDragging, setIsDragging] = useState(false);
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
@@ -215,7 +271,12 @@ export const Finder = ({ windowId }: FinderProps) => {
     }
   }, [windows, updateWindowAppState, history, historyIndex, windowId]);
 
-  const { data: files, isLoading, refetch } = useFiles({ path: currentPath });
+  const { data: files, isLoading, refetch } = useFiles({
+    path: currentPath,
+    sortBy: sortBy,
+    order: sortDirection,
+    search: searchQuery,
+  });
   const { data: trashFiles, isLoading: isTrashLoading, refetch: refetchTrash } = useTrash();
   const { data: favorites } = useFavorites();
 
@@ -255,41 +316,48 @@ export const Finder = ({ windowId }: FinderProps) => {
 
   // Filter and sort files
   const currentFiles = React.useMemo(() => {
-    // When filtering by tag, use the tagged files
-    const sourceFiles = selectedTag ? tagFilteredFiles : currentFilesRaw;
-    if (!sourceFiles) return undefined;
+    // When filtering by tag, use the tagged files (need client-side sort since tag API may not support sorting)
+    if (selectedTag) {
+      const sourceFiles = tagFilteredFiles;
+      if (!sourceFiles) return undefined;
 
-    let filtered = sourceFiles;
+      let filtered = sourceFiles;
 
-    // Apply search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(f => f.name.toLowerCase().includes(query));
-    }
-
-    // Apply sorting
-    const sorted = [...filtered].sort((a, b) => {
-      // Folders first
-      if (a.is_dir && !b.is_dir) return -1;
-      if (!a.is_dir && b.is_dir) return 1;
-
-      let comparison = 0;
-      switch (sortBy) {
-        case 'name':
-          comparison = a.name.localeCompare(b.name);
-          break;
-        case 'size':
-          comparison = a.size - b.size;
-          break;
-        case 'modified':
-          comparison = new Date(a.modified).getTime() - new Date(b.modified).getTime();
-          break;
+      // Apply search filter for tag mode (backend search doesn't apply here)
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        filtered = filtered.filter(f => f.name.toLowerCase().includes(query));
       }
 
-      return sortDirection === 'asc' ? comparison : -comparison;
-    });
+      // Apply sorting for tag-filtered files (client-side since these come from tag API)
+      const sorted = [...filtered].sort((a, b) => {
+        // Folders first
+        if (a.is_dir && !b.is_dir) return -1;
+        if (!a.is_dir && b.is_dir) return 1;
 
-    return sorted;
+        let comparison = 0;
+        switch (sortBy) {
+          case 'name':
+            comparison = a.name.localeCompare(b.name);
+            break;
+          case 'size':
+            comparison = a.size - b.size;
+            break;
+          case 'modified':
+            comparison = new Date(a.modified).getTime() - new Date(b.modified).getTime();
+            break;
+        }
+
+        return sortDirection === 'asc' ? comparison : -comparison;
+      });
+
+      return sorted;
+    }
+
+    // For normal file listing and trash mode: backend already handles sorting & search
+    // Just return data as-is
+    if (!currentFilesRaw) return undefined;
+    return currentFilesRaw;
   }, [selectedTag, tagFilteredFiles, currentFilesRaw, searchQuery, sortBy, sortDirection]);
 
   const handleNavigate = (path: string) => {
@@ -350,6 +418,14 @@ export const Finder = ({ windowId }: FinderProps) => {
 
       // Delete keys
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedFiles.size > 0 && !renamingFile) {
+        // Ignore Backspace when an input/textarea is focused (avoid accidental deletion while typing)
+        if (e.key === 'Backspace') {
+          const activeEl = document.activeElement;
+          if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || (activeEl as HTMLElement).isContentEditable)) {
+            return;
+          }
+        }
+
         e.preventDefault();
         e.stopPropagation();
 
@@ -362,15 +438,32 @@ export const Finder = ({ windowId }: FinderProps) => {
           setFilesToPermanentlyDelete(filePaths);
           setIsPermanentDeleteConfirmOpen(true);
         } else {
-          // Delete: Move to trash (no confirmation)
-          Array.from(selectedFiles).forEach(fileName => {
+          // Delete: Move to trash with Toast notification + Undo
+          const filesToDelete = Array.from(selectedFiles).map(fileName => {
             const file = currentFiles?.find(f => f.name === fileName);
-            if (file) {
-              const fullPath = file.path || (currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`);
-              deleteFile.mutate(fullPath);
-            }
+            return {
+              name: fileName,
+              path: file?.path || (currentPath === '/' ? `/${fileName}` : `${currentPath}/${fileName}`),
+            };
           });
+
+          filesToDelete.forEach(({ path }) => deleteFile.mutate(path));
           setSelectedFiles(new Set());
+
+          const fileNames = filesToDelete.map(f => f.name);
+          const label = fileNames.length === 1
+            ? `「${fileNames[0]}」已移至垃圾桶`
+            : `${fileNames.length} 個項目已移至垃圾桶`;
+
+          toast(label, {
+            action: {
+              label: '復原',
+              onClick: () => {
+                fileNames.forEach(name => restoreFromTrash.mutate(name));
+              },
+            },
+            duration: 6000,
+          });
         }
       }
     };
@@ -482,8 +575,18 @@ export const Finder = ({ windowId }: FinderProps) => {
   };
 
   const handleDelete = (file: FileInfo) => {
-    // No confirmation dialog, directly move to trash
-    deleteFile.mutate(file.path || (currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`));
+    const fullPath = file.path || (currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`);
+    deleteFile.mutate(fullPath);
+
+    toast(`「${file.name}」已移至垃圾桶`, {
+      action: {
+        label: '復原',
+        onClick: () => {
+          restoreFromTrash.mutate(file.name);
+        },
+      },
+      duration: 6000,
+    });
   };
 
   const handleRenameStart = (file: FileInfo) => {
@@ -678,6 +781,8 @@ export const Finder = ({ windowId }: FinderProps) => {
       }
 
       // Now upload files with their correct relative paths
+      // Group files by target directory for batch upload
+      const filesByDir = new Map<string, File[]>();
       for (const { file, relativePath } of allFilesWithPaths) {
         const targetDir = relativePath.includes('/')
           ? relativePath.substring(0, relativePath.lastIndexOf('/'))
@@ -685,8 +790,18 @@ export const Finder = ({ windowId }: FinderProps) => {
         const uploadPath = currentPath
           ? (targetDir ? `${currentPath}/${targetDir}` : currentPath)
           : targetDir;
-        await handleUploadFiles([file], uploadPath);
+        
+        if (!filesByDir.has(uploadPath)) {
+          filesByDir.set(uploadPath, []);
+        }
+        filesByDir.get(uploadPath)!.push(file);
       }
+
+      // Upload all groups concurrently (each group uses the upload queue internally)
+      const uploadPromises = Array.from(filesByDir.entries()).map(
+        ([uploadPath, groupFiles]) => handleUploadFiles(groupFiles, uploadPath)
+      );
+      await Promise.allSettled(uploadPromises);
 
       // Refresh file list
       await queryClient.invalidateQueries({ queryKey: ['files'] });

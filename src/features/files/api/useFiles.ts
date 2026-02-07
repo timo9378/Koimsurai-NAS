@@ -4,15 +4,16 @@ import { FileInfo, FileVersion, TagRequest, BatchOperationRequest, InitUploadReq
 
 interface UseFilesParams {
   path: string;
-  sortBy?: 'name' | 'size' | 'date';
+  sortBy?: 'name' | 'size' | 'date' | 'modified';
   order?: 'asc' | 'desc';
   page?: number;
   limit?: number;
+  search?: string;
 }
 
-export const useFiles = ({ path, sortBy = 'name', order = 'asc', page = 1, limit = 50 }: UseFilesParams) => {
+export const useFiles = ({ path, sortBy = 'name', order = 'asc', page = 1, limit = 1000, search }: UseFilesParams) => {
   return useQuery({
-    queryKey: ['files', path, sortBy, order, page, limit],
+    queryKey: ['files', path, sortBy, order, page, limit, search],
     queryFn: async () => {
       // Clean path but preserve structure for backend wildcard matching
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
@@ -20,11 +21,15 @@ export const useFiles = ({ path, sortBy = 'name', order = 'asc', page = 1, limit
         ? '/files'
         : `/files/${cleanPath}`; // Use path directly, backend handles wildcard routes
 
+      // Map frontend sort key to backend sort key ('modified' -> 'date')
+      const backendSortBy = sortBy === 'modified' ? 'date' : sortBy;
+
       const params = new URLSearchParams();
-      if (sortBy) params.append('sort_by', sortBy);
+      if (backendSortBy) params.append('sort_by', backendSortBy);
       if (order) params.append('order', order);
       if (page) params.append('page', page.toString());
       if (limit) params.append('limit', limit.toString());
+      if (search?.trim()) params.append('search', search.trim());
       // Add timestamp to prevent caching
       params.append('_t', Date.now().toString());
 
@@ -389,21 +394,26 @@ export const useDownload = () => {
   return useMutation({
     mutationFn: async (path: string) => {
       const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      // Use path directly for backend wildcard routes
-      const response = await apiClient.get(`/download/${cleanPath}`, {
-        responseType: 'blob',
-      });
+      // Encode each path segment to handle special characters (Chinese, spaces, etc.)
+      const encodedPath = cleanPath.split('/').map(encodeURIComponent).join('/');
 
-      // Create a download link and trigger it
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      // Build the download URL using the same base as apiClient (respects proxy/rewrites)
+      // This lets the browser handle the download natively with streaming,
+      // avoiding loading the entire file into JS memory (which crashes on large files).
+      const downloadUrl = `/api/download/${encodedPath}`;
+
       const link = document.createElement('a');
-      link.href = url;
+      link.href = downloadUrl;
+      link.style.display = 'none';
+      // Set download attribute with the original filename
       const fileName = path.split('/').pop() || 'download';
       link.setAttribute('download', fileName);
       document.body.appendChild(link);
       link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      // Clean up after a short delay to ensure the download starts
+      setTimeout(() => {
+        link.remove();
+      }, 100);
     },
   });
 };
