@@ -10,7 +10,6 @@ import {
   Activity,
   HardDrive,
   Cpu,
-  Power,
   RefreshCw,
   User,
   Loader2,
@@ -42,7 +41,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { Job } from '@/types/api';
 import { Progress } from "@/components/ui/progress"
-import { useWindowStore } from '@/store/window-store';
+import { useWindowStore, AppType } from '@/store/window-store';
 
 import { useUploadStore } from '@/store/upload-store';
 import { useTransferStore, formatSpeed } from '@/store/transfer-store';
@@ -498,7 +497,7 @@ export const TopBar = () => {
   const logoutMutation = useLogout();
   const { data: systemStatus } = useSystemStatus();
   const { theme, setTheme } = useTheme();
-  const { windows, activeWindowId, showDesktop, toggleShowDesktop } = useWindowStore();
+  const { windows, activeWindowId, showDesktop, toggleShowDesktop, openWindow } = useWindowStore();
   const { uploadSpeed, downloadSpeed } = useTransferStore();
 
   const activeWindow = windows.find(w => w.id === activeWindowId);
@@ -507,9 +506,18 @@ export const TopBar = () => {
   const handleLogout = async () => {
     try {
       await logoutMutation.mutateAsync();
-      window.location.reload();
+      window.location.href = '/login';
     } catch (error) {
       console.error('Logout failed:', error);
+    }
+  };
+
+  const handleOpenApp = (appType: AppType) => {
+    const existing = windows.find(w => w.appType === appType);
+    if (existing) {
+      useWindowStore.getState().focusWindow(existing.id);
+    } else {
+      openWindow(appType);
     }
   };
 
@@ -539,24 +547,19 @@ export const TopBar = () => {
           <DropdownMenuContent className="w-56 bg-black/80 backdrop-blur-xl border-white/10 text-white">
             <DropdownMenuLabel>Koimsurai NAS</DropdownMenuLabel>
             <DropdownMenuSeparator className="bg-white/10" />
-            <DropdownMenuItem className="focus:bg-white/10 focus:text-white cursor-default">
+            <DropdownMenuItem
+              className="focus:bg-white/10 focus:text-white cursor-default"
+              onClick={() => handleOpenApp('settings')}
+            >
               <Settings className="mr-2 h-4 w-4" />
-              <span>System Settings...</span>
+              <span>系統設定...</span>
             </DropdownMenuItem>
-            <DropdownMenuItem className="focus:bg-white/10 focus:text-white cursor-default">
+            <DropdownMenuItem
+              className="focus:bg-white/10 focus:text-white cursor-default"
+              onClick={() => handleOpenApp('dashboard')}
+            >
               <Activity className="mr-2 h-4 w-4" />
-              <span>Activity Monitor</span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-white/10" />
-            <DropdownMenuItem className="focus:bg-white/10 focus:text-white cursor-default">
-              Sleep
-            </DropdownMenuItem>
-            <DropdownMenuItem className="focus:bg-white/10 focus:text-white cursor-default">
-              Restart...
-            </DropdownMenuItem>
-            <DropdownMenuItem className="focus:bg-white/10 focus:text-white cursor-default">
-              <Power className="mr-2 h-4 w-4" />
-              <span>Shut Down...</span>
+              <span>活動監視器</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-white/10" />
             <DropdownMenuItem
@@ -564,7 +567,7 @@ export const TopBar = () => {
               onClick={handleLogout}
             >
               <LogOut className="mr-2 h-4 w-4" />
-              <span>Log Out...</span>
+              <span>登出...</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

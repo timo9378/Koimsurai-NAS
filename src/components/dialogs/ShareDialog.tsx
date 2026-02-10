@@ -126,7 +126,7 @@ export function ShareDialog({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent 
-        className="sm:max-w-md bg-gradient-to-b from-zinc-900/95 to-zinc-950/95 backdrop-blur-xl border-zinc-700/50 shadow-2xl"
+        className="sm:max-w-md bg-gradient-to-b from-zinc-900/95 to-zinc-950/95 backdrop-blur-xl border-zinc-700/50 shadow-2xl overflow-hidden"
         onInteractOutside={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
       >

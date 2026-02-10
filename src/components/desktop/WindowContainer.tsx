@@ -12,6 +12,7 @@ import { DockerManager } from '@/components/apps/DockerManager';
 import { Photos } from '@/components/apps/Photos';
 import { FilePreview } from '@/components/apps/FilePreview';
 import { Calculator } from '@/components/apps/Calculator';
+import { Settings } from '@/components/apps/Settings';
 import dynamic from 'next/dynamic';
 
 const ContainerTerminal = dynamic(() => import('@/components/apps/ContainerTerminal').then(mod => mod.ContainerTerminal), {
@@ -45,6 +46,8 @@ const WindowContent = ({ appType, props, windowId }: { appType: string, props?: 
       return <Terminal windowId={windowId} />;
     case 'calculator':
       return <Calculator windowId={windowId} />;
+    case 'settings':
+      return <Settings />;
     default:
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground">

@@ -15,7 +15,8 @@ import {
   CheckCircle2,
   Loader2,
   Share2,
-  HardDrive
+  HardDrive,
+  FolderArchive
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,7 @@ interface ShareInfo {
   file_name: string;
   file_size: number;
   mime_type: string | null;
+  is_directory: boolean;
   is_password_protected: boolean;
   expires_at: string | null;
   created_at: string;
@@ -134,60 +136,18 @@ export default function SharePage() {
         ? `/api/share/${shareId}/download?pwd=${encodeURIComponent(password)}`
         : `/api/share/${shareId}/download`;
       
-      const response = await fetch(url);
-      
-      if (response.status === 401) {
-        setError('密碼錯誤');
-        setIsDownloading(false);
-        return;
-      }
-      
-      if (!response.ok) {
-        setError('下載失敗');
-        setIsDownloading(false);
-        return;
-      }
-      
-      // Get content length for progress
-      const contentLength = response.headers.get('content-length');
-      const total = contentLength ? parseInt(contentLength, 10) : 0;
-      
-      // Create a reader
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('Unable to read response');
-      }
-      
-      const chunks: BlobPart[] = [];
-      let receivedLength = 0;
-      
-      while (true) {
-        const { done, value } = await reader.read();
-        
-        if (done) break;
-        
-        chunks.push(value);
-        receivedLength += value.length;
-        
-        if (total > 0) {
-          setDownloadProgress((receivedLength / total) * 100);
-        }
-      }
-      
-      // Combine chunks
-      const blob = new Blob(chunks);
-      const downloadUrl = URL.createObjectURL(blob);
-      
-      // Create download link
+      // Use native browser download — reliable for all file sizes
+      // The backend validates password/expiry and returns proper Content-Disposition
+      const downloadName = shareInfo.is_directory 
+        ? `${shareInfo.file_name}.zip` 
+        : shareInfo.file_name;
       const a = document.createElement('a');
-      a.href = downloadUrl;
-      a.download = shareInfo.file_name;
+      a.href = url;
+      a.download = downloadName;
+      a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(downloadUrl);
-      
-      setStatus('ready');
     } catch (err) {
       console.error('Download error:', err);
       setError('下載過程中發生錯誤');
@@ -349,17 +309,24 @@ export default function SharePage() {
                   {/* File Preview */}
                   <div className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10">
                     <div className="flex-shrink-0">
-                      <FileTypeIcon 
-                        filename={shareInfo.file_name} 
-                        isDir={false} 
-                        mimeType={shareInfo.mime_type ?? undefined}
-                        size="xl"
-                        className="opacity-80"
-                      />
+                      {shareInfo.is_directory ? (
+                        <FolderArchive className="w-10 h-10 text-blue-400 opacity-80" />
+                      ) : (
+                        <FileTypeIcon 
+                          filename={shareInfo.file_name} 
+                          isDir={false} 
+                          mimeType={shareInfo.mime_type ?? undefined}
+                          size="xl"
+                          className="opacity-80"
+                        />
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-white font-medium truncate">{shareInfo.file_name}</p>
-                      <p className="text-white/50 text-sm">{formatFileSize(shareInfo.file_size)}</p>
+                      <p className="text-white/50 text-sm">
+                        {shareInfo.is_directory ? '資料夾' : formatFileSize(shareInfo.file_size)}
+                        {shareInfo.is_directory && shareInfo.file_size > 0 && ` · ${formatFileSize(shareInfo.file_size)}`}
+                      </p>
                     </div>
                     <Lock className="w-5 h-5 text-yellow-400 flex-shrink-0" />
                   </div>
@@ -413,17 +380,24 @@ export default function SharePage() {
                   <div className="p-6 rounded-xl bg-white/5 border border-white/10 space-y-4">
                     <div className="flex items-center gap-4">
                       <div className="flex-shrink-0">
-                        <FileTypeIcon 
-                          filename={shareInfo.file_name} 
-                          isDir={false} 
-                          mimeType={shareInfo.mime_type ?? undefined}
-                          size="xl"
-                          className="opacity-80"
-                        />
+                        {shareInfo.is_directory ? (
+                          <FolderArchive className="w-12 h-12 text-blue-400 opacity-80" />
+                        ) : (
+                          <FileTypeIcon 
+                            filename={shareInfo.file_name} 
+                            isDir={false} 
+                            mimeType={shareInfo.mime_type ?? undefined}
+                            size="xl"
+                            className="opacity-80"
+                          />
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-white font-medium truncate text-lg">{shareInfo.file_name}</p>
-                        <p className="text-white/50 text-sm">{formatFileSize(shareInfo.file_size)}</p>
+                        <p className="text-white/50 text-sm">
+                          {shareInfo.is_directory ? '資料夾' : formatFileSize(shareInfo.file_size)}
+                          {shareInfo.is_directory && shareInfo.file_size > 0 && ` · ${formatFileSize(shareInfo.file_size)}`}
+                        </p>
                       </div>
                     </div>
                     
@@ -472,7 +446,7 @@ export default function SharePage() {
                     ) : (
                       <div className="flex items-center gap-2">
                         <Download className="w-5 h-5" />
-                        <span>下載檔案</span>
+                        <span>{shareInfo.is_directory ? '下載資料夾 (ZIP)' : '下載檔案'}</span>
                       </div>
                     )}
                   </Button>
