@@ -475,8 +475,8 @@ export const FileList = ({
               )}
             />
           ) : (
-            <div className="w-full text-sm text-gray-700 dark:text-gray-200">
-              <div className="grid grid-cols-[minmax(200px,1fr)_80px_120px] gap-2 px-4 py-2 border-b border-white/10 font-medium text-gray-500 sticky top-0 bg-white/80 dark:bg-black/80 backdrop-blur-sm z-10">
+            <div className="w-full h-full flex flex-col text-sm text-gray-700 dark:text-gray-200">
+              <div className="grid grid-cols-[minmax(200px,1fr)_80px_120px] gap-2 px-4 py-2 border-b border-white/10 font-medium text-gray-500 bg-white/80 dark:bg-black/80 backdrop-blur-sm z-10 shrink-0">
                 <button
                   onClick={() => onSortChange?.('name')}
                   className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-300 text-left"
@@ -507,7 +507,7 @@ export const FileList = ({
               </div>
               <TooltipProvider delayDuration={300}>
               <Virtuoso
-                style={{ height: '100%' }}
+                style={{ flex: 1 }}
                 data={files ?? []}
                 overscan={200}
                 onScroll={(e) => { scrollOffsetRef.current = (e.target as HTMLElement).scrollTop; }}

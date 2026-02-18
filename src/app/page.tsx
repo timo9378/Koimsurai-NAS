@@ -3,13 +3,16 @@
 import { useEffect, useState } from 'react';
 import { DesktopLayout } from '@/components/desktop/DesktopLayout';
 import { Dock } from '@/components/desktop/Dock';
+import { MobileLayout } from '@/components/mobile/MobileLayout';
 import { LoginScreen } from '@/components/auth/LoginScreen';
 import { useCheckAuth } from '@/features/auth/api/useAuth';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { Loader2 } from 'lucide-react';
 
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const checkAuth = useCheckAuth();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const verifyAuth = async () => {
@@ -33,6 +36,10 @@ export default function Home() {
 
   if (!isAuthenticated) {
     return <LoginScreen />;
+  }
+
+  if (isMobile) {
+    return <MobileLayout />;
   }
 
   return (

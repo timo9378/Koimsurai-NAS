@@ -1047,43 +1047,45 @@ export const Finder = ({ windowId }: FinderProps) => {
         />
 
         {/* Status Bar */}
-        <div className="h-auto min-h-[32px] flex flex-col justify-center px-4 py-1 border-t border-white/10 bg-white/40 dark:bg-black/40 text-xs text-gray-500 backdrop-blur-md">
-          {Object.values(uploadTasks).filter(t => t.path === currentPath && t.status === 'uploading').length > 0 ? (
-            <div className="flex flex-col gap-2 w-full py-1">
-              {Object.values(uploadTasks)
-                .filter(t => t.path === currentPath)
-                .map((task) => (
-                  <div key={task.id} className="flex items-center gap-2 w-full">
-                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                    <span className="truncate max-w-[150px]">{task.file.name}</span>
+        <div className="min-h-[32px] max-h-[120px] flex flex-col justify-center px-4 py-1 border-t border-white/10 bg-white/40 dark:bg-black/40 text-xs text-gray-500 backdrop-blur-md shrink-0">
+          {(() => {
+            const activeTasks = Object.values(uploadTasks).filter(t => t.path === currentPath && (t.status === 'uploading' || t.status === 'error'));
+            if (activeTasks.length > 0) {
+              const totalTasks = activeTasks.length;
+              const completedCount = activeTasks.filter(t => t.progress === 100).length;
+              const avgProgress = Math.round(activeTasks.reduce((s, t) => s + t.progress, 0) / totalTasks);
+              return (
+                <div className="flex flex-col gap-1 w-full py-1 overflow-y-auto scrollbar-thin">
+                  {/* Summary line */}
+                  <div className="flex items-center gap-2 w-full shrink-0">
+                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse shrink-0" />
+                    <span className="shrink-0">Uploading {totalTasks} files ({completedCount} done)</span>
                     <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                      <div
-                        className={cn(
-                          "h-full transition-all duration-300",
-                          task.status === 'error' ? "bg-red-500" : "bg-blue-500"
-                        )}
-                        style={{ width: `${task.progress}%` }}
-                      />
+                      <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${avgProgress}%` }} />
                     </div>
-                    <span className="w-10 text-right">{task.progress}%</span>
-                    {task.status === 'error' && task.uploadId && (
-                      <button
-                        onClick={() => resumeUpload(task.id)}
-                        className="p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded text-blue-600 dark:text-blue-400"
-                        title="Resume Upload"
-                      >
-                        <RefreshCw className="w-3 h-3" />
-                      </button>
-                    )}
-                    {task.status === 'error' && (
-                      <span className="text-red-500 text-[10px]">{task.error}</span>
-                    )}
+                    <span className="w-10 text-right shrink-0">{avgProgress}%</span>
                   </div>
-                ))}
-            </div>
-          ) : (
-            <span>{currentFiles ? `${currentFiles.length} items` : 'Loading...'}</span>
-          )}
+                  {/* Individual tasks (only show a few) */}
+                  {activeTasks.filter(t => t.status === 'error').map((task) => (
+                    <div key={task.id} className="flex items-center gap-2 w-full shrink-0">
+                      <span className="truncate max-w-[150px] text-red-500">{task.file.name}</span>
+                      <span className="text-red-500 text-[10px] truncate">{task.error}</span>
+                      {task.uploadId && (
+                        <button
+                          onClick={() => resumeUpload(task.id)}
+                          className="p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded text-blue-600 dark:text-blue-400"
+                          title="Resume Upload"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              );
+            }
+            return <span>{currentFiles ? `${currentFiles.length} items` : 'Loading...'}</span>;
+          })()}
         </div>
       </div>
 

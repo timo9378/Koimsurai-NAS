@@ -18,6 +18,7 @@ export function LoginScreen() {
   const [inviteCode, setInviteCode] = useState("")
   const [remember, setRemember] = useState(false)
   const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
   const [currentTime, setCurrentTime] = useState<Date | null>(null)
 
   const loginMutation = useLogin()
@@ -34,6 +35,7 @@ export function LoginScreen() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+    setSuccess("")
 
     if (!username || !password) {
       setError("Please fill in all fields")
@@ -62,9 +64,8 @@ export function LoginScreen() {
         })
         setIsLogin(true)
         setPassword("")
-        setConfirmPassword("")
-        setInviteCode("")
-        setError("Registration successful! Please log in.")
+        setSuccess("Registration successful! Please log in.")
+        return
         return
       }
 
@@ -83,20 +84,21 @@ export function LoginScreen() {
   const toggleMode = () => {
     setIsLogin(!isLogin)
     setError("")
+    setSuccess("")
     setPassword("")
     setConfirmPassword("")
     setInviteCode("")
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-between bg-cover bg-center overflow-hidden font-sans text-zinc-100"
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-between bg-cover bg-center overflow-y-auto font-sans text-zinc-100"
       style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1477346611705-65d1883cee1e?q=80&w=2070&auto=format&fit=crop)' }}>
 
       {/* Background Overlay */}
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
 
       {/* Top Bar - Time & Date */}
-      <div className="relative z-10 w-full pt-20 flex justify-center">
+      <div className="relative z-10 w-full pt-8 sm:pt-20 flex justify-center shrink-0">
         <motion.div
           initial={{ y: -20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -104,7 +106,7 @@ export function LoginScreen() {
         >
           {currentTime && (
             <>
-              <h1 className="text-7xl font-thin tracking-tight drop-shadow-lg leading-none">
+              <h1 className="text-5xl sm:text-7xl font-thin tracking-tight drop-shadow-lg leading-none">
                 {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
               </h1>
               <p className="text-xl font-medium text-zinc-200 drop-shadow-md">
@@ -116,7 +118,7 @@ export function LoginScreen() {
       </div>
 
       {/* Main Login Card */}
-      <div className="relative z-10 w-full max-w-md px-4 mb-20">
+      <div className="relative z-10 w-full max-w-md px-4 my-4 sm:mb-20 shrink-0">
         <motion.div
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -124,8 +126,8 @@ export function LoginScreen() {
           className="flex flex-col items-center space-y-6 p-8 rounded-3xl bg-black/20 backdrop-blur-xl border border-white/10 shadow-2xl"
         >
           {/* Logo */}
-          <div className="relative group mb-4">
-            <div className="relative w-40 h-40 transition-transform duration-300 group-hover:scale-105">
+          <div className="relative group mb-2 sm:mb-4">
+            <div className="relative w-24 h-24 sm:w-40 sm:h-40 transition-transform duration-300 group-hover:scale-105">
               <img
                 src="/Images/logo.svg"
                 alt="Koimsurai NAS"
@@ -252,6 +254,16 @@ export function LoginScreen() {
               </motion.div>
             )}
 
+            {success && (
+              <motion.div
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-center"
+              >
+                <p className="text-sm text-green-200">{success}</p>
+              </motion.div>
+            )}
+
             <div className="pt-2 flex justify-center">
               <button
                 type="button"
@@ -272,7 +284,7 @@ export function LoginScreen() {
       </div>
 
       {/* Bottom Status Bar */}
-      <div className="relative z-10 w-full p-6 flex justify-between items-end text-zinc-400">
+      <div className="relative z-10 w-full p-3 sm:p-6 flex justify-between items-end text-zinc-400 shrink-0">
         <div className="flex flex-col gap-1">
           <h3 className="text-lg font-semibold text-zinc-200">Koimsurai NAS</h3>
           <p className="text-xs opacity-60">v1.0.0 • System Normal</p>
