@@ -382,7 +382,11 @@ export const FileList = ({
                     <div
                       data-file-item
                       onClick={(e) => { e.stopPropagation(); onFileClick(file, e); }}
-                      onDoubleClick={(e) => { e.stopPropagation(); onFileDoubleClick(file); }}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        if (renamingFile === file.name) return;
+                        onFileDoubleClick(file);
+                      }}
                       className={cn(
                         "flex flex-col items-center gap-1 p-2 rounded cursor-pointer group transition-colors duration-200",
                         selectedFiles.has(file.name)
@@ -403,6 +407,10 @@ export const FileList = ({
                             if (e.key === 'Escape') onRenameCancel();
                           }}
                           onClick={(e) => e.stopPropagation()}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            (e.currentTarget as HTMLInputElement).select();
+                          }}
                           className="text-xs text-center px-1 rounded w-full bg-white dark:bg-black border border-blue-500 focus:outline-none text-black dark:text-white"
                         />
                       ) : (
@@ -517,7 +525,11 @@ export const FileList = ({
                     <div
                       data-file-item
                       onClick={(e) => { e.stopPropagation(); onFileClick(file, e); }}
-                      onDoubleClick={(e) => { e.stopPropagation(); onFileDoubleClick(file); }}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        if (renamingFile === file.name) return;
+                        onFileDoubleClick(file);
+                      }}
                       className={cn(
                         "grid grid-cols-[minmax(200px,1fr)_80px_120px] gap-2 px-4 py-1.5 cursor-pointer transition-colors duration-150",
                         selectedFiles.has(file.name)
@@ -541,6 +553,10 @@ export const FileList = ({
                               if (e.key === 'Escape') onRenameCancel();
                             }}
                             onClick={(e) => e.stopPropagation()}
+                            onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              (e.currentTarget as HTMLInputElement).select();
+                            }}
                             className="text-sm px-1 rounded bg-white dark:bg-black border border-blue-500 focus:outline-none text-black dark:text-white flex-1 min-w-0"
                           />
                         ) : (

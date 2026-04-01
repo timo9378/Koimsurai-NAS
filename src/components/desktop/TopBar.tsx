@@ -319,6 +319,18 @@ interface AuditLog {
   created_at: string;
 }
 
+const parseAuditLogDate = (value: string): Date => {
+  if (!value) return new Date();
+
+  // Backend may return "YYYY-MM-DD HH:mm:ss" (SQLite UTC without timezone).
+  // Force UTC interpretation to avoid local timezone offset errors (e.g. 8 hours ago).
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) {
+    return new Date(value.replace(' ', 'T') + 'Z');
+  }
+
+  return new Date(value);
+};
+
 // Map action types to display info
 const getActionInfo = (action: string) => {
   const actionMap: Record<string, { icon: React.ComponentType<{ className?: string }>; color: string; label: string }> = {
@@ -414,7 +426,7 @@ const NotificationCenter = () => {
                       <span className="text-sm font-medium capitalize truncate">{actionInfo.label}</span>
                       <div className="flex items-center gap-1 shrink-0">
                         <span className="text-[10px] text-muted-foreground">
-                          {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
+                          {formatDistanceToNow(parseAuditLogDate(log.created_at), { addSuffix: true })}
                         </span>
                         <button
                           onClick={(e) => handleDeleteOne(log.id, e)}
