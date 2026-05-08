@@ -1,14 +1,38 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import { AuthResponse, LoginRequest, RegisterRequest } from '@/types/api';
+import {
+  AuthResponse, LoginRequest, RegisterRequest,
+  LoginResult,
+  TwoFactorLoginRequest,
+  TwoFactorSetupResponse,
+  TwoFactorVerifySetupResponse,
+  TwoFactorDisableRequest,
+  TwoFactorStatusResponse,
+} from '@/types/api';
 
 export const useLogin = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: LoginRequest) => {
-      const response = await apiClient.post<AuthResponse>('/auth/login', data);
+    mutationFn: async (data: LoginRequest): Promise<LoginResult> => {
+      const response = await apiClient.post<LoginResult>('/auth/login', data);
       return response.data;
+    },
+    onSuccess: (data) => {
+      // 只有完成登入（無 2FA）時才 invalidate；要 2FA 時 cookie 還沒發
+      if (!('requires_2fa' in data)) {
+        queryClient.invalidateQueries({ queryKey: ['auth'] });
+      }
+    },
+  });
+};
+
+/** 2FA 第二階段：用 temp_token + code 換 cookie */
+export const useTwoFactorLogin = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: TwoFactorLoginRequest) => {
+      await apiClient.post('/auth/2fa/login', data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['auth'] });
@@ -37,14 +61,10 @@ export const useRegister = () => {
     },
   });
 };
+
 export const useCheckAuth = () => {
   return useMutation({
     mutationFn: async () => {
-      // Try to access a protected route to check if we are authenticated
-      // Since we don't have a dedicated /me endpoint yet, we can use a lightweight protected endpoint
-      // or just rely on the 401 interceptor.
-      // However, for initial load, we might want to check status.
-      // Let's assume we can check system status as a way to verify auth
       const response = await apiClient.get('/system/status');
       return response.data;
     },
@@ -52,22 +72,72 @@ export const useCheckAuth = () => {
   });
 };
 
-// Simple API helpers as requested
+// ─────────── 2FA 設定相關 hooks（需登入）───────────
+
+export const useTwoFactorStatus = () => {
+  return useQuery({
+    queryKey: ['2fa', 'status'],
+    queryFn: async () => {
+      const response = await apiClient.get<TwoFactorStatusResponse>('/auth/2fa/status');
+      return response.data;
+    },
+  });
+};
+
+export const useTwoFactorSetup = () => {
+  return useMutation({
+    mutationFn: async () => {
+      const response = await apiClient.post<TwoFactorSetupResponse>('/auth/2fa/setup');
+      return response.data;
+    },
+  });
+};
+
+export const useTwoFactorVerifySetup = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (code: string) => {
+      const response = await apiClient.post<TwoFactorVerifySetupResponse>(
+        '/auth/2fa/verify-setup',
+        { code }
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['2fa', 'status'] });
+    },
+  });
+};
+
+export const useTwoFactorDisable = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (data: TwoFactorDisableRequest) => {
+      await apiClient.post('/auth/2fa/disable', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['2fa', 'status'] });
+    },
+  });
+};
+
+// Simple API helpers
 export const authApi = {
   login: async (data: LoginRequest) => {
-    const response = await apiClient.post<AuthResponse>('/auth/login', data);
+    const response = await apiClient.post<LoginResult>('/auth/login', data);
     return response.data;
   },
-  
+
+  twoFactorLogin: async (data: TwoFactorLoginRequest) => {
+    await apiClient.post('/auth/2fa/login', data);
+  },
+
   logout: async () => {
     await apiClient.post('/auth/logout');
   },
 
-  // Wrapper around apiClient which already handles auth headers/cookies and refresh token
   fetchWithAuth: apiClient,
 
-  // Simple check if we are likely logged in (can be used for initial state)
-  // Note: True verification happens on the server
   isLoggedIn: async () => {
     try {
       await apiClient.get('/system/status');

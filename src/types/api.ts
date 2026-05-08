@@ -10,6 +10,12 @@ export interface User {
 export interface AuthResponse {
   token: string;
 }
+
+/** /api/auth/login 回傳：要嘛已 set cookie、要嘛需要 2FA 驗證 */
+export type LoginResult =
+  | Record<string, never>                                 // {} = 已登入完成
+  | { requires_2fa: true; temp_token: string };
+
 export interface LoginRequest {
   username: string;
   password: string;
@@ -20,6 +26,37 @@ export interface RegisterRequest {
   username: string;
   password: string;
   invite_code: string;
+}
+
+// ─────────── 2FA / TOTP ───────────
+export interface TwoFactorLoginRequest {
+  temp_token: string;
+  /** 6 位 TOTP code 或 backup code（含 dash 例如 ABCDE-F2345） */
+  code: string;
+}
+
+export interface TwoFactorSetupResponse {
+  secret: string;
+  otpauth_uri: string;
+}
+
+export interface TwoFactorVerifySetupRequest {
+  code: string;
+}
+
+export interface TwoFactorVerifySetupResponse {
+  /** 8 個 backup codes，僅啟用時顯示一次，user 必須記下 */
+  backup_codes: string[];
+}
+
+export interface TwoFactorDisableRequest {
+  password: string;
+  code: string;
+}
+
+export interface TwoFactorStatusResponse {
+  enabled: boolean;
+  backup_codes_remaining: number;
 }
 
 // File Models

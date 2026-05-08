@@ -2,16 +2,17 @@
 
 import React, { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { User, ArrowRight, Loader2, ArrowLeft, Power, Wifi, Battery, Monitor } from "lucide-react"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { ArrowRight, Loader2, ArrowLeft, Power, Wifi, Battery, ShieldCheck, KeyRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox"
-import { useLogin, useRegister } from "@/features/auth/api/useAuth"
+import { useLogin, useRegister, useTwoFactorLogin } from "@/features/auth/api/useAuth"
 import { cn } from "@/lib/utils"
+
+type Step = "credentials" | "two_factor"
 
 export function LoginScreen() {
   const [isLogin, setIsLogin] = useState(true)
+  const [step, setStep] = useState<Step>("credentials")
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -21,10 +22,16 @@ export function LoginScreen() {
   const [success, setSuccess] = useState("")
   const [currentTime, setCurrentTime] = useState<Date | null>(null)
 
+  // 2FA 階段需要的 state
+  const [tempToken, setTempToken] = useState("")
+  const [twoFactorCode, setTwoFactorCode] = useState("")
+
   const loginMutation = useLogin()
   const registerMutation = useRegister()
+  const twoFactorLoginMutation = useTwoFactorLogin()
 
-  const isLoading = loginMutation.isPending || registerMutation.isPending
+  const isLoading =
+    loginMutation.isPending || registerMutation.isPending || twoFactorLoginMutation.isPending
 
   useEffect(() => {
     setCurrentTime(new Date())
@@ -55,7 +62,14 @@ export function LoginScreen() {
 
     try {
       if (isLogin) {
-        await loginMutation.mutateAsync({ username, password, remember })
+        const res = await loginMutation.mutateAsync({ username, password, remember })
+        // 後端回 requires_2fa = true 時需要第二階段
+        if (res && typeof res === "object" && "requires_2fa" in res && res.requires_2fa) {
+          setTempToken(res.temp_token)
+          setStep("two_factor")
+          setPassword("") // 清掉原密碼，避免殘留
+          return
+        }
       } else {
         await registerMutation.mutateAsync({
           username,
@@ -65,7 +79,6 @@ export function LoginScreen() {
         setIsLogin(true)
         setPassword("")
         setSuccess("Registration successful! Please log in.")
-        return
         return
       }
 
@@ -81,6 +94,43 @@ export function LoginScreen() {
     }
   }
 
+  const handleTwoFactorSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError("")
+    const code = twoFactorCode.trim()
+    if (!code) {
+      setError("Enter the 6-digit code or a backup code")
+      return
+    }
+    try {
+      await twoFactorLoginMutation.mutateAsync({ temp_token: tempToken, code })
+      window.location.href = '/'
+    } catch (err: unknown) {
+      console.error("2FA error:", err)
+      if (err && typeof err === 'object' && 'response' in err) {
+        const axiosError = err as { response: { data: { message: string }, status?: number } };
+        // temp_token 過期會回 401，需要回到第一階段重 login
+        if (axiosError.response?.status === 401 && /temp token|expired/i.test(axiosError.response?.data?.message || "")) {
+          setError("Session expired. Please log in again.")
+          setStep("credentials")
+          setTempToken("")
+          setTwoFactorCode("")
+          return
+        }
+        setError(axiosError.response?.data?.message || "Invalid code")
+      } else {
+        setError("Invalid code")
+      }
+    }
+  }
+
+  const cancelTwoFactor = () => {
+    setStep("credentials")
+    setTempToken("")
+    setTwoFactorCode("")
+    setError("")
+  }
+
   const toggleMode = () => {
     setIsLogin(!isLogin)
     setError("")
@@ -88,6 +138,9 @@ export function LoginScreen() {
     setPassword("")
     setConfirmPassword("")
     setInviteCode("")
+    setStep("credentials")
+    setTempToken("")
+    setTwoFactorCode("")
   }
 
   return (
@@ -138,13 +191,64 @@ export function LoginScreen() {
 
           <div className="text-center space-y-1">
             <h2 className="text-2xl font-semibold tracking-wide drop-shadow-md">
-              {isLogin ? (username || "Koimsurai User") : "Create Account"}
+              {step === "two_factor"
+                ? <span className="inline-flex items-center gap-2"><ShieldCheck className="w-6 h-6" /> Two-Factor Verification</span>
+                : isLogin ? (username || "Koimsurai User") : "Create Account"}
             </h2>
             <p className="text-sm text-zinc-400">
-              {isLogin ? "Enter your credentials to access" : "Join the Koimsurai ecosystem"}
+              {step === "two_factor"
+                ? "Enter the 6-digit code from your authenticator app"
+                : isLogin ? "Enter your credentials to access" : "Join the Koimsurai ecosystem"}
             </p>
           </div>
 
+          {/* ─── 2FA 第二階段 ─── */}
+          {step === "two_factor" ? (
+            <form onSubmit={handleTwoFactorSubmit} className="w-full space-y-4">
+              <div className="relative">
+                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                <Input
+                  type="text"
+                  inputMode="text"
+                  autoFocus
+                  autoComplete="one-time-code"
+                  placeholder="123 456 or backup code"
+                  value={twoFactorCode}
+                  onChange={(e) => setTwoFactorCode(e.target.value)}
+                  className="h-11 pl-10 pr-4 border-white/10 bg-black/20 text-zinc-100 placeholder:text-zinc-500 focus-visible:border-white/30 focus-visible:bg-black/40 focus-visible:ring-0 transition-all rounded-xl backdrop-blur-md font-mono tracking-widest text-center"
+                  maxLength={20}
+                />
+              </div>
+
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-center"
+                >
+                  <p className="text-sm text-red-200">{error}</p>
+                </motion.div>
+              )}
+
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="w-full h-11 bg-blue-500/80 hover:bg-blue-500 text-white rounded-xl backdrop-blur-md transition-all"
+              >
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify"}
+              </Button>
+
+              <div className="pt-1 flex justify-center">
+                <button
+                  type="button"
+                  onClick={cancelTwoFactor}
+                  className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-2 px-4 py-2 rounded-full hover:bg-white/5"
+                >
+                  <ArrowLeft className="h-3 w-3" /> Back to login
+                </button>
+              </div>
+            </form>
+          ) : (
           <form onSubmit={handleSubmit} className="w-full space-y-4">
             <div className="space-y-3">
               <div className="relative group">
@@ -280,6 +384,7 @@ export function LoginScreen() {
               </button>
             </div>
           </form>
+          )}
         </motion.div>
       </div>
 

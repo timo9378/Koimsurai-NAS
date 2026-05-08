@@ -14,13 +14,26 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
+  ShieldCheck,
+  ShieldAlert,
+  Copy,
+  Check,
+  Loader2,
+  AlertTriangle,
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { cn } from '@/lib/utils';
 import { useTheme } from 'next-themes';
 import { useWindowStore, DockPosition } from '@/store/window-store';
 import { useSystemStatus } from '@/features/system/api/useSystem';
+import {
+  useTwoFactorStatus,
+  useTwoFactorSetup,
+  useTwoFactorVerifySetup,
+  useTwoFactorDisable,
+} from '@/features/auth/api/useAuth';
 
-type SettingsSection = 'appearance' | 'dock' | 'storage' | 'account' | 'about';
+type SettingsSection = 'appearance' | 'dock' | 'storage' | 'account' | 'security' | 'about';
 
 interface SettingsItemProps {
   icon: React.ElementType;
@@ -213,6 +226,354 @@ const AccountSection = () => {
   );
 };
 
+/* ─────────────────────────────────────────────────
+   Security — 兩階段驗證 (TOTP) 設定
+   流程：
+     idle (未啟用) → setup (拿 QR + 輸入第一個 code) → verified (顯示 backup codes)
+     enabled        → 顯示狀態 + 停用按鈕
+   ───────────────────────────────────────────────── */
+type SecurityStep = 'idle' | 'setup' | 'verified' | 'disable';
+
+const SecuritySection = () => {
+  const { data: status, isLoading: statusLoading, refetch } = useTwoFactorStatus();
+  const setupMutation = useTwoFactorSetup();
+  const verifySetupMutation = useTwoFactorVerifySetup();
+  const disableMutation = useTwoFactorDisable();
+
+  const [step, setStep] = useState<SecurityStep>('idle');
+  const [setupData, setSetupData] = useState<{ secret: string; otpauth_uri: string } | null>(null);
+  const [code, setCode] = useState('');
+  const [backupCodes, setBackupCodes] = useState<string[]>([]);
+  const [copiedSecret, setCopiedSecret] = useState(false);
+  const [copiedAllCodes, setCopiedAllCodes] = useState(false);
+  const [disablePassword, setDisablePassword] = useState('');
+  const [disableCode, setDisableCode] = useState('');
+  const [error, setError] = useState('');
+
+  const startSetup = async () => {
+    setError('');
+    try {
+      const data = await setupMutation.mutateAsync();
+      setSetupData(data);
+      setStep('setup');
+    } catch (e) {
+      console.error(e);
+      setError('Failed to start 2FA setup');
+    }
+  };
+
+  const verifySetup = async () => {
+    setError('');
+    if (code.trim().length !== 6) {
+      setError('Enter the 6-digit code from your authenticator app');
+      return;
+    }
+    try {
+      const data = await verifySetupMutation.mutateAsync(code.trim());
+      setBackupCodes(data.backup_codes);
+      setStep('verified');
+      setCode('');
+    } catch {
+      setError('Invalid code, please try again');
+    }
+  };
+
+  const finishSetup = () => {
+    setStep('idle');
+    setSetupData(null);
+    setBackupCodes([]);
+    setCopiedAllCodes(false);
+    refetch();
+  };
+
+  const startDisable = () => {
+    setError('');
+    setDisablePassword('');
+    setDisableCode('');
+    setStep('disable');
+  };
+
+  const confirmDisable = async () => {
+    setError('');
+    if (!disablePassword || !disableCode) {
+      setError('Both password and code are required');
+      return;
+    }
+    try {
+      await disableMutation.mutateAsync({
+        password: disablePassword,
+        code: disableCode.trim(),
+      });
+      setStep('idle');
+      setDisablePassword('');
+      setDisableCode('');
+      refetch();
+    } catch {
+      setError('Wrong password or code');
+    }
+  };
+
+  const copyToClipboard = async (text: string, kind: 'secret' | 'codes') => {
+    try {
+      await navigator.clipboard.writeText(text);
+      if (kind === 'secret') {
+        setCopiedSecret(true);
+        setTimeout(() => setCopiedSecret(false), 1500);
+      } else {
+        setCopiedAllCodes(true);
+        setTimeout(() => setCopiedAllCodes(false), 1500);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  if (statusLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-6 h-6 animate-spin text-zinc-400" />
+      </div>
+    );
+  }
+
+  const enabled = status?.enabled === true;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">兩階段驗證</h3>
+        <p className="text-sm text-gray-500 dark:text-zinc-400 mt-1">
+          密碼之外再加一層驗證碼，防止密碼洩漏導致帳號被入侵
+        </p>
+      </div>
+
+      {/* 狀態卡 */}
+      <div
+        className={cn(
+          'p-4 rounded-xl border space-y-3',
+          enabled
+            ? 'border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10'
+            : 'border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10'
+        )}
+      >
+        <div className="flex items-center gap-3">
+          {enabled ? (
+            <ShieldCheck className="w-6 h-6 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          ) : (
+            <ShieldAlert className="w-6 h-6 text-amber-600 dark:text-amber-400 shrink-0" />
+          )}
+          <div className="flex-1">
+            <div
+              className={cn(
+                'font-medium',
+                enabled ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'
+              )}
+            >
+              {enabled ? '2FA 已啟用' : '2FA 尚未啟用'}
+            </div>
+            {enabled && (
+              <div className="text-xs text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">
+                還剩 {status?.backup_codes_remaining ?? 0} 組 backup codes
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* idle 狀態下的主要動作 */}
+      {step === 'idle' && (
+        <div className="flex flex-wrap gap-2">
+          {!enabled && (
+            <button
+              onClick={startSetup}
+              disabled={setupMutation.isPending}
+              className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+            >
+              {setupMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              啟用兩階段驗證
+            </button>
+          )}
+          {enabled && (
+            <button
+              onClick={startDisable}
+              className="px-4 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-sm font-medium transition-colors border border-red-500/20"
+            >
+              停用 2FA
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* setup 步驟：QR + 輸入 code */}
+      {step === 'setup' && setupData && (
+        <div className="space-y-4 p-5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900/50">
+          <div className="space-y-2">
+            <h4 className="font-medium text-gray-900 dark:text-white">1. 用 Authenticator app 掃描 QR Code</h4>
+            <p className="text-xs text-gray-500 dark:text-zinc-400">
+              Google Authenticator / Authy / 1Password 任一個都可以
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="bg-white p-3 rounded-lg shrink-0 self-center">
+              <QRCodeSVG value={setupData.otpauth_uri} size={180} level="M" />
+            </div>
+            <div className="flex-1 space-y-2">
+              <p className="text-xs text-gray-500 dark:text-zinc-400">
+                若無法掃描，可手動輸入 secret：
+              </p>
+              <div className="flex items-center gap-2 p-2 rounded-md bg-gray-100 dark:bg-zinc-800 font-mono text-xs break-all">
+                <span className="flex-1">{setupData.secret}</span>
+                <button
+                  onClick={() => copyToClipboard(setupData.secret, 'secret')}
+                  className="p-1 rounded hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors shrink-0"
+                  title="複製 secret"
+                >
+                  {copiedSecret ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2 pt-2">
+            <h4 className="font-medium text-gray-900 dark:text-white">2. 輸入 app 顯示的 6 位 code</h4>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoFocus
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              placeholder="123456"
+              className="w-full max-w-[200px] h-11 px-3 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-zinc-800 text-center font-mono text-lg tracking-widest focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+
+          {error && (
+            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
+              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={verifySetup}
+              disabled={verifySetupMutation.isPending || code.length !== 6}
+              className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white text-sm font-medium transition-colors flex items-center gap-2"
+            >
+              {verifySetupMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              驗證並啟用
+            </button>
+            <button
+              onClick={() => { setStep('idle'); setSetupData(null); setCode(''); setError(''); }}
+              className="px-4 py-2 rounded-lg bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-zinc-300 text-sm font-medium transition-colors"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* verified 步驟：顯示 8 個 backup codes */}
+      {step === 'verified' && backupCodes.length > 0 && (
+        <div className="space-y-4 p-5 rounded-xl border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/5">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-1">
+              <h4 className="font-medium text-amber-900 dark:text-amber-200">儲存 Backup Codes（只會顯示這一次）</h4>
+              <p className="text-xs text-amber-700 dark:text-amber-300/80">
+                換手機或 Authenticator app 故障時，每組可使用一次。請存到密碼管理器或印出來放安全地方。
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 font-mono text-sm">
+            {backupCodes.map((c, i) => (
+              <div
+                key={i}
+                className="p-2 rounded-md bg-white dark:bg-zinc-900 border border-amber-200 dark:border-amber-500/20 text-center tracking-wider"
+              >
+                {c}
+              </div>
+            ))}
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={() => copyToClipboard(backupCodes.join('\n'), 'codes')}
+              className="px-4 py-2 rounded-lg bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 border border-gray-200 dark:border-white/10 text-sm font-medium transition-colors flex items-center gap-2"
+            >
+              {copiedAllCodes ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+              {copiedAllCodes ? '已複製' : '複製全部'}
+            </button>
+            <button
+              onClick={finishSetup}
+              className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors"
+            >
+              我已儲存好了
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* disable 步驟：要密碼 + code 確認 */}
+      {step === 'disable' && (
+        <div className="space-y-4 p-5 rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/5">
+          <div className="flex items-start gap-3">
+            <ShieldAlert className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-1">
+              <h4 className="font-medium text-red-900 dark:text-red-200">確認停用 2FA</h4>
+              <p className="text-xs text-red-700 dark:text-red-300/80">
+                請輸入密碼 + 當前 6 位 code（或 backup code）以確認操作
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <input
+              type="password"
+              value={disablePassword}
+              onChange={(e) => setDisablePassword(e.target.value)}
+              placeholder="當前密碼"
+              className="w-full h-10 px-3 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-zinc-800 focus:border-red-500 focus:outline-none"
+            />
+            <input
+              type="text"
+              value={disableCode}
+              onChange={(e) => setDisableCode(e.target.value)}
+              placeholder="6 位 code 或 backup code"
+              className="w-full h-10 px-3 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-zinc-800 focus:border-red-500 focus:outline-none font-mono"
+            />
+          </div>
+
+          {error && (
+            <div className="p-3 rounded-lg bg-red-100 dark:bg-red-500/20 border border-red-300 dark:border-red-500/40">
+              <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={confirmDisable}
+              disabled={disableMutation.isPending}
+              className="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-medium transition-colors flex items-center gap-2"
+            >
+              {disableMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              確認停用
+            </button>
+            <button
+              onClick={() => { setStep('idle'); setError(''); }}
+              className="px-4 py-2 rounded-lg bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-zinc-300 text-sm font-medium transition-colors"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AboutSection = () => {
   const { data: systemStatus } = useSystemStatus();
 
@@ -262,6 +623,7 @@ const SECTIONS: { id: SettingsSection; label: string; icon: React.ElementType }[
   { id: 'dock', label: 'Dock', icon: Layout },
   { id: 'storage', label: '儲存空間', icon: HardDrive },
   { id: 'account', label: '帳戶', icon: User },
+  { id: 'security', label: '安全性', icon: ShieldCheck },
   { id: 'about', label: '關於', icon: Info },
 ];
 
@@ -274,6 +636,7 @@ export const Settings = () => {
       case 'dock': return <DockSection />;
       case 'storage': return <StorageSection />;
       case 'account': return <AccountSection />;
+      case 'security': return <SecuritySection />;
       case 'about': return <AboutSection />;
     }
   };
