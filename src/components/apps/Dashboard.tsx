@@ -13,7 +13,7 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { Cpu, HardDrive, Activity, Thermometer, Monitor, Loader2, LayoutGrid, AlertTriangle } from 'lucide-react';
+import { Cpu, HardDrive, Activity, Thermometer, Monitor, Loader2, LayoutGrid, AlertTriangle, BatteryCharging, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSystemStatus } from '@/features/system/api/useSystem';
 
@@ -147,6 +147,38 @@ export const Dashboard = () => {
               <div className="h-full bg-blue-500 transition-all" style={{ width: `${systemStatus?.cpu_usage || 0}%` }} />
             </div>
           </div>
+
+          {/* UPS */}
+          {systemStatus?.ups && (
+            <div className="bg-gray-100 dark:bg-white/5 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                {systemStatus.ups.online ? (
+                  <Zap className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
+                ) : (
+                  <BatteryCharging className="w-4 h-4 text-amber-500 dark:text-amber-400" />
+                )}
+                <span className="text-xs text-gray-500 dark:text-zinc-400">UPS</span>
+                <span className={cn(
+                  "ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-medium",
+                  systemStatus.ups.online
+                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                    : "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                )}>
+                  {systemStatus.ups.online ? '市電' : '電池'}
+                </span>
+              </div>
+              <div className="text-2xl font-bold text-gray-900 dark:text-white">{systemStatus.ups.battery_charge?.toFixed(0) ?? '--'}%</div>
+              <div className="text-xs text-gray-500 dark:text-zinc-500 mt-1">
+                剩 {Math.round((systemStatus.ups.battery_runtime ?? 0) / 60)} 分 · 負載 {systemStatus.ups.ups_load?.toFixed(0) ?? '--'}% · {systemStatus.ups.input_voltage?.toFixed(0) ?? '--'}V
+              </div>
+              <div className="h-1.5 bg-gray-200 dark:bg-white/10 rounded-full mt-2 overflow-hidden">
+                <div
+                  className={cn("h-full transition-all", systemStatus.ups.online ? "bg-emerald-500" : "bg-amber-500")}
+                  style={{ width: `${systemStatus.ups.battery_charge ?? 0}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Memory */}
           <div className="bg-gray-100 dark:bg-white/5 rounded-xl p-4">

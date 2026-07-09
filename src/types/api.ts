@@ -184,6 +184,18 @@ export interface ProcessInfo {
   memory_percent: number;
 }
 
+export interface UpsInfo {
+  status: string;
+  online: boolean;
+  battery_charge?: number;
+  battery_runtime?: number;
+  ups_load?: number;
+  input_voltage?: number;
+  output_voltage?: number;
+  model?: string;
+  updated_at?: string;
+}
+
 export interface SystemStatus {
   cpu_usage: number;
   cpu_temp?: number;
@@ -194,6 +206,7 @@ export interface SystemStatus {
   disks: DiskInfo[];
   gpu?: GpuInfo;
   top_processes: ProcessInfo[];
+  ups?: UpsInfo;
 }
 
 export interface DockerContainer {

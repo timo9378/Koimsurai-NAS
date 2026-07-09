@@ -24,6 +24,11 @@ import {
   Loader2,
   RefreshCw,
   Info,
+  Activity,
+  Cpu,
+  HardDrive,
+  Zap,
+  BatteryCharging,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { FileInfo } from '@/types/api';
@@ -48,6 +53,7 @@ import { FileTypeIcon } from '@/lib/file-icons';
 import { useThumbnail } from '@/features/files/api/useFiles';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useSystemStatus } from '@/features/system/api/useSystem';
 
 // ─── Thumbnail component ────────────────────────────────
 const MobileFileThumb = ({ file, currentPath }: { file: FileInfo; currentPath: string }) => {
@@ -220,8 +226,102 @@ function formatSize(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
+// ─── Mobile Monitor (系統狀態 + UPS) ─────────────────────
+const MonitorBar = ({ pct, color }: { pct: number; color: string }) => (
+  <div className="h-1.5 bg-gray-200 dark:bg-white/10 rounded-full mt-2 overflow-hidden">
+    <div className={cn("h-full transition-all", color)} style={{ width: `${Math.min(Math.max(pct, 0), 100)}%` }} />
+  </div>
+);
+
+const MobileMonitor = () => {
+  const { data: sys } = useSystemStatus();
+
+  if (!sys) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  const memPct = sys.total_memory ? (sys.used_memory / sys.total_memory) * 100 : 0;
+  const ups = sys.ups;
+  const card = "bg-white dark:bg-zinc-900 rounded-2xl p-4 border border-gray-100 dark:border-zinc-800";
+
+  return (
+    <div className="p-4 space-y-3">
+      {/* UPS */}
+      {ups && (
+        <div className={card}>
+          <div className="flex items-center gap-2 mb-2">
+            {ups.online
+              ? <Zap className="w-4 h-4 text-emerald-500" />
+              : <BatteryCharging className="w-4 h-4 text-amber-500" />}
+            <span className="text-sm font-medium">UPS 電源</span>
+            <span className={cn(
+              "ml-auto text-[11px] px-2 py-0.5 rounded-full font-medium",
+              ups.online
+                ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                : "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+            )}>
+              {ups.online ? '市電正常' : '吃電池'}
+            </span>
+          </div>
+          <div className="flex items-end gap-2">
+            <span className="text-3xl font-bold">{ups.battery_charge?.toFixed(0) ?? '--'}%</span>
+            <span className="text-xs text-gray-500 mb-1">剩約 {Math.round((ups.battery_runtime ?? 0) / 60)} 分</span>
+          </div>
+          <MonitorBar pct={ups.battery_charge ?? 0} color={ups.online ? "bg-emerald-500" : "bg-amber-500"} />
+          <div className="grid grid-cols-3 gap-2 mt-3 text-center">
+            <div><div className="text-xs text-gray-400">負載</div><div className="text-sm font-semibold">{ups.ups_load?.toFixed(0) ?? '--'}%</div></div>
+            <div><div className="text-xs text-gray-400">市電</div><div className="text-sm font-semibold">{ups.input_voltage?.toFixed(0) ?? '--'}V</div></div>
+            <div><div className="text-xs text-gray-400">機型</div><div className="text-[11px] font-medium truncate">{ups.model ?? '--'}</div></div>
+          </div>
+        </div>
+      )}
+
+      {/* CPU */}
+      <div className={card}>
+        <div className="flex items-center gap-2 mb-1">
+          <Cpu className="w-4 h-4 text-blue-500" />
+          <span className="text-sm font-medium">CPU</span>
+          {sys.cpu_temp && <span className="ml-auto text-xs text-orange-500">{sys.cpu_temp.toFixed(0)}°C</span>}
+        </div>
+        <span className="text-2xl font-bold">{sys.cpu_usage.toFixed(1)}%</span>
+        <MonitorBar pct={sys.cpu_usage} color="bg-blue-500" />
+      </div>
+
+      {/* Memory */}
+      <div className={card}>
+        <div className="flex items-center gap-2 mb-1">
+          <Activity className="w-4 h-4 text-purple-500" />
+          <span className="text-sm font-medium">記憶體</span>
+          <span className="ml-auto text-xs text-gray-500">{formatSize(sys.used_memory)} / {formatSize(sys.total_memory)}</span>
+        </div>
+        <span className="text-2xl font-bold">{memPct.toFixed(1)}%</span>
+        <MonitorBar pct={memPct} color="bg-purple-500" />
+      </div>
+
+      {/* Disks */}
+      {sys.disks?.map((d) => {
+        const usedPct = d.total_space ? ((d.total_space - d.available_space) / d.total_space) * 100 : 0;
+        return (
+          <div key={d.mount_point} className={card}>
+            <div className="flex items-center gap-2 mb-1">
+              <HardDrive className="w-4 h-4 text-cyan-500" />
+              <span className="text-sm font-medium truncate">{d.mount_point === '/' ? 'System' : d.mount_point}</span>
+              <span className="ml-auto text-xs text-gray-500 shrink-0">{formatSize(d.total_space - d.available_space)} / {formatSize(d.total_space)}</span>
+            </div>
+            <MonitorBar pct={usedPct} color={usedPct > 90 ? "bg-red-500" : "bg-cyan-500"} />
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 // ─── Main MobileLayout ──────────────────────────────────
-type Tab = 'files' | 'starred' | 'settings';
+type Tab = 'files' | 'starred' | 'monitor' | 'settings';
 
 export const MobileLayout = () => {
   const [activeTab, setActiveTab] = useState<Tab>('files');
@@ -416,6 +516,7 @@ export const MobileLayout = () => {
                 {activeTab === 'files'
                   ? (isTrashMode ? 'Trash' : (currentPath === '/' ? 'My Files' : pathParts[pathParts.length - 1]))
                   : activeTab === 'starred' ? 'Starred'
+                  : activeTab === 'monitor' ? '監控'
                   : 'Settings'}
               </h1>
               {activeTab === 'files' && (
@@ -583,6 +684,8 @@ export const MobileLayout = () => {
           </>
         )}
 
+        {activeTab === 'monitor' && <MobileMonitor />}
+
         {activeTab === 'settings' && (
           <div className="py-4">
             <div className="px-4 pb-2 text-xs text-gray-500 uppercase tracking-wider">Account</div>
@@ -619,6 +722,7 @@ export const MobileLayout = () => {
           {([
             { id: 'files' as Tab, icon: Folder, label: 'Files' },
             { id: 'starred' as Tab, icon: Star, label: 'Starred' },
+            { id: 'monitor' as Tab, icon: Activity, label: '監控' },
             { id: 'settings' as Tab, icon: Settings, label: 'Settings' },
           ]).map((tab) => (
             <button

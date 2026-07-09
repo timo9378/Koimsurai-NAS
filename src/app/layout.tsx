@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { SocketProvider } from "@/components/providers/socket-provider";
 import { GlobalMiniPlayer } from "@/components/ui/global-mini-player";
+import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,10 +20,20 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Koimsurai NAS",
   description: "Koimsurai NAS Frontend",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Koimsurai NAS",
+  },
   icons: {
     icon: "/favicon.ico",
     apple: "/Images/logo.svg",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#09090b",
 };
 
 export default function RootLayout({
@@ -45,6 +56,7 @@ export default function RootLayout({
             <SocketProvider>
               {children}
               <GlobalMiniPlayer />
+              <ServiceWorkerRegister />
             </SocketProvider>
           </ThemeProvider>
         </Providers>
