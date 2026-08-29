@@ -1,0 +1,9 @@
+packages:
+  - 'packages/*'
+
+# pnpm 12 起 CLI 是 Rust 原生 binary，靠 postinstall 的 install.js 把它放到位。
+# 不核可的話 packageManager 自動接手會裝出一個**佔位符**，執行時報 "Syntax error"
+# 而不是「缺少 binary」—— 症狀跟原因差很遠。
+allowBuilds:
+  pnpm: true
+  esbuild: true

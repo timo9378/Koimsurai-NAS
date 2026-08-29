@@ -1,0 +1,11 @@
+# Koimsurai NAS monorepo — Cargo workspace
+#
+# 前端在 repo 根目錄、後端在 backend/（對齊 sora-to-ki 的佈局）。
+# 把 workspace root 放在這裡有兩個實質理由，不只是形式：
+#   1. Cargo.lock 落在根目錄 —— `cargo audit` 只認 workspace root 的 lock，
+#      在 backend/ 底下跑會得到「Couldn't load Cargo.lock」。
+#   2. cargo-nextest 的設定檔（.config/nextest.toml）必須在 workspace root，
+#      放進 backend/ 底下 nextest 讀不到。
+[workspace]
+resolver = "2"
+members = ["backend"]
