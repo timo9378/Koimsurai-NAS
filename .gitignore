@@ -1,8 +1,14 @@
 /target
+
+# ⚠️ .env 含 JWT_SECRET / SESSION_SECRET 等真實金鑰，絕不進版控。
+# 舊寫法 `! .env` 是壞的：驚嘆號後有空格不是有效語法，且「取消忽略」前面
+# 根本沒有忽略規則 —— 於是 .env 從 init commit 起一路被追蹤到公開 repo 上。
+.env
+.env.bak-*
+!.env.example
 *.db
 *.db-shm
 *.db-wal
-! .env
 
 # Storage 目錄中的使用者資料 (保留目錄結構但不追蹤內容)
 # User data in storage directory (keep structure but don't track contents)
