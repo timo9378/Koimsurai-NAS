@@ -1,9 +1,9 @@
-use axum::{Json, extract::State};
-use sysinfo::{System, Disks, Components};
-use serde::{Serialize, Deserialize};
-use crate::state::AppState;
 use crate::services::indexer::Indexer;
+use crate::state::AppState;
+use axum::{extract::State, Json};
+use serde::{Deserialize, Serialize};
 use std::process::Command;
+use sysinfo::{Components, Disks, ProcessesToUpdate, System, MINIMUM_CPU_UPDATE_INTERVAL};
 
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct SystemStatus {
@@ -51,7 +51,7 @@ fn get_gpu_info() -> Option<GpuInfo> {
     let output = Command::new("nvidia-smi")
         .args([
             "--query-gpu=name,memory.total,memory.used,memory.free,utilization.gpu,temperature.gpu",
-            "--format=csv,noheader,nounits"
+            "--format=csv,noheader,nounits",
         ])
         .output()
         .ok()?;
@@ -108,73 +108,59 @@ fn get_ups_info() -> Option<UpsInfo> {
 
 fn get_cpu_temperature() -> Option<f32> {
     let components = Components::new_with_refreshed_list();
-    
+
     // Look for CPU temperature sensors
     // Common sensor names: "coretemp", "k10temp", "cpu_thermal", "Package", "Core"
     for component in components.iter() {
         let label = component.label().to_lowercase();
-        if label.contains("core") || label.contains("cpu") || 
-           label.contains("package") || label.contains("tctl") {
+        if label.contains("core")
+            || label.contains("cpu")
+            || label.contains("package")
+            || label.contains("tctl")
+        {
             // temperature() returns Option<f32>
             if let Some(temp) = component.temperature() {
                 return Some(temp);
             }
         }
     }
-    
+
     // Fallback: return first component temperature if available
     components.iter().next().and_then(|c| c.temperature())
 }
 
-/// Get top processes from host using `ps` command
-/// This works because we have access to the host's /proc via Docker
-fn get_top_processes(total_memory: u64) -> Vec<ProcessInfo> {
-    // Use ps to get top CPU consuming processes
-    // Format: pid, %cpu, rss (in KB), command
-    let output = Command::new("ps")
-        .args([
-            "-eo", "pid,%cpu,rss,comm",
-            "--sort=-%cpu",
-            "--no-headers"
-        ])
-        .output();
-
-    let output = match output {
-        Ok(o) if o.status.success() => o,
-        _ => return Vec::new(),
-    };
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut processes: Vec<ProcessInfo> = stdout
-        .lines()
-        .take(20) // Get top 20
-        .filter_map(|line| {
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() >= 4 {
-                let pid: u32 = parts[0].parse().ok()?;
-                let cpu_usage: f32 = parts[1].parse().ok()?;
-                let rss_kb: u64 = parts[2].parse().ok()?;
-                let memory_bytes = rss_kb * 1024;
-                let memory_percent = if total_memory > 0 {
-                    (memory_bytes as f32 / total_memory as f32) * 100.0
-                } else {
-                    0.0
-                };
-                // Command is everything after the 3rd field
-                let name = parts[3..].join(" ");
-                
-                Some(ProcessInfo {
-                    pid,
-                    name,
-                    cpu_usage,
-                    memory_bytes,
-                    memory_percent,
-                })
+/// Get top processes (by real, delta-based CPU%) from the shared `System` snapshot.
+fn get_top_processes(sys: &System, total_memory: u64) -> Vec<ProcessInfo> {
+    // Read CPU% straight from the shared `System` snapshot. Because
+    // get_system_status refreshes it twice MINIMUM_CPU_UPDATE_INTERVAL apart,
+    // each process cpu_usage() is a real delta — a just-spawned short-lived
+    // process reads ~0%, not the bogus hundreds-of-percent that `ps`'s
+    // lifetime-average %cpu column used to report.
+    let mut processes: Vec<ProcessInfo> = sys
+        .processes()
+        .iter()
+        .map(|(pid, process)| {
+            let memory_bytes = process.memory(); // sysinfo 0.33 reports bytes
+            let memory_percent = if total_memory > 0 {
+                (memory_bytes as f32 / total_memory as f32) * 100.0
             } else {
-                None
+                0.0
+            };
+            ProcessInfo {
+                pid: pid.as_u32(),
+                name: process.name().to_string_lossy().to_string(),
+                // %/core; can exceed 100 for genuinely multi-core processes
+                cpu_usage: process.cpu_usage(),
+                memory_bytes,
+                memory_percent,
             }
         })
         .collect();
+    processes.sort_by(|a, b| {
+        b.cpu_usage
+            .partial_cmp(&a.cpu_usage)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     // Filter out noise (very low usage processes that aren't interesting)
     processes.retain(|p| p.cpu_usage >= 0.1 || p.memory_bytes > 50 * 1024 * 1024);
@@ -190,8 +176,17 @@ fn get_top_processes(total_memory: u64) -> Vec<ProcessInfo> {
     )
 )]
 pub async fn get_system_status() -> Json<SystemStatus> {
-    let mut sys = System::new_all();
-    sys.refresh_all();
+    // sysinfo derives CPU% from the delta between two refreshes, so we must
+    // sample twice at least MINIMUM_CPU_UPDATE_INTERVAL apart. The previous
+    // new_all() + refresh_all() measured over a ~0s window and produced
+    // unstable readings that spiked to 50-60% while the box was actually idle.
+    let mut sys = System::new();
+    sys.refresh_cpu_usage();
+    sys.refresh_processes(ProcessesToUpdate::All, true);
+    tokio::time::sleep(MINIMUM_CPU_UPDATE_INTERVAL).await;
+    sys.refresh_cpu_usage();
+    sys.refresh_processes(ProcessesToUpdate::All, true);
+    sys.refresh_memory();
 
     let cpu_usage = sys.global_cpu_usage();
     let total_memory = sys.total_memory();
@@ -200,64 +195,69 @@ pub async fn get_system_status() -> Json<SystemStatus> {
     let used_swap = sys.used_swap();
 
     let disks = Disks::new_with_refreshed_list();
-    
+
     // Filter out overlay, loop, tmpfs, Docker mounts, and virtual filesystems
     // Only show real physical disks with actual mount points
-    let disk_info: Vec<DiskInfo> = disks.list().iter()
+    let disk_info: Vec<DiskInfo> = disks
+        .list()
+        .iter()
         .filter(|disk| {
             let mount = disk.mount_point().to_string_lossy();
             let name = disk.name().to_string_lossy();
-            
+
             // Skip loop devices
             if name.starts_with("loop") {
                 return false;
             }
-            
+
             // Skip various virtual/system mounts
-            if mount.contains("/snap/") ||
-               mount.starts_with("/boot") ||
-               mount.starts_with("/run") ||
-               mount == "/dev/shm" {
+            if mount.contains("/snap/")
+                || mount.starts_with("/boot")
+                || mount.starts_with("/run")
+                || mount == "/dev/shm"
+            {
                 return false;
             }
-            
+
             // Skip Docker-related mounts (overlay, container config files)
             // These typically have overlay name or short config file mounts
             if name == "overlay" || name.is_empty() {
                 return false;
             }
-            
+
             // Skip Docker container config files (resolv.conf, hostname, hosts, etc.)
             let mount_str = mount.to_string();
-            if mount_str.contains("/docker/") ||
-               mount_str.ends_with("/resolv.conf") ||
-               mount_str.ends_with("/hostname") ||
-               mount_str.ends_with("/hosts") ||
-               mount_str.ends_with("/db") {
+            if mount_str.contains("/docker/")
+                || mount_str.ends_with("/resolv.conf")
+                || mount_str.ends_with("/hostname")
+                || mount_str.ends_with("/hosts")
+                || mount_str.ends_with("/db")
+            {
                 return false;
             }
-            
+
             // Skip NVIDIA driver mounts and system library directories
             // These are bind-mounted by nvidia-container-toolkit
-            if mount_str.starts_with("/usr/") ||
-               mount_str.starts_with("/lib/") ||
-               mount_str.starts_with("/lib64/") ||
-               mount_str.contains("nvidia") ||
-               mount_str.contains("libnvidia") ||
-               mount_str.contains("gsp_") ||
-               name.contains("nvidia") ||
-               name.starts_with("libnvidia") ||
-               name.starts_with("gsp_") {
+            if mount_str.starts_with("/usr/")
+                || mount_str.starts_with("/lib/")
+                || mount_str.starts_with("/lib64/")
+                || mount_str.contains("nvidia")
+                || mount_str.contains("libnvidia")
+                || mount_str.contains("gsp_")
+                || name.contains("nvidia")
+                || name.starts_with("libnvidia")
+                || name.starts_with("gsp_")
+            {
                 return false;
             }
-            
+
             // Only include if it's a real disk with substantial size (at least 1GB)
             disk.total_space() > 1024 * 1024 * 1024
         })
         .map(|disk| {
             let name = disk.name().to_string_lossy().to_string();
             let mount = disk.mount_point().to_string_lossy().to_string();
-            
+
             // Determine disk type based on name
             let disk_type = if name.contains("nvme") {
                 "NVMe SSD".to_string()
@@ -266,7 +266,7 @@ pub async fn get_system_status() -> Json<SystemStatus> {
             } else {
                 "Unknown".to_string()
             };
-            
+
             DiskInfo {
                 name,
                 mount_point: mount,
@@ -279,12 +279,12 @@ pub async fn get_system_status() -> Json<SystemStatus> {
 
     // Get GPU info
     let gpu = get_gpu_info();
-    
+
     // Get CPU temperature
     let cpu_temp = get_cpu_temperature();
 
     // Get top processes using ps command (works in container)
-    let top_processes = get_top_processes(total_memory);
+    let top_processes = get_top_processes(&sys, total_memory);
 
     // Get UPS status from host-written /data/ups.json (updated by ups-log.sh)
     let ups = get_ups_info();
@@ -321,29 +321,23 @@ pub struct ConsistencyCheckResult {
         (status = 200, description = "Consistency check completed", body = ConsistencyCheckResult)
     )
 )]
-pub async fn verify_consistency(
-    State(state): State<AppState>,
-) -> Json<ConsistencyCheckResult> {
+pub async fn verify_consistency(State(state): State<AppState>) -> Json<ConsistencyCheckResult> {
     let indexer = Indexer::new(state.pool.clone(), state.storage_path.clone());
-    
+
     match indexer.verify_consistency().await {
-        Ok((total, removed)) => {
-            Json(ConsistencyCheckResult {
-                total_db_entries: total,
-                removed_orphans: removed,
-                message: format!(
-                    "Consistency check complete. Checked {} entries, removed {} orphaned records.",
-                    total, removed
-                ),
-            })
-        }
-        Err(e) => {
-            Json(ConsistencyCheckResult {
-                total_db_entries: 0,
-                removed_orphans: 0,
-                message: format!("Consistency check failed: {}", e),
-            })
-        }
+        Ok((total, removed)) => Json(ConsistencyCheckResult {
+            total_db_entries: total,
+            removed_orphans: removed,
+            message: format!(
+                "Consistency check complete. Checked {} entries, removed {} orphaned records.",
+                total, removed
+            ),
+        }),
+        Err(e) => Json(ConsistencyCheckResult {
+            total_db_entries: 0,
+            removed_orphans: 0,
+            message: format!("Consistency check failed: {}", e),
+        }),
     }
 }
 
@@ -363,23 +357,17 @@ pub struct RescanResult {
         (status = 200, description = "Rescan completed", body = RescanResult)
     )
 )]
-pub async fn trigger_rescan(
-    State(state): State<AppState>,
-) -> Json<RescanResult> {
+pub async fn trigger_rescan(State(state): State<AppState>) -> Json<RescanResult> {
     let indexer = Indexer::new(state.pool.clone(), state.storage_path.clone());
-    
+
     match indexer.full_scan().await {
-        Ok(()) => {
-            Json(RescanResult {
-                success: true,
-                message: "Full rescan completed successfully.".to_string(),
-            })
-        }
-        Err(e) => {
-            Json(RescanResult {
-                success: false,
-                message: format!("Rescan failed: {}", e),
-            })
-        }
+        Ok(()) => Json(RescanResult {
+            success: true,
+            message: "Full rescan completed successfully.".to_string(),
+        }),
+        Err(e) => Json(RescanResult {
+            success: false,
+            message: format!("Rescan failed: {}", e),
+        }),
     }
 }
