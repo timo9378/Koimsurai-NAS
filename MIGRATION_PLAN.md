@@ -9,7 +9,7 @@ Next.js 16 → Vite + TanStack Router（純 SPA），收攏後端成 monorepo，
 |---|---|
 | 0 · monorepo 收攏 | ✅ `829f069`（外加資安事件處理，見 §9）|
 | 1 · Next → Vite SPA | ✅ `0f638a6` |
-| 2 · 型別橋（specta）| ✅ `5b76798`（發現 5 處前後端不一致，見 §10）|
+| 2 · 型別橋（specta）| ✅ `5b76798` + `2334724`（發現並修掉 5 處前後端不一致，見 §10）|
 | 3 · 工具鏈落地 | ⬜ |
 | 4 · 部署（ServeDir + GlitchTip）| ⬜ |
 
@@ -442,40 +442,33 @@ nginx `nas-koimsurai` 的 `location /` 由 `13001` 改指 `127.0.0.1:3000`；
 | 3 | `LoginRequest` 只有 `username`/`password`，前端多送 `remember` | serde 靜默丟棄 → **登入頁的「記住我」從來沒作用過**。已停止送出並標 TODO |
 | 4 | `JobUpdate` 沒有 `type` 欄位 | 手寫版憑空多宣告，toast 顯示 `undefined` |
 
-### ⚠️ 未解：WebSocket 協定完全對不上
+### 已修：WebSocket 協定（`2334724`）
 
-**後端送的**（`WsServerMessage`，`#[serde(tag="type", content="payload")]`，無 `rename_all`）：
+原本這條 socket 上有**兩種不相容的封包格式**，而且整條路徑壞掉卻毫無症狀：
 
-```json
-{ "type": "DockerStats",  "payload": { "container_id": "...", "cpu_percent": 1.2, ... } }
-{ "type": "DockerStatsError", "payload": {...} }
-{ "type": "Error", "payload": {...} }
-{ "type": "Pong" }
-```
+| 來源 | 送出的形狀 |
+|---|---|
+| `queue.rs` 的 broadcast | 裸 `JobUpdate`，**沒有 `type` 欄位** |
+| `WsServerMessage` | `{ "type": "DockerStats", "payload": … }`（PascalCase）|
+| 前端比對的 | `'docker_stats'` / `'job_update'` / `'file_change'` |
 
-**前端比對的**（`socket-provider.tsx`）：
+三者互不相符 → `switch (msg.type)` 沒有分支命中 → 背景工作的進度與完成通知
+從來沒有送達過。沒有錯誤、沒有 log。
 
-```ts
-case 'docker_stats':   // → data 鍵
-case 'job_update':
-case 'file_change':
-```
+解法是讓 **`WsServerMessage` 成為伺服器送出的唯一信封**：
 
-查證結果：
-- `docker_stats` / `job_update` / `file_change` 這三個字串在**整個 Rust 後端出現 0 次**
-- 後端只有一個 `/ws` 路由，只送 `WsServerMessage` 那四個 variant
-- 所以前端這三個 case **永遠不會命中**
+- 新增 `JobUpdate(JobUpdate)` variant，broadcast 包進信封才送（`queue.rs` 不動）
+- 兩個 enum 加 `rename_all = "snake_case"`，與 JSON 面其餘部分及既有的
+  `JobStatus`（本來就 lowercase）一致 —— 產生的 tag 正好就是前端當初預期的名字
+- 前端刪掉手刻的 `WebSocketMessage`，直接用產生的型別，並加 `never` 窮盡檢查
+- 移除 `file_change` 分支（後端沒有任何送出點）
+- 刪除 `src/hooks/use-socket.ts`（三個 export 全部零消費者）
 
-實際後果：Docker 即時統計沒有更新、背景工作完成/失敗的 toast 不會跳、
-檔案變更不會觸發查詢失效（`useDockerStats` / `useJobProgress` 兩個 hook
-本身也是空殼，只呼叫 `useSocket()` 什麼都不做）。
+⚠️ **`docker_stats` 仍然收不到，但那是另一回事**：後端要收到
+`subscribe_docker_stats` 才會開始推，而前端目前沒有任何地方送這則訊息
+（原本負責的 `useDockerStats` 是空殼且零呼叫端，已刪）。
+協定本身是通的，缺的是呼叫端 —— 哪天 Docker 監控頁要即時數據時再接。
 
-修法要選一邊，兩者都不是純機械改動，所以留給你裁示：
-
-| 選項 | 做法 | 代價 |
-|---|---|---|
-| A | 後端 `WsServerMessage` 加 `#[serde(rename_all = "snake_case")]`、content 鍵改 `data`，並補送 `job_update` / `file_change` | 要實作兩個從未存在的訊息來源 |
-| B | 前端改用產生版的 `WsServerMessage` 判別聯集，並移除 `job_update` / `file_change` 兩個從來沒有對應的分支 | 那兩個功能等於正式承認沒做 |
-
-無論選哪邊，改完之後前端都應該直接用 `WsServerMessage`，
-不要再手刻一份 `WebSocketMessage`。
+測試釘在 `backend/tests/ws_protocol_tests.rs`：型別由 specta 擔保，但
+`rename_all` / `content` 鍵被改掉時型別檢查抓不到（兩邊產物會同時變，
+看起來依然一致卻與舊客戶端不相容）。實測拿掉 `rename_all` 會讓 3/4 條紅。
