@@ -22,10 +22,11 @@ pub struct ShareQuery {
 }
 
 /// 分享連結元數據響應
-#[derive(Serialize, utoipa::ToSchema)]
+#[derive(Serialize, utoipa::ToSchema, specta::Type)]
 pub struct ShareInfoResponse {
     pub id: String,
     pub file_name: String,
+    #[specta(type = specta_typescript::Number)]
     pub file_size: u64,
     pub mime_type: Option<String>,
     pub is_directory: bool,

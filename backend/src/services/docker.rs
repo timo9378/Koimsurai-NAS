@@ -48,7 +48,7 @@ impl From<bollard::errors::Error> for DockerError {
 }
 
 /// 容器摘要資訊（用於列表顯示）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 pub struct ContainerSummary {
     pub id: String,
     pub names: Vec<String>,
@@ -56,12 +56,13 @@ pub struct ContainerSummary {
     pub image_id: String,
     pub state: String,
     pub status: String,
+    #[specta(type = specta_typescript::Number)]
     pub created: i64,
     pub ports: Vec<PortMapping>,
 }
 
 /// 端口映射資訊
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 pub struct PortMapping {
     pub private_port: u16,
     pub public_port: Option<u16>,
@@ -69,7 +70,7 @@ pub struct PortMapping {
 }
 
 /// 容器詳細資訊
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 pub struct ContainerDetails {
     pub id: String,
     pub name: String,
@@ -81,7 +82,7 @@ pub struct ContainerDetails {
 }
 
 /// 容器狀態
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 pub struct ContainerState {
     pub status: String,
     pub running: bool,
@@ -89,11 +90,12 @@ pub struct ContainerState {
     pub restarting: bool,
     pub started_at: Option<String>,
     pub finished_at: Option<String>,
+    #[specta(type = Option<specta_typescript::Number>)]
     pub exit_code: Option<i64>,
 }
 
 /// 容器配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 pub struct ContainerConfig {
     pub hostname: Option<String>,
     pub env: Vec<String>,
@@ -102,7 +104,7 @@ pub struct ContainerConfig {
 }
 
 /// 網絡設置
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 pub struct NetworkSettings {
     pub ip_address: Option<String>,
     pub gateway: Option<String>,
@@ -110,7 +112,7 @@ pub struct NetworkSettings {
 }
 
 /// 網絡資訊
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 pub struct NetworkInfo {
     pub ip_address: Option<String>,
     pub gateway: Option<String>,
@@ -118,7 +120,7 @@ pub struct NetworkInfo {
 }
 
 /// 掛載點資訊
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 pub struct MountPoint {
     pub mount_type: String,
     pub source: Option<String>,
@@ -128,38 +130,47 @@ pub struct MountPoint {
 }
 
 /// 容器統計資訊
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 pub struct ContainerStats {
     pub cpu_percent: f64,
+    #[specta(type = specta_typescript::Number)]
     pub memory_usage: u64,
+    #[specta(type = specta_typescript::Number)]
     pub memory_limit: u64,
     pub memory_percent: f64,
+    #[specta(type = specta_typescript::Number)]
     pub network_rx: u64,
+    #[specta(type = specta_typescript::Number)]
     pub network_tx: u64,
+    #[specta(type = specta_typescript::Number)]
     pub block_read: u64,
+    #[specta(type = specta_typescript::Number)]
     pub block_write: u64,
 }
 
 /// 鏡像摘要資訊
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 pub struct ImageSummary {
     pub id: String,
     pub repo_tags: Vec<String>,
     pub repo_digests: Vec<String>,
+    #[specta(type = specta_typescript::Number)]
     pub created: i64,
+    #[specta(type = specta_typescript::Number)]
     pub size: i64,
+    #[specta(type = Option<specta_typescript::Number>)]
     pub virtual_size: Option<i64>,
 }
 
 /// Docker 日誌條目
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 pub struct LogEntry {
     pub stream: String,
     pub message: String,
 }
 
 /// 網絡摘要資訊
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 pub struct NetworkSummary {
     pub id: String,
     pub name: String,

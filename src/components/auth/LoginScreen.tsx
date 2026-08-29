@@ -62,7 +62,11 @@ export function LoginScreen() {
 
     try {
       if (isLogin) {
-        const res = await loginMutation.mutateAsync({ username, password, remember })
+        // ⚠️ TODO：`remember` 沒有送出。Rust 的 LoginRequest 只有 username / password，
+        // serde 會靜默丟棄未知欄位 —— 也就是說這個核取方塊從來就沒有作用過，
+        // 只是先前手寫的 TS 型別多宣告了一個欄位，把這件事遮住了。
+        // 要讓它生效需要後端補欄位並據以調整 cookie/JWT 的有效期。
+        const res = await loginMutation.mutateAsync({ username, password })
         // 後端回 requires_2fa = true 時需要第二階段
         if (res && typeof res === "object" && "requires_2fa" in res && res.requires_2fa) {
           setTempToken(res.temp_token)

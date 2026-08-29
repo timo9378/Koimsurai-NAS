@@ -287,8 +287,8 @@ const MobileMonitor = () => {
           <span className="text-sm font-medium">CPU</span>
           {sys.cpu_temp && <span className="ml-auto text-xs text-orange-500">{sys.cpu_temp.toFixed(0)}°C</span>}
         </div>
-        <span className="text-2xl font-bold">{sys.cpu_usage.toFixed(1)}%</span>
-        <MonitorBar pct={sys.cpu_usage} color="bg-blue-500" />
+        <span className="text-2xl font-bold">{(sys.cpu_usage ?? 0).toFixed(1)}%</span>
+        <MonitorBar pct={sys.cpu_usage ?? 0} color="bg-blue-500" />
       </div>
 
       {/* Memory */}

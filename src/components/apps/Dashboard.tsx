@@ -55,9 +55,9 @@ export const Dashboard = () => {
       const timeStr = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
       const newData = {
         time: timeStr,
-        cpu: systemStatus.cpu_usage,
+        cpu: systemStatus.cpu_usage ?? 0,
         ram: (systemStatus.used_memory / systemStatus.total_memory) * 100,
-        gpu: systemStatus.gpu?.utilization
+        gpu: systemStatus.gpu?.utilization ?? undefined
       };
 
       const timer = setTimeout(() => {
@@ -122,7 +122,7 @@ export const Dashboard = () => {
             </div>
             <div className="space-y-1 text-sm">
               {(systemStatus?.cpu_usage || 0) > 90 && (
-                <div className="text-red-500 dark:text-red-300">• System CPU usage is critical ({systemStatus?.cpu_usage.toFixed(1)}%)</div>
+                <div className="text-red-500 dark:text-red-300">• System CPU usage is critical ({(systemStatus?.cpu_usage ?? 0).toFixed(1)}%)</div>
               )}
               {memoryPercent > 90 && (
                 <div className="text-red-500 dark:text-red-300">• System memory usage is critical ({memoryPercent.toFixed(1)}%)</div>
@@ -139,7 +139,7 @@ export const Dashboard = () => {
               <Cpu className="w-4 h-4 text-blue-500 dark:text-blue-400" />
               <span className="text-xs text-gray-500 dark:text-zinc-400">CPU</span>
             </div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">{systemStatus?.cpu_usage.toFixed(1) || '--'}%</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">{(systemStatus?.cpu_usage ?? 0).toFixed(1)}%</div>
             {systemStatus?.cpu_temp && (
               <div className="text-xs text-orange-500 dark:text-orange-400 mt-1">{systemStatus.cpu_temp.toFixed(0)}°C</div>
             )}
@@ -266,16 +266,16 @@ export const Dashboard = () => {
                     key={`${proc.pid}-${i}`} 
                     className={cn(
                       "grid grid-cols-12 gap-2 text-xs px-2 py-1.5 rounded-lg",
-                      proc.cpu_usage > 50 ? "bg-red-50 dark:bg-red-500/10" : proc.cpu_usage > 20 ? "bg-orange-50 dark:bg-orange-500/10" : "bg-gray-50 dark:bg-white/5"
+                      (proc.cpu_usage ?? 0) > 50 ? "bg-red-50 dark:bg-red-500/10" : (proc.cpu_usage ?? 0) > 20 ? "bg-orange-50 dark:bg-orange-500/10" : "bg-gray-50 dark:bg-white/5"
                     )}
                   >
                     <div className="col-span-5 text-gray-900 dark:text-white truncate" title={proc.name}>{proc.name}</div>
                     <div className="col-span-2 text-right text-gray-500 dark:text-zinc-400">{proc.pid}</div>
                     <div className={cn(
                       "col-span-2 text-right font-medium",
-                      proc.cpu_usage > 50 ? "text-red-500 dark:text-red-400" : proc.cpu_usage > 20 ? "text-orange-500 dark:text-orange-400" : "text-gray-900 dark:text-white"
+                      (proc.cpu_usage ?? 0) > 50 ? "text-red-500 dark:text-red-400" : (proc.cpu_usage ?? 0) > 20 ? "text-orange-500 dark:text-orange-400" : "text-gray-900 dark:text-white"
                     )}>
-                      {proc.cpu_usage.toFixed(1)}%
+                      {(proc.cpu_usage ?? 0).toFixed(1)}%
                     </div>
                     <div className="col-span-3 text-right text-gray-600 dark:text-zinc-300">{formatBytes(proc.memory_bytes)}</div>
                   </div>
@@ -371,7 +371,7 @@ export const Dashboard = () => {
           <div>
             <div className="text-sm text-gray-500 dark:text-zinc-400">CPU Usage</div>
             <div className="text-3xl font-bold text-gray-900 dark:text-white">
-              {systemStatus ? `${systemStatus.cpu_usage.toFixed(1)}%` : '--'}
+              {systemStatus ? `${(systemStatus.cpu_usage ?? 0).toFixed(1)}%` : '--'}
             </div>
           </div>
         </div>

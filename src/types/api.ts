@@ -1,214 +1,35 @@
-// Generated from Rust models
+// API 型別的單一入口。
+//
+// 絕大多數型別**由 Rust 產生**（`pnpm export:types` → `packages/api-types/index.ts`），
+// 這裡只是轉出去，讓既有的 17 個 `from '@/types/api'` 匯入不必全部改寫。
+// 此前這個檔是 225 行手寫、靠人工與 Rust 同步 —— 換掉的理由見下面那段。
+export * from '@koimsurai/nas-api-types';
 
-// User Models
-export interface User {
-  id: number; // i64 in Rust, but JS number is safe up to 2^53
-  username: string;
-  created_at: string; // ISO 8601
+// ─────────────────────────────────────────────────────────────────────────────
+// 以下是**後端沒有對應型別**的殘留，逐一標明狀態。
+// 它們是人工同步時期留下的產物，每一個都代表一處前後端不一致，
+// 不要當成「還沒搬過來的型別」直接沿用。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * ⚠️ 與後端不符。Rust 的 `WsServerMessage::DockerStats` payload 欄位是
+ * `cpu_percent`（不是 `cpu_percentage`），而且還多了 network/block 四個欄位。
+ * 目前 socket-provider 比對的訊息 type 也對不上（見該檔註解），這條路徑實際上沒在運作。
+ * 修好協定之後應改用產生版的 `WsServerMessage`。
+ */
+export interface DockerStats {
+  container_id: string;
+  cpu_percentage: number;
+  memory_usage: number;
+  memory_limit: number;
 }
 
-export interface AuthResponse {
-  token: string;
-}
-
-/** /api/auth/login 回傳：要嘛已 set cookie、要嘛需要 2FA 驗證 */
-export type LoginResult =
-  | Record<string, never>                                 // {} = 已登入完成
-  | { requires_2fa: true; temp_token: string };
-
-export interface LoginRequest {
-  username: string;
-  password: string;
-  remember?: boolean;
-}
-
-export interface RegisterRequest {
-  username: string;
-  password: string;
-  invite_code: string;
-}
-
-// ─────────── 2FA / TOTP ───────────
-export interface TwoFactorLoginRequest {
-  temp_token: string;
-  /** 6 位 TOTP code 或 backup code（含 dash 例如 ABCDE-F2345） */
-  code: string;
-}
-
-export interface TwoFactorSetupResponse {
-  secret: string;
-  otpauth_uri: string;
-}
-
-export interface TwoFactorVerifySetupRequest {
-  code: string;
-}
-
-export interface TwoFactorVerifySetupResponse {
-  /** 8 個 backup codes，僅啟用時顯示一次，user 必須記下 */
-  backup_codes: string[];
-}
-
-export interface TwoFactorDisableRequest {
-  password: string;
-  code: string;
-}
-
-export interface TwoFactorStatusResponse {
-  enabled: boolean;
-  backup_codes_remaining: number;
-}
-
-// File Models
-export interface FileMetadata {
-  // Assuming structure based on usage, as it was imported in Rust
-  [key: string]: unknown;
-}
-
-export interface Tag {
-  name: string;
-  color: string | null;
-}
-
-export interface UserTag {
-  name: string;
-  color: string | null;
-  count: number;
-}
-
-export interface TaggedFile {
-  path: string;
-  name: string;
-  is_dir: boolean;
-  size: number;
-  modified: string;
-}
-
-export interface FileInfo {
-  name: string;
-  path: string; // Added path for convenience
-  original_path?: string; // Original path before deletion (only present for trash items)
-  is_dir: boolean;
-  size: number; // u64 in Rust
-  modified: string;
-  mime_type: string | null;
-  metadata: FileMetadata | null;
-  tags: Tag[];
-  is_starred: boolean;
-}
-
-export interface FileVersion {
-  id: string;
-  size: number;
-  modified: string;
-  path: string;
-}
-
-export interface BatchOperationRequest {
-  paths: string[];
-  destination?: string;
-}
-
-export interface TagRequest {
-  name: string;
-  color: string;
-}
-
-// Job Models
-export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
-
-export interface Job {
-  id: string;
-  job_type: string;
-  status: string; // Using string as it comes from DB, but logically JobStatus
-  progress: number;
-  created_at: string;
-  updated_at: string;
-  error: string | null;
-}
-
-export interface JobUpdate {
-  job_id: string;
-  status: JobStatus;
-  progress: number;
-  error: string | null;
-  type?: string;
-}
-
-// Upload Models
-export interface InitUploadRequest {
-  file_path: string;
-  file_name: string;
-  total_size: number;
-}
-
-export interface InitUploadResponse {
-  upload_id: string;
-  uploaded_size?: number;
-}
-
-export interface UploadSession {
-  id: string;
-  user_id: number;
-  file_path: string;
-  file_name: string;
-  total_size: number;
-  uploaded_size: number;
-  created_at: string;
-  updated_at: string;
-}
-
-// System/Docker Models (Inferred from prompt requirements as they weren't in the file list)
-export interface DiskInfo {
-  name: string;
-  mount_point: string;
-  total_space: number;
-  available_space: number;
-  disk_type: string;
-}
-
-export interface GpuInfo {
-  name: string;
-  memory_total: number;
-  memory_used: number;
-  memory_free: number;
-  utilization: number;
-  temperature: number;
-}
-
-export interface ProcessInfo {
-  pid: number;
-  name: string;
-  cpu_usage: number;
-  memory_bytes: number;
-  memory_percent: number;
-}
-
-export interface UpsInfo {
-  status: string;
-  online: boolean;
-  battery_charge?: number;
-  battery_runtime?: number;
-  ups_load?: number;
-  input_voltage?: number;
-  output_voltage?: number;
-  model?: string;
-  updated_at?: string;
-}
-
-export interface SystemStatus {
-  cpu_usage: number;
-  cpu_temp?: number;
-  total_memory: number;
-  used_memory: number;
-  total_swap: number;
-  used_swap: number;
-  disks: DiskInfo[];
-  gpu?: GpuInfo;
-  top_processes: ProcessInfo[];
-  ups?: UpsInfo;
-}
-
+/**
+ * ⚠️ 與後端不符。`GET /api/docker/containers` 回的是產生版的 `ContainerSummary`：
+ * `names: string[]`（複數、陣列）、`state`、`created`、`ports`，
+ * **沒有** `name`、`cpu_usage`、`memory_usage` 這三個欄位。
+ * 要改用 `ContainerSummary` 並調整取值處。
+ */
 export interface DockerContainer {
   id: string;
   name: string;
@@ -218,9 +39,25 @@ export interface DockerContainer {
   memory_usage: string;
 }
 
-export interface DockerStats {
-  container_id: string;
-  cpu_percentage: number;
-  memory_usage: number;
-  memory_limit: number;
+/**
+ * ⚠️ 與後端不符。Rust 的 `AddTagRequest` 欄位叫 `tag_name`，不是 `name`。
+ * 只有 `useFiles.ts` 的 `useAddTag` 在用（`use-tags.ts` 另有一份實作）。
+ */
+export interface TagRequest {
+  name: string;
+  color: string;
+}
+
+/**
+ * 產生版對應 `LoginResponse`（`EmptyResponse | { requires_2fa, temp_token }`）。
+ * 這份保留只是為了不動既有呼叫端；差別在 `requires_2fa` 產生版是 `boolean`、
+ * 這裡是字面量 `true`。新程式碼請用 `LoginResponse`。
+ */
+export type LoginResult =
+  | Record<string, never>
+  | { requires_2fa: true; temp_token: string };
+
+/** 後端沒有這個型別（認證走 cookie，不回 token body）。確認無人使用後即可刪。 */
+export interface AuthResponse {
+  token: string;
 }

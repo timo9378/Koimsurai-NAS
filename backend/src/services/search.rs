@@ -182,7 +182,7 @@ impl SearchService {
     }
 }
 
-#[derive(serde::Serialize, utoipa::ToSchema)]
+#[derive(serde::Serialize, utoipa::ToSchema, specta::Type)]
 pub struct SearchResult {
     pub path: String,
     pub name: String,
@@ -190,7 +190,7 @@ pub struct SearchResult {
 }
 
 /// AI 標籤搜尋結果
-#[derive(serde::Serialize, utoipa::ToSchema)]
+#[derive(serde::Serialize, utoipa::ToSchema, specta::Type)]
 pub struct AiTagSearchResult {
     pub path: String,
     pub name: String,

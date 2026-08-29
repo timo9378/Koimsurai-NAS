@@ -596,10 +596,10 @@ const AboutSection = () => {
 
       <div className="space-y-2">
         {[
-          { label: 'CPU 使用率', value: systemStatus ? `${Math.round(systemStatus.cpu_usage)}%` : '-' },
+          { label: 'CPU 使用率', value: systemStatus ? `${Math.round(systemStatus.cpu_usage ?? 0)}%` : '-' },
           { label: '記憶體', value: systemStatus ? `${(systemStatus.used_memory / (1024 * 1024 * 1024)).toFixed(1)} / ${(systemStatus.total_memory / (1024 * 1024 * 1024)).toFixed(1)} GB` : '-' },
           { label: 'Swap', value: systemStatus ? `${(systemStatus.used_swap / (1024 * 1024 * 1024)).toFixed(1)} / ${(systemStatus.total_swap / (1024 * 1024 * 1024)).toFixed(1)} GB` : '-' },
-          { label: 'GPU', value: systemStatus?.gpu ? `${systemStatus.gpu.name} (${Math.round(systemStatus.gpu.utilization)}%)` : '無 GPU 資訊' },
+          { label: 'GPU', value: systemStatus?.gpu ? `${systemStatus.gpu.name} (${Math.round(systemStatus.gpu.utilization ?? 0)}%)` : '無 GPU 資訊' },
           { label: '磁碟數量', value: systemStatus ? `${systemStatus.disks.length} 個磁碟` : '-' },
         ].map((item) => (
           <div key={item.label} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-white/5 last:border-0">

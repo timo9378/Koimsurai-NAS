@@ -70,10 +70,12 @@ pub async fn list_versions(file_path: &Path, storage_root: &Path) -> Result<Vec<
     Ok(versions)
 }
 
-#[derive(serde::Serialize, utoipa::ToSchema)]
+#[derive(serde::Serialize, utoipa::ToSchema, specta::Type)]
 pub struct FileVersion {
     pub version_id: String,
+    #[specta(type = specta_typescript::Number)]
     pub timestamp: i64,
+    #[specta(type = specta_typescript::Number)]
     pub size: u64,
 }
 

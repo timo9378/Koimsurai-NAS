@@ -146,7 +146,7 @@ pub struct TimelineQuery {
     pub group_by: Option<String>, // day, month, year
 }
 
-#[derive(serde::Serialize, utoipa::ToSchema)]
+#[derive(serde::Serialize, utoipa::ToSchema, specta::Type)]
 pub struct TimelineGroup {
     pub date: String,
     pub files: Vec<crate::models::FileInfo>,
@@ -257,7 +257,7 @@ pub async fn get_timeline(
 const HLS_CACHE_DIR: &str = ".hls_cache";
 
 /// HLS 狀態響應
-#[derive(Serialize, utoipa::ToSchema)]
+#[derive(Serialize, utoipa::ToSchema, specta::Type)]
 pub struct HlsStatusResponse {
     pub status: String,          // "ready", "processing", "not_found"
     pub qualities: Vec<String>,  // 可用的品質列表

@@ -5,13 +5,17 @@ use serde::{Deserialize, Serialize};
 use std::process::Command;
 use sysinfo::{Components, Disks, ProcessesToUpdate, System, MINIMUM_CPU_UPDATE_INTERVAL};
 
-#[derive(Serialize, utoipa::ToSchema)]
+#[derive(Serialize, utoipa::ToSchema, specta::Type)]
 pub struct SystemStatus {
     cpu_usage: f32,
     cpu_temp: Option<f32>,
+    #[specta(type = specta_typescript::Number)]
     total_memory: u64,
+    #[specta(type = specta_typescript::Number)]
     used_memory: u64,
+    #[specta(type = specta_typescript::Number)]
     total_swap: u64,
+    #[specta(type = specta_typescript::Number)]
     used_swap: u64,
     disks: Vec<DiskInfo>,
     gpu: Option<GpuInfo>,
@@ -19,29 +23,35 @@ pub struct SystemStatus {
     ups: Option<UpsInfo>,
 }
 
-#[derive(Serialize, utoipa::ToSchema)]
+#[derive(Serialize, utoipa::ToSchema, specta::Type)]
 pub struct ProcessInfo {
     pid: u32,
     name: String,
     cpu_usage: f32,
+    #[specta(type = specta_typescript::Number)]
     memory_bytes: u64,
     memory_percent: f32,
 }
 
-#[derive(Serialize, utoipa::ToSchema)]
+#[derive(Serialize, utoipa::ToSchema, specta::Type)]
 pub struct DiskInfo {
     name: String,
     mount_point: String,
+    #[specta(type = specta_typescript::Number)]
     total_space: u64,
+    #[specta(type = specta_typescript::Number)]
     available_space: u64,
     disk_type: String,
 }
 
-#[derive(Serialize, Clone, utoipa::ToSchema)]
+#[derive(Serialize, Clone, utoipa::ToSchema, specta::Type)]
 pub struct GpuInfo {
     name: String,
+    #[specta(type = specta_typescript::Number)]
     memory_total: u64,
+    #[specta(type = specta_typescript::Number)]
     memory_used: u64,
+    #[specta(type = specta_typescript::Number)]
     memory_free: u64,
     utilization: f32,
     temperature: u32,
@@ -78,7 +88,7 @@ fn get_gpu_info() -> Option<GpuInfo> {
     }
 }
 
-#[derive(Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 pub struct UpsInfo {
     /// NUT ups.status，例如 "OL"（吃市電）/ "OB"（吃電池）/ "OL CHRG"
     status: String,
@@ -87,6 +97,7 @@ pub struct UpsInfo {
     /// 電池電量 %
     battery_charge: Option<f32>,
     /// 剩餘可用秒數
+    #[specta(type = Option<specta_typescript::Number>)]
     battery_runtime: Option<u64>,
     /// UPS 負載 %
     ups_load: Option<f32>,
@@ -304,9 +315,11 @@ pub async fn get_system_status() -> Json<SystemStatus> {
 }
 
 /// 一致性檢查結果
-#[derive(Serialize, utoipa::ToSchema)]
+#[derive(Serialize, utoipa::ToSchema, specta::Type)]
 pub struct ConsistencyCheckResult {
+    #[specta(type = specta_typescript::Number)]
     pub total_db_entries: usize,
+    #[specta(type = specta_typescript::Number)]
     pub removed_orphans: usize,
     pub message: String,
 }
@@ -342,7 +355,7 @@ pub async fn verify_consistency(State(state): State<AppState>) -> Json<Consisten
 }
 
 /// 重新掃描結果
-#[derive(Serialize, utoipa::ToSchema)]
+#[derive(Serialize, utoipa::ToSchema, specta::Type)]
 pub struct RescanResult {
     pub success: bool,
     pub message: String,

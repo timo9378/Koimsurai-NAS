@@ -18,7 +18,7 @@ use tower::util::ServiceExt; // for oneshot
 use std::path::{Path, Component};
 use utoipa::ToSchema;
 
-#[derive(Deserialize, ToSchema)]
+#[derive(Deserialize, ToSchema, specta::Type)]
 pub struct CreateFolderRequest {
     /// 父目錄路徑，例如 "Documents"。空字串表示根目錄
     /// Parent directory path, e.g. "Documents". Empty string means root.
@@ -851,7 +851,7 @@ pub async fn delete_file(
     Ok(StatusCode::OK)
 }
 
-#[derive(Deserialize, ToSchema)]
+#[derive(Deserialize, ToSchema, specta::Type)]
 pub struct BatchOperationRequest {
     pub paths: Vec<String>,
     pub destination: Option<String>, // For move/copy
@@ -947,11 +947,12 @@ pub async fn batch_copy(
 
 /// 我的最愛檔案資訊（包含 starred_at 時間戳）
 /// Favorite file info with starred_at timestamp
-#[derive(serde::Serialize, ToSchema)]
+#[derive(serde::Serialize, ToSchema, specta::Type)]
 pub struct FavoriteFileInfo {
     pub name: String,
     pub path: String,
     pub is_dir: bool,
+    #[specta(type = specta_typescript::Number)]
     pub size: u64,
     pub modified: String,
     pub mime_type: Option<String>,

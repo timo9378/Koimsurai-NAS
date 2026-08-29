@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::state::AppState;
 
 /// WebSocket 客戶端發送的訊息類型
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema, specta::Type)]
 #[serde(tag = "type", content = "payload")]
 pub enum WsClientMessage {
     /// 訂閱 Docker 容器統計
@@ -19,20 +19,27 @@ pub enum WsClientMessage {
 }
 
 /// WebSocket 伺服器發送的訊息類型
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema, specta::Type)]
 #[serde(tag = "type", content = "payload")]
 pub enum WsServerMessage {
     /// Docker 容器統計數據
     DockerStats {
         container_id: String,
         cpu_percent: f64,
+        #[specta(type = specta_typescript::Number)]
         memory_usage: u64,
+        #[specta(type = specta_typescript::Number)]
         memory_limit: u64,
         memory_percent: f64,
+        #[specta(type = specta_typescript::Number)]
         network_rx: u64,
+        #[specta(type = specta_typescript::Number)]
         network_tx: u64,
+        #[specta(type = specta_typescript::Number)]
         block_read: u64,
+        #[specta(type = specta_typescript::Number)]
         block_write: u64,
+        #[specta(type = specta_typescript::Number)]
         timestamp: i64,
     },
     /// Docker 統計錯誤

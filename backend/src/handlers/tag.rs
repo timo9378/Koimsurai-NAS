@@ -9,25 +9,29 @@ use crate::error::AppError;
 use crate::models::Tag;
 use utoipa::ToSchema;
 
-#[derive(Deserialize, ToSchema)]
+#[derive(Deserialize, ToSchema, specta::Type)]
 pub struct AddTagRequest {
     pub tag_name: String,
     pub color: Option<String>,
 }
 
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, ToSchema, specta::Type)]
 pub struct UserTag {
     pub name: String,
     pub color: Option<String>,
+    #[specta(type = specta_typescript::Number)]
     pub count: i64,
 }
 
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, ToSchema, specta::Type)]
 pub struct TaggedFile {
     pub path: String,
     pub name: String,
-    pub is_dir: bool,    pub size: u64,
-    pub modified: String,}
+    pub is_dir: bool,
+    #[specta(type = specta_typescript::Number)]
+    pub size: u64,
+    pub modified: String,
+}
 
 #[utoipa::path(
     post,

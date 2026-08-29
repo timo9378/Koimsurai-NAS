@@ -79,11 +79,11 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
               // Show toast notification for completed/failed jobs
               if (jobUpdate.status === 'completed') {
-                toast.success(`Task Completed: ${jobUpdate.type || 'Operation'}`, {
+                toast.success(`Task Completed: ${jobUpdate.job_id}`, {
                   description: 'The background task has finished successfully.'
                 });
               } else if (jobUpdate.status === 'failed') {
-                toast.error(`Task Failed: ${jobUpdate.type || 'Operation'}`, {
+                toast.error(`Task Failed: ${jobUpdate.job_id}`, {
                   description: jobUpdate.error || 'An error occurred during the operation.'
                 });
               }

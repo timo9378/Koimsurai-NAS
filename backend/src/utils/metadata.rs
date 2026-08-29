@@ -6,7 +6,7 @@ use utoipa::ToSchema;
 use exif;
 use id3::TagLike;
 
-#[derive(Debug, Serialize, ToSchema, Default)]
+#[derive(Debug, Serialize, ToSchema, Default, specta::Type)]
 pub struct ImageMetadata {
     pub width: Option<u32>,
     pub height: Option<u32>,
@@ -14,7 +14,7 @@ pub struct ImageMetadata {
     pub date_time: Option<String>,
 }
 
-#[derive(Debug, Serialize, ToSchema, Default)]
+#[derive(Debug, Serialize, ToSchema, Default, specta::Type)]
 pub struct AudioMetadata {
     pub title: Option<String>,
     pub artist: Option<String>,
@@ -22,14 +22,14 @@ pub struct AudioMetadata {
     pub duration_seconds: Option<u32>,
 }
 
-#[derive(Debug, Serialize, ToSchema, Default)]
+#[derive(Debug, Serialize, ToSchema, Default, specta::Type)]
 pub struct VideoMetadata {
     pub width: Option<u32>,
     pub height: Option<u32>,
     pub duration_seconds: Option<f64>,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, ToSchema, specta::Type)]
 pub enum FileMetadata {
     Image(ImageMetadata),
     Audio(AudioMetadata),

@@ -118,7 +118,9 @@ export const useFileUpload = () => {
             total_size: file.size
           });
 
-          if (initResult.uploaded_size !== undefined) {
+          // ⚠️ Rust 的 Option<i64> 會序列化成 null（不是省略欄位），
+          // 用 `!== undefined` 判斷永遠成立，startOffset 會被設成 null。
+          if (initResult.uploaded_size != null) {
             console.log(`Resuming upload for ${file.name} from ${initResult.uploaded_size}`);
             upload_id = initResult.upload_id;
             startOffset = initResult.uploaded_size;

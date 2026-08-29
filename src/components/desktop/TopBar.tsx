@@ -629,7 +629,7 @@ export const TopBar = () => {
           <div className="hidden lg:flex items-center gap-3 px-3 py-0.5 mr-2 text-xs text-white/70 border-r border-white/10">
             <div className="flex items-center gap-1" title="CPU Usage">
               <Cpu className="w-3 h-3" />
-              <span>{Math.round(systemStatus.cpu_usage)}%</span>
+              <span>{Math.round(systemStatus.cpu_usage ?? 0)}%</span>
             </div>
             <div className="flex items-center gap-1" title="RAM Usage">
               <Activity className="w-3 h-3" />

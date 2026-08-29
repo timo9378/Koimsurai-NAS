@@ -29,9 +29,10 @@ pub struct ListContainersQuery {
 }
 
 /// 停止/重啟容器的請求體
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, ToSchema, specta::Type)]
 pub struct StopContainerRequest {
     /// 超時秒數（預設 10 秒）
+    #[specta(type = Option<specta_typescript::Number>)]
     pub timeout: Option<i64>,
 }
 
@@ -53,7 +54,7 @@ pub struct LogsQuery {
 }
 
 /// 拉取鏡像請求
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, ToSchema, specta::Type)]
 pub struct PullImageRequest {
     pub image: String,
     #[serde(default = "default_tag")]

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use sqlx::FromRow;
 
-#[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Clone, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum JobStatus {
     Pending,
@@ -34,7 +34,7 @@ impl From<String> for JobStatus {
     }
 }
 
-#[derive(Debug, Serialize, FromRow, ToSchema)]
+#[derive(Debug, Serialize, FromRow, ToSchema, specta::Type)]
 pub struct Job {
     pub id: String,
     pub job_type: String,
@@ -45,7 +45,7 @@ pub struct Job {
     pub error: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 pub struct JobUpdate {
     pub job_id: String,
     pub status: JobStatus,

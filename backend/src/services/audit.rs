@@ -36,9 +36,11 @@ impl AuditService {
     }
 }
 
-#[derive(Debug, Serialize, sqlx::FromRow, ToSchema)]
+#[derive(Debug, Serialize, sqlx::FromRow, ToSchema, specta::Type)]
 pub struct AuditLog {
+    #[specta(type = specta_typescript::Number)]
     pub id: i64,
+    #[specta(type = specta_typescript::Number)]
     pub user_id: i64,
     pub action: String,
     pub target: String,
