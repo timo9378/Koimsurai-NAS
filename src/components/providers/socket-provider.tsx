@@ -3,12 +3,12 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { DockerStats, JobUpdate, Job } from '@/types/api';
+import type { Job, WsServerMessage } from '@/types/api';
 
-type WebSocketMessage =
-  | { type: 'docker_stats'; data: DockerStats }
-  | { type: 'job_update'; data: JobUpdate }
-  | { type: 'file_change'; data: { path: string; action: 'created' | 'deleted' | 'modified' | 'renamed' } };
+// 協定型別由 Rust 產生（`pnpm export:types`）。這裡刻意不再手刻一份 —— 先前那份
+// 手寫的 WebSocketMessage 比對的是 'docker_stats' / 'job_update' / 'file_change'，
+// 而後端當時送的是 PascalCase 的 { type: "DockerStats", payload }，三個分支
+// 全部永遠不會命中。現在兩邊共用同一個定義，對不上就編不過。
 
 interface SocketContextType {
   socket: WebSocket | null;
@@ -56,44 +56,51 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
       ws.onmessage = (event) => {
         try {
-          const message: WebSocketMessage = JSON.parse(event.data);
-          
-          switch (message.type) {
-            case 'docker_stats':
-              queryClient.setQueryData(['docker', 'stats', message.data.container_id], message.data);
-              break;
-            case 'job_update':
-              const jobUpdate = message.data;
-              
-              // Update job list or specific job status
-              queryClient.setQueryData(['jobs', jobUpdate.job_id], (old: Job | undefined) => {
-                if (!old) return undefined;
-                return {
-                  ...old,
-                  ...jobUpdate
-                };
-              });
-              
-              // Invalidate list to refresh status
-              queryClient.invalidateQueries({ queryKey: ['jobs'] });
+          const message: WsServerMessage = JSON.parse(event.data);
 
-              // Show toast notification for completed/failed jobs
+          switch (message.type) {
+            case 'job_update': {
+              const jobUpdate = message.payload;
+
+              queryClient.setQueryData(['jobs', jobUpdate.job_id], (old: Job | undefined) =>
+                old ? { ...old, ...jobUpdate } : undefined,
+              );
+              void queryClient.invalidateQueries({ queryKey: ['jobs'] });
+
               if (jobUpdate.status === 'completed') {
-                toast.success(`Task Completed: ${jobUpdate.job_id}`, {
-                  description: 'The background task has finished successfully.'
+                toast.success(`工作完成：${jobUpdate.job_id}`, {
+                  description: '背景工作已順利結束。',
                 });
               } else if (jobUpdate.status === 'failed') {
-                toast.error(`Task Failed: ${jobUpdate.job_id}`, {
-                  description: jobUpdate.error || 'An error occurred during the operation.'
+                toast.error(`工作失敗：${jobUpdate.job_id}`, {
+                  description: jobUpdate.error ?? '執行過程中發生錯誤。',
                 });
               }
               break;
-            case 'file_change':
-              // Invalidate all file queries to refresh the file list
-              console.log('File change detected:', message.data);
-              queryClient.invalidateQueries({ queryKey: ['files'] });
-              queryClient.invalidateQueries({ queryKey: ['favorites'] });
+            }
+            case 'docker_stats':
+              queryClient.setQueryData(
+                ['docker', 'stats', message.payload.container_id],
+                message.payload,
+              );
               break;
+            case 'docker_stats_error':
+              console.error(
+                `Docker 統計失敗 (${message.payload.container_id}):`,
+                message.payload.error,
+              );
+              break;
+            case 'error':
+              console.error('WebSocket 伺服器回報錯誤:', message.payload.message);
+              break;
+            case 'pong':
+              break;
+            default: {
+              // 窮盡檢查：Rust 端加了新的 WsServerMessage variant 而這裡沒接，
+              // 這行會編譯失敗 —— 而不是安靜地被 switch 漏掉。
+              const unhandled: never = message;
+              console.warn('未處理的 WebSocket 訊息', unhandled);
+            }
           }
         } catch (error) {
           console.error('Failed to parse WebSocket message', error);

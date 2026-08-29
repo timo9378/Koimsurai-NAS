@@ -495,23 +495,36 @@ export type VideoMetadata = {
 	duration_seconds: number | null,
 };
 
-/**  WebSocket 客戶端發送的訊息類型 */
+/**
+ *  WebSocket 客戶端發送的訊息類型
+ * 
+ *  `rename_all = "snake_case"`：與 JSON 面上其餘部分（欄位名、`JobStatus`）一致。
+ */
 export type WsClientMessage = 
 /**  訂閱 Docker 容器統計 */
-{ type: "SubscribeDockerStats"; payload: {
+{ type: "subscribe_docker_stats"; payload: {
 	container_id: string,
 } } | 
 /**  取消訂閱 Docker 容器統計 */
-{ type: "UnsubscribeDockerStats"; payload: {
+{ type: "unsubscribe_docker_stats"; payload: {
 	container_id: string,
 } } | 
 /**  Ping (保持連線) */
-{ type: "Ping" };
+{ type: "ping" };
 
-/**  WebSocket 伺服器發送的訊息類型 */
+/**
+ *  WebSocket 伺服器發送的訊息類型。
+ * 
+ *  ⚠️ **這是伺服器送出的唯一信封** —— 每一則訊息都必須是本 enum 的某個 variant。
+ *  先前 `JobUpdate` 是直接把裸物件序列化丟上同一條 socket（沒有 `type` 欄位），
+ *  於是前端的 `switch (msg.type)` 拿到 `undefined`，背景工作的進度與完成通知
+ *  從來沒有送達過。要加新的推播就在這裡加 variant，不要另闢管道。
+ */
 export type WsServerMessage = 
+/**  背景工作進度更新（來源是 `utils::queue` 的 broadcast） */
+{ type: "job_update"; payload: JobUpdate } | 
 /**  Docker 容器統計數據 */
-{ type: "DockerStats"; payload: {
+{ type: "docker_stats"; payload: {
 	container_id: string,
 	cpu_percent: number | null,
 	memory_usage: number,
@@ -524,13 +537,13 @@ export type WsServerMessage =
 	timestamp: number,
 } } | 
 /**  Docker 統計錯誤 */
-{ type: "DockerStatsError"; payload: {
+{ type: "docker_stats_error"; payload: {
 	container_id: string,
 	error: string,
 } } | 
 /**  Pong 回應 */
-{ type: "Pong" } | 
+{ type: "pong" } | 
 /**  錯誤訊息 */
-{ type: "Error"; payload: {
+{ type: "error"; payload: {
 	message: string,
 } };

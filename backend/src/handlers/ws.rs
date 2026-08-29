@@ -4,11 +4,14 @@ use axum::{
 };
 use futures::{sink::SinkExt, stream::StreamExt};
 use serde::{Deserialize, Serialize};
+use crate::models::JobUpdate;
 use crate::state::AppState;
 
 /// WebSocket 客戶端發送的訊息類型
+///
+/// `rename_all = "snake_case"`：與 JSON 面上其餘部分（欄位名、`JobStatus`）一致。
 #[derive(Debug, Deserialize, utoipa::ToSchema, specta::Type)]
-#[serde(tag = "type", content = "payload")]
+#[serde(tag = "type", content = "payload", rename_all = "snake_case")]
 pub enum WsClientMessage {
     /// 訂閱 Docker 容器統計
     SubscribeDockerStats { container_id: String },
@@ -18,10 +21,17 @@ pub enum WsClientMessage {
     Ping,
 }
 
-/// WebSocket 伺服器發送的訊息類型
+/// WebSocket 伺服器發送的訊息類型。
+///
+/// ⚠️ **這是伺服器送出的唯一信封** —— 每一則訊息都必須是本 enum 的某個 variant。
+/// 先前 `JobUpdate` 是直接把裸物件序列化丟上同一條 socket（沒有 `type` 欄位），
+/// 於是前端的 `switch (msg.type)` 拿到 `undefined`，背景工作的進度與完成通知
+/// 從來沒有送達過。要加新的推播就在這裡加 variant，不要另闢管道。
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema, specta::Type)]
-#[serde(tag = "type", content = "payload")]
+#[serde(tag = "type", content = "payload", rename_all = "snake_case")]
 pub enum WsServerMessage {
+    /// 背景工作進度更新（來源是 `utils::queue` 的 broadcast）
+    JobUpdate(JobUpdate),
     /// Docker 容器統計數據
     DockerStats {
         container_id: String,
@@ -81,10 +91,11 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     let mut send_task = tokio::spawn(async move {
         loop {
             tokio::select! {
-                // 處理 Job 更新廣播
+                // 處理 Job 更新廣播（包進統一信封後才送，見 WsServerMessage 的說明）
                 result = rx.recv() => {
                     match result {
-                        Ok(msg) => {
+                        Ok(job) => {
+                            let msg = WsServerMessage::JobUpdate(job);
                             if let Ok(json) = serde_json::to_string(&msg) {
                                 if sender.send(Message::Text(json)).await.is_err() {
                                     break;
