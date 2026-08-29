@@ -38,7 +38,7 @@ pub async fn spawn_app() -> TestApp {
     // 綁定到隨機埠口
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("Failed to bind random port");
     let port = listener.local_addr().unwrap().port();
-    let address = format!("http://127.0.0.1:{}", port);
+    let address = format!("http://127.0.0.1:{port}");
 
     tokio::spawn(async move {
         axum::serve(listener, app).await.unwrap();

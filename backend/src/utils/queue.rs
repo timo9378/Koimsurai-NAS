@@ -17,7 +17,7 @@ pub enum JobType {
         output_path: PathBuf,
     },
     /// 生成影片 Proxy (低碼率預覽版)
-    /// 適用於 GoPro 等高碼率影片的瀏覽器預覽
+    /// 適用於 `GoPro` 等高碼率影片的瀏覽器預覽
     GenerateVideoProxy {
         input_path: PathBuf,
         output_path: PathBuf,
@@ -46,13 +46,13 @@ pub enum JobType {
 impl ToString for JobType {
     fn to_string(&self) -> String {
         match self {
-            JobType::Transcode { .. } => "transcode".to_string(),
-            JobType::GenerateThumbnail { .. } => "generate_thumbnail".to_string(),
-            JobType::GenerateVideoProxy { .. } => "generate_video_proxy".to_string(),
-            JobType::GenerateHls { .. } => "generate_hls".to_string(),
-            JobType::CopyFiles { .. } => "copy_files".to_string(),
-            JobType::IndexFile { .. } => "index_file".to_string(),
-            JobType::AiAnalyzeImage { .. } => "ai_analyze_image".to_string(),
+            Self::Transcode { .. } => "transcode".to_string(),
+            Self::GenerateThumbnail { .. } => "generate_thumbnail".to_string(),
+            Self::GenerateVideoProxy { .. } => "generate_video_proxy".to_string(),
+            Self::GenerateHls { .. } => "generate_hls".to_string(),
+            Self::CopyFiles { .. } => "copy_files".to_string(),
+            Self::IndexFile { .. } => "index_file".to_string(),
+            Self::AiAnalyzeImage { .. } => "ai_analyze_image".to_string(),
         }
     }
 }
@@ -141,8 +141,8 @@ pub async fn worker(
 
                 match status {
                     Ok(s) if s.success() => Ok(()),
-                    Ok(s) => Err(format!("Transcoding failed with status: {}", s)),
-                    Err(e) => Err(format!("Failed to execute ffmpeg: {}", e)),
+                    Ok(s) => Err(format!("Transcoding failed with status: {s}")),
+                    Err(e) => Err(format!("Failed to execute ffmpeg: {e}")),
                 }
             }
             JobType::GenerateThumbnail { input_path, output_path: _ } => {
@@ -182,90 +182,84 @@ pub async fn worker(
                         info!("Proxy generated successfully: {:?}", output_path);
                         Ok(())
                     },
-                    Ok(s) => Err(format!("Proxy generation failed with status: {}", s)),
-                    Err(e) => Err(format!("Failed to execute ffmpeg for proxy: {}", e)),
+                    Ok(s) => Err(format!("Proxy generation failed with status: {s}")),
+                    Err(e) => Err(format!("Failed to execute ffmpeg for proxy: {e}")),
                 }
             }
             JobType::GenerateHls { input_path, output_dir, quality } => {
                 use crate::utils::ffmpeg::{FfmpegCommand, HlsQuality};
                 
                 // 確保輸出目錄存在
-                match tokio::fs::create_dir_all(&output_dir).await {
-                    Err(e) => {
-                        error!("Failed to create HLS output directory: {}", e);
-                        Err(format!("Failed to create HLS output directory: {}", e))
-                    }
-                    Ok(_) => {
-                        let ffmpeg = FfmpegCommand::new(&input_path.to_string_lossy());
+                if let Err(e) = tokio::fs::create_dir_all(&output_dir).await {
+                    error!("Failed to create HLS output directory: {}", e);
+                    Err(format!("Failed to create HLS output directory: {e}"))
+                } else {
+                    let ffmpeg = FfmpegCommand::new(&input_path.to_string_lossy());
+                    
+                    if quality == "all" {
+                        // 生成所有品質 + master playlist
+                        let qualities = HlsQuality::all_presets();
+                        let mut success = true;
+                        let mut error_msg = String::new();
                         
-                        if quality == "all" {
-                            // 生成所有品質 + master playlist
-                            let qualities = HlsQuality::all_presets();
-                            let mut success = true;
-                            let mut error_msg = String::new();
-                            
-                            for q in &qualities {
-                                let quality_dir = output_dir.join(&q.name);
-                                if let Err(e) = tokio::fs::create_dir_all(&quality_dir).await {
-                                    error!("Failed to create quality dir {:?}: {}", quality_dir, e);
-                                    continue;
-                                }
-                                
-                                let ffmpeg = FfmpegCommand::new(&input_path.to_string_lossy());
-                                let mut cmd = ffmpeg.generate_hls(&quality_dir.to_string_lossy(), q);
-                                
-                                info!("Generating HLS {}: {:?}", q.name, input_path);
-                                
-                                match cmd.status() {
-                                    Ok(s) if s.success() => {
-                                        info!("HLS {} generated successfully", q.name);
-                                    }
-                                    Ok(s) => {
-                                        error!("HLS {} generation failed: {}", q.name, s);
-                                        success = false;
-                                        error_msg = format!("HLS {} failed with status: {}", q.name, s);
-                                    }
-                                    Err(e) => {
-                                        error!("Failed to execute ffmpeg for HLS {}: {}", q.name, e);
-                                        success = false;
-                                        error_msg = format!("FFmpeg error for {}: {}", q.name, e);
-                                    }
-                                }
+                        for q in &qualities {
+                            let quality_dir = output_dir.join(&q.name);
+                            if let Err(e) = tokio::fs::create_dir_all(&quality_dir).await {
+                                error!("Failed to create quality dir {:?}: {}", quality_dir, e);
+                                continue;
                             }
                             
-                            // 生成 master playlist
-                            if success {
-                                if let Err(e) = FfmpegCommand::generate_master_playlist(&output_dir.to_string_lossy(), &qualities) {
-                                    Err(format!("Failed to create master playlist: {}", e))
-                                } else {
-                                    info!("Master playlist created at {:?}", output_dir);
-                                    Ok(())
+                            let ffmpeg = FfmpegCommand::new(&input_path.to_string_lossy());
+                            let mut cmd = ffmpeg.generate_hls(&quality_dir.to_string_lossy(), q);
+                            
+                            info!("Generating HLS {}: {:?}", q.name, input_path);
+                            
+                            match cmd.status() {
+                                Ok(s) if s.success() => {
+                                    info!("HLS {} generated successfully", q.name);
                                 }
+                                Ok(s) => {
+                                    error!("HLS {} generation failed: {}", q.name, s);
+                                    success = false;
+                                    error_msg = format!("HLS {} failed with status: {}", q.name, s);
+                                }
+                                Err(e) => {
+                                    error!("Failed to execute ffmpeg for HLS {}: {}", q.name, e);
+                                    success = false;
+                                    error_msg = format!("FFmpeg error for {}: {}", q.name, e);
+                                }
+                            }
+                        }
+                        
+                        // 生成 master playlist
+                        if success {
+                            if let Err(e) = FfmpegCommand::generate_master_playlist(&output_dir.to_string_lossy(), &qualities) {
+                                Err(format!("Failed to create master playlist: {e}"))
                             } else {
-                                Err(error_msg)
+                                info!("Master playlist created at {:?}", output_dir);
+                                Ok(())
                             }
                         } else {
-                            // 生成單一品質
-                            let hls_quality = HlsQuality::from_name(&quality)
-                                .unwrap_or_else(HlsQuality::preset_720p);
+                            Err(error_msg)
+                        }
+                    } else {
+                        // 生成單一品質
+                        let hls_quality = HlsQuality::from_name(&quality)
+                            .unwrap_or_else(HlsQuality::preset_720p);
+                        
+                        let quality_dir = output_dir.join(&hls_quality.name);
+                        if let Err(e) = tokio::fs::create_dir_all(&quality_dir).await { Err(format!("Failed to create quality dir: {e}")) } else {
+                            let mut cmd = ffmpeg.generate_hls(&quality_dir.to_string_lossy(), &hls_quality);
                             
-                            let quality_dir = output_dir.join(&hls_quality.name);
-                            match tokio::fs::create_dir_all(&quality_dir).await {
-                                Err(e) => Err(format!("Failed to create quality dir: {}", e)),
-                                Ok(_) => {
-                                    let mut cmd = ffmpeg.generate_hls(&quality_dir.to_string_lossy(), &hls_quality);
-                                    
-                                    info!("Generating HLS {}: {:?}", quality, input_path);
-                                    
-                                    match cmd.status() {
-                                        Ok(s) if s.success() => {
-                                            info!("HLS generated successfully: {:?}", output_dir);
-                                            Ok(())
-                                        }
-                                        Ok(s) => Err(format!("HLS generation failed with status: {}", s)),
-                                        Err(e) => Err(format!("Failed to execute ffmpeg for HLS: {}", e)),
-                                    }
+                            info!("Generating HLS {}: {:?}", quality, input_path);
+                            
+                            match cmd.status() {
+                                Ok(s) if s.success() => {
+                                    info!("HLS generated successfully: {:?}", output_dir);
+                                    Ok(())
                                 }
+                                Ok(s) => Err(format!("HLS generation failed with status: {s}")),
+                                Err(e) => Err(format!("Failed to execute ffmpeg for HLS: {e}")),
                             }
                         }
                     }
@@ -296,12 +290,10 @@ pub async fn worker(
                              success = false;
                              error_msg = e.to_string();
                         }
-                    } else {
-                        if let Err(e) = tokio::fs::copy(&src_path, &target_path).await {
-                            error!("Failed to copy file {:?} to {:?}: {}", src_path, target_path, e);
-                            success = false;
-                            error_msg = e.to_string();
-                        }
+                    } else if let Err(e) = tokio::fs::copy(&src_path, &target_path).await {
+                        error!("Failed to copy file {:?} to {:?}: {}", src_path, target_path, e);
+                        success = false;
+                        error_msg = e.to_string();
                     }
                 }
                 
@@ -323,7 +315,7 @@ pub async fn worker(
                     let name = full_path.file_name().unwrap_or_default().to_string_lossy().to_string();
                     
                     if let Err(e) = search_service.index_file(&path, &name, &content) {
-                        Err(format!("Failed to index file: {:?}", e))
+                        Err(format!("Failed to index file: {e:?}"))
                     } else {
                         Ok(())
                     }
@@ -333,33 +325,30 @@ pub async fn worker(
             }
             JobType::AiAnalyzeImage { image_path } => {
                 // AI 圖片分析任務
-                match &ai_service {
-                    Some(ai) => {
-                        info!("AI analyzing image: {}", image_path);
-                        match ai.analyze_and_save(&image_path).await {
-                            Ok(result) => {
-                                info!("AI analysis completed for {}: {} tags detected", 
-                                      image_path, result.tags.len());
-                                Ok(())
-                            }
-                            Err(e) => {
-                                error!("AI analysis failed for {}: {}", image_path, e);
-                                Err(format!("AI analysis failed: {}", e))
-                            }
+                if let Some(ai) = &ai_service {
+                    info!("AI analyzing image: {}", image_path);
+                    match ai.analyze_and_save(&image_path).await {
+                        Ok(result) => {
+                            info!("AI analysis completed for {}: {} tags detected", 
+                                  image_path, result.tags.len());
+                            Ok(())
+                        }
+                        Err(e) => {
+                            error!("AI analysis failed for {}: {}", image_path, e);
+                            Err(format!("AI analysis failed: {e}"))
                         }
                     }
-                    None => {
-                        // AI 服務未啟用，跳過此任務
-                        warn!("AI service not enabled, skipping AI analysis job for: {}", image_path);
-                        Ok(()) // 返回 Ok 避免任務被標記為失敗
-                    }
+                } else {
+                    // AI 服務未啟用，跳過此任務
+                    warn!("AI service not enabled, skipping AI analysis job for: {}", image_path);
+                    Ok(()) // 返回 Ok 避免任務被標記為失敗
                 }
             }
         };
 
         // Update final status
         match result {
-            Ok(_) => {
+            Ok(()) => {
                 let _ = sqlx::query("UPDATE jobs SET status = ?, progress = 100, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
                     .bind(JobStatus::Completed.to_string())
                     .bind(&job.id)

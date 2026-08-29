@@ -39,13 +39,13 @@ impl From<tower_sessions::session::Error> for AppError {
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
-            AppError::AuthError(msg) => (StatusCode::UNAUTHORIZED, msg),
-            AppError::DatabaseError(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-            AppError::Anyhow(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-            AppError::Status(s) => (s, s.to_string()),
-            AppError::IoError(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
-            AppError::Custom(s, msg) => (s, msg),
-            AppError::InternalServerError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
+            Self::AuthError(msg) => (StatusCode::UNAUTHORIZED, msg),
+            Self::DatabaseError(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+            Self::Anyhow(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+            Self::Status(s) => (s, s.to_string()),
+            Self::IoError(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+            Self::Custom(s, msg) => (s, msg),
+            Self::InternalServerError(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
         };
 
         let body = Json(json!({

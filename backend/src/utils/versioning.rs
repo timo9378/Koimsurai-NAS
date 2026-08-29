@@ -24,7 +24,7 @@ pub async fn create_version(file_path: &Path, storage_root: &Path) -> Result<(),
 
     let file_name = file_path.file_name().ok_or(AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?.to_string_lossy();
     let timestamp = Utc::now().timestamp();
-    let version_name = format!("{}_{}", timestamp, file_name);
+    let version_name = format!("{timestamp}_{file_name}");
     let version_path = version_dir.join(version_name);
 
     // Rename current file to version path
@@ -114,11 +114,10 @@ pub fn validate_path(path: &str) -> bool {
             return false;
         }
         // 不允許以 . 開頭的系統目錄
-        if segment.starts_with('.') {
-            if *segment == ".versions" || *segment == ".hls_cache" || *segment == ".trash" {
+        if segment.starts_with('.')
+            && (*segment == ".versions" || *segment == ".hls_cache" || *segment == ".trash") {
                 return false;
             }
-        }
     }
     
     // 不允許只有點的路徑
@@ -261,8 +260,8 @@ mod tests {
         // replace all ".." -> "__.tripledot" ... hmm
         // Let me just accept the actual behavior
         let result = sanitize_filename("...tripledot");
-        assert!(!result.starts_with('.'), "Should not start with dot: {}", result);
-        assert!(!result.contains(".."), "Should not contain ..: {}", result);
+        assert!(!result.starts_with('.'), "Should not start with dot: {result}");
+        assert!(!result.contains(".."), "Should not contain ..: {result}");
     }
     
     #[test]
@@ -276,7 +275,7 @@ mod tests {
         // "..." -> "__." (after replace) -> "__." (no leading dot, the "__" is not a dot)
         let result = sanitize_filename("...");
         assert!(!result.is_empty(), "Should not be empty");
-        assert!(!result.starts_with('.'), "Should not start with dot: {}", result);
+        assert!(!result.starts_with('.'), "Should not start with dot: {result}");
     }
     
     #[test]

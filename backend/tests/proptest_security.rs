@@ -34,7 +34,7 @@ proptest! {
         prefix in "[a-zA-Z0-9_/]{0,20}",
         suffix in "[a-zA-Z0-9_/.]{0,20}"
     ) {
-        let path = format!("{}\0{}", prefix, suffix);
+        let path = format!("{prefix}\0{suffix}");
         prop_assert!(!validate_path(&path), "Path with null byte should be rejected");
     }
     
@@ -44,7 +44,7 @@ proptest! {
         drive in "[A-Z]",
         path in "[a-zA-Z0-9_/]{0,30}"
     ) {
-        let win_path = format!("{}:\\{}", drive, path);
+        let win_path = format!("{drive}:\\{path}");
         prop_assert!(!validate_path(&win_path), "Windows path should be rejected: {}", win_path);
     }
     
@@ -82,7 +82,7 @@ proptest! {
         ]),
         suffix in "[a-zA-Z0-9]{0,10}"
     ) {
-        let adversarial = format!("{}{}{}", prefix, dangerous, suffix);
+        let adversarial = format!("{prefix}{dangerous}{suffix}");
         let sanitized = sanitize_filename(&adversarial);
         
         // All dangerous patterns should be sanitized

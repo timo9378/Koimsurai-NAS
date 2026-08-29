@@ -10,7 +10,7 @@ async fn list_files_requires_auth() {
     let client = Client::new();
 
     let response = client
-        .get(&format!("{}/api/files", app.address))
+        .get(format!("{}/api/files", app.address))
         .send()
         .await
         .expect("Failed to execute request");
@@ -25,7 +25,7 @@ async fn list_files_works_with_auth() {
 
     // Register and Login
     client
-        .post(&format!("{}/api/auth/register", app.address))
+        .post(format!("{}/api/auth/register", app.address))
         .json(&json!({
             "username": "testuser",
             "password": "password123",
@@ -36,7 +36,7 @@ async fn list_files_works_with_auth() {
         .expect("Failed to register");
 
     client
-        .post(&format!("{}/api/auth/login", app.address))
+        .post(format!("{}/api/auth/login", app.address))
         .json(&json!({
             "username": "testuser",
             "password": "password123"
@@ -47,7 +47,7 @@ async fn list_files_works_with_auth() {
 
     // Login (cookie-based: access_token will be set as HttpOnly cookie)
     client
-        .post(&format!("{}/api/auth/login", app.address))
+        .post(format!("{}/api/auth/login", app.address))
         .json(&json!({
             "username": "testuser",
             "password": "password123"
@@ -58,7 +58,7 @@ async fn list_files_works_with_auth() {
 
     // List files (cookie will be sent automatically)
     let response = client
-        .get(&format!("{}/api/files", app.address))
+        .get(format!("{}/api/files", app.address))
         .send()
         .await
         .expect("Failed to execute request");

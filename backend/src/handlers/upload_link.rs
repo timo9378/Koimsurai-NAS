@@ -4,7 +4,6 @@ use axum::{
     Json,
     response::IntoResponse,
 };
-use serde::{Serialize, Deserialize};
 use crate::state::AppState;
 use crate::models::{CreateUploadLinkRequest, UploadLinkResponse, UploadLinkInfoResponse};
 use crate::error::AppError;
@@ -59,7 +58,7 @@ pub async fn create_upload_link(
 
     Ok(Json(UploadLinkResponse {
         id: id.clone(),
-        url: format!("/u/{}", id),
+        url: format!("/u/{id}"),
         expires_at: expires_at.map(|t| t.to_rfc3339()),
     }))
 }
@@ -101,15 +100,13 @@ pub async fn get_upload_link_info(
 
     // 獲取目標資料夾名稱
     let target_folder = Path::new(&target_path)
-        .file_name()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| {
+        .file_name().map_or_else(|| {
             if target_path == "/" || target_path.is_empty() {
                 "Root".to_string()
             } else {
                 target_path.clone()
             }
-        });
+        }, |s| s.to_string_lossy().to_string());
 
     Ok(Json(UploadLinkInfoResponse {
         id,
@@ -210,9 +207,7 @@ pub async fn upload_via_link(
                 .collect::<Vec<_>>()
                 .join("/")
         } else {
-            field.file_name()
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| format!("upload_{}", Uuid::new_v4()))
+            field.file_name().map_or_else(|| format!("upload_{}", Uuid::new_v4()), std::string::ToString::to_string)
         };
         pending_relative_path = None; // Reset for next iteration
 

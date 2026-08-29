@@ -10,7 +10,7 @@ async fn register_works() {
     let client = Client::new();
 
     let response = client
-        .post(&format!("{}/api/auth/register", app.address))
+        .post(format!("{}/api/auth/register", app.address))
         .json(&json!({
             "username": "testuser",
             "password": "password123",
@@ -30,7 +30,7 @@ async fn login_works() {
 
     // Register first
     client
-        .post(&format!("{}/api/auth/register", app.address))
+        .post(format!("{}/api/auth/register", app.address))
         .json(&json!({
             "username": "testuser",
             "password": "password123",
@@ -42,7 +42,7 @@ async fn login_works() {
 
     // Login
     let response = client
-        .post(&format!("{}/api/auth/login", app.address))
+        .post(format!("{}/api/auth/login", app.address))
         .json(&json!({
             "username": "testuser",
             "password": "password123"

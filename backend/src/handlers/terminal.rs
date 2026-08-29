@@ -19,8 +19,8 @@ pub struct TerminalQuery {
     pub rows: u16,
 }
 
-fn default_cols() -> u16 { 80 }
-fn default_rows() -> u16 { 24 }
+const fn default_cols() -> u16 { 80 }
+const fn default_rows() -> u16 { 24 }
 
 /// 允許的命令白名單 - 只包含容器內實際可用的命令
 fn get_allowed_commands() -> HashSet<&'static str> {
@@ -67,7 +67,7 @@ pub fn get_available_commands() -> Vec<&'static str> {
 
 /// 危險的 shell 元字符 — 禁止出現在任何地方
 /// 這些字符可用來繞過白名單（命令替換、進程替換等）
-fn get_dangerous_shell_chars() -> &'static [&'static str] {
+const fn get_dangerous_shell_chars() -> &'static [&'static str] {
     &[
         "`",      // backtick 命令替換
         "$(",     // $() 命令替換
@@ -114,7 +114,7 @@ fn is_command_safe(cmd: &str) -> Result<(), String> {
     // 1. 檢查危險 shell 元字符
     for pattern in get_dangerous_shell_chars() {
         if cmd_trimmed.contains(pattern) {
-            return Err(format!("禁止的操作: 包含不安全的字符 '{}'", pattern));
+            return Err(format!("禁止的操作: 包含不安全的字符 '{pattern}'"));
         }
     }
 
@@ -160,14 +160,13 @@ fn is_command_safe(cmd: &str) -> Result<(), String> {
 
         // 3a. 檢查是否在危險命令名單中
         if dangerous.contains(command_name) {
-            return Err(format!("命令 '{}' 被禁止執行。", command_name));
+            return Err(format!("命令 '{command_name}' 被禁止執行。"));
         }
 
         // 3b. 檢查是否在白名單中
         if !allowed.contains(command_name) {
             return Err(format!(
-                "命令 '{}' 不在允許列表中。輸入 'help' 查看可用命令。",
-                command_name
+                "命令 '{command_name}' 不在允許列表中。輸入 'help' 查看可用命令。"
             ));
         }
 
@@ -183,7 +182,7 @@ fn is_command_safe(cmd: &str) -> Result<(), String> {
         for part in &parts[1..] {
             let lower = part.to_lowercase();
             if lower.contains("/etc/passwd") || lower.contains("/etc/shadow") || lower.contains("/dev/sd") {
-                return Err(format!("禁止存取敏感路徑: {}", part));
+                return Err(format!("禁止存取敏感路徑: {part}"));
             }
         }
     }
@@ -220,10 +219,10 @@ fn get_completions(partial: &str, current_dir: &str, storage_base: &str) -> Vec<
                 if dir.starts_with("~/") {
                     format!("{}{}", storage_base, &dir[1..])
                 } else {
-                    format!("{}{}", storage_base, dir)
+                    format!("{storage_base}{dir}")
                 }
             } else {
-                format!("{}/{}", current_dir, dir)
+                format!("{current_dir}/{dir}")
             };
             (full_dir, prefix.to_string())
         } else {
@@ -232,12 +231,12 @@ fn get_completions(partial: &str, current_dir: &str, storage_base: &str) -> Vec<
         
         // 讀取目錄內容
         if let Ok(entries) = std::fs::read_dir(&dir_to_search) {
-            for entry in entries.filter_map(|e| e.ok()) {
+            for entry in entries.filter_map(std::result::Result::ok) {
                 let name = entry.file_name().to_string_lossy().to_string();
                 if name.starts_with(&file_prefix) {
-                    let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+                    let is_dir = entry.file_type().is_ok_and(|t| t.is_dir());
                     let display_name = if is_dir {
-                        format!("{}/", name)
+                        format!("{name}/")
                     } else {
                         name
                     };
@@ -259,8 +258,7 @@ fn handle_builtin_command(cmd: &str, current_dir: &str) -> Option<String> {
     }
 
     match parts[0] {
-        "help" => Some(format!(
-            "\x1b[32m╔══════════════════════════════════════════════════════════════╗\x1b[0m\r\n\
+        "help" => Some("\x1b[32m╔══════════════════════════════════════════════════════════════╗\x1b[0m\r\n\
              \x1b[32m║\x1b[0m  \x1b[1;36mKoimsurai NAS Terminal - 受限 Shell 環境\x1b[0m                    \x1b[32m║\x1b[0m\r\n\
              \x1b[32m╠══════════════════════════════════════════════════════════════╣\x1b[0m\r\n\
              \x1b[32m║\x1b[0m  \x1b[33m檔案操作:\x1b[0m ls, cat, head, tail, mkdir, touch, cp, mv, rm     \x1b[32m║\x1b[0m\r\n\
@@ -271,8 +269,7 @@ fn handle_builtin_command(cmd: &str, current_dir: &str) -> Option<String> {
              \x1b[32m║\x1b[0m  \x1b[33m其他:\x1b[0m     date, echo, clear, history, exit                  \x1b[32m║\x1b[0m\r\n\
              \x1b[32m╠══════════════════════════════════════════════════════════════╣\x1b[0m\r\n\
              \x1b[32m║\x1b[0m  \x1b[34mTab\x1b[0m 自動補全 | \x1b[34m↑↓\x1b[0m 歷史記錄 | \x1b[34mCtrl+C\x1b[0m 取消            \x1b[32m║\x1b[0m\r\n\
-             \x1b[32m╚══════════════════════════════════════════════════════════════╝\x1b[0m"
-        )),
+             \x1b[32m╚══════════════════════════════════════════════════════════════╝\x1b[0m".to_string()),
         "clear" => Some("\x1b[2J\x1b[H".to_string()),
         "exit" | "logout" => Some("\x1b[33m再見！終端機連線已關閉。\x1b[0m".to_string()),
         "pwd" => Some(current_dir.to_string()),
@@ -303,7 +300,7 @@ pub async fn terminal_handler(
     ws.on_upgrade(move |socket| handle_terminal_socket(socket, state, query))
 }
 
-async fn handle_terminal_socket(socket: WebSocket, state: AppState, query: TerminalQuery) {
+async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: TerminalQuery) {
     let (mut sender, mut receiver) = socket.split();
     
     // 當前工作目錄（限制在 storage 內）
@@ -311,15 +308,13 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, query: Termi
     let mut current_dir = storage_path.to_string_lossy().to_string();
     
     // 發送歡迎訊息
-    let welcome = format!(
-        "\x1b[2J\x1b[H\
+    let welcome = "\x1b[2J\x1b[H\
          \x1b[36m╔════════════════════════════════════════════════════╗\x1b[0m\r\n\
          \x1b[36m║\x1b[0m  \x1b[1;32mKoimsurai NAS Terminal\x1b[0m                            \x1b[36m║\x1b[0m\r\n\
          \x1b[36m║\x1b[0m  \x1b[90mSecure Restricted Shell Environment\x1b[0m                \x1b[36m║\x1b[0m\r\n\
          \x1b[36m╠════════════════════════════════════════════════════╣\x1b[0m\r\n\
          \x1b[36m║\x1b[0m  輸入 \x1b[33mhelp\x1b[0m 查看可用命令                            \x1b[36m║\x1b[0m\r\n\
-         \x1b[36m╚════════════════════════════════════════════════════╝\x1b[0m\r\n\r\n"
-    );
+         \x1b[36m╚════════════════════════════════════════════════════╝\x1b[0m\r\n\r\n".to_string();
     
     if sender.send(Message::Text(welcome)).await.is_err() {
         return;
@@ -365,7 +360,7 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, query: Termi
                             let output = execute_command(&cmd, &mut current_dir, &storage_path.to_string_lossy()).await;
                             
                             if !output.is_empty() {
-                                let _ = sender.send(Message::Text(format!("{}\r\n", output))).await;
+                                let _ = sender.send(Message::Text(format!("{output}\r\n"))).await;
                             }
 
                             // 檢查是否是 exit 命令
@@ -409,25 +404,25 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, query: Termi
                                 let _ = sender.send(Message::Text("\r\n".to_string())).await;
                                 
                                 // 格式化輸出（類似 bash）
-                                let max_len = completions.iter().map(|s| s.len()).max().unwrap_or(10) + 2;
+                                let max_len = completions.iter().map(std::string::String::len).max().unwrap_or(10) + 2;
                                 let cols = 80 / max_len.max(10);
                                 
                                 for (i, comp) in completions.iter().enumerate() {
-                                    let padded = format!("{:<width$}", comp, width = max_len);
+                                    let padded = format!("{comp:<max_len$}");
                                     let _ = sender.send(Message::Text(padded)).await;
                                     if (i + 1) % cols == 0 {
                                         let _ = sender.send(Message::Text("\r\n".to_string())).await;
                                     }
                                 }
                                 
-                                if completions.len() % cols != 0 {
+                                if !completions.len().is_multiple_of(cols) {
                                     let _ = sender.send(Message::Text("\r\n".to_string())).await;
                                 }
                                 
                                 // 重新顯示提示符和當前輸入
                                 let prompt = format!("\x1b[36mnas\x1b[0m:\x1b[34m{}\x1b[0m$ ", 
                                     get_display_path(&current_dir, &storage_path.to_string_lossy()));
-                                let _ = sender.send(Message::Text(format!("{}{}", prompt, input_buffer))).await;
+                                let _ = sender.send(Message::Text(format!("{prompt}{input_buffer}"))).await;
                                 
                                 // 嘗試補全共同前綴
                                 if let Some(common) = find_common_prefix(&completions) {
@@ -535,7 +530,7 @@ async fn execute_command(cmd: &str, current_dir: &mut String, storage_base: &str
 
     // 先檢查命令安全性
     if let Err(e) = is_command_safe(cmd) {
-        return format!("\x1b[31m錯誤: {}\x1b[0m", e);
+        return format!("\x1b[31m錯誤: {e}\x1b[0m");
     }
 
     // 處理內建命令
@@ -561,7 +556,7 @@ fn handle_cd_command(parts: &[&str], current_dir: &mut String, storage_base: &st
         "~"
     };
 
-    let new_path = if target == "~" || target == "" {
+    let new_path = if target == "~" || target.is_empty() {
         storage_base.to_string()
     } else if target == ".." {
         let path = std::path::Path::new(current_dir);
@@ -571,40 +566,40 @@ fn handle_cd_command(parts: &[&str], current_dir: &mut String, storage_base: &st
             if parent_str.starts_with(storage_base) {
                 parent_str
             } else {
-                return format!("\x1b[31m錯誤: 無法離開 storage 目錄\x1b[0m");
+                return "\x1b[31m錯誤: 無法離開 storage 目錄\x1b[0m".to_string();
             }
         } else {
-            return format!("\x1b[31m錯誤: 已在根目錄\x1b[0m");
+            return "\x1b[31m錯誤: 已在根目錄\x1b[0m".to_string();
         }
     } else if target.starts_with('/') {
         // 絕對路徑 - 必須在 storage 內
-        let full_path = format!("{}{}", storage_base, target);
+        let full_path = format!("{storage_base}{target}");
         if std::path::Path::new(&full_path).exists() {
             full_path
         } else {
-            return format!("\x1b[31m錯誤: 目錄不存在: {}\x1b[0m", target);
+            return format!("\x1b[31m錯誤: 目錄不存在: {target}\x1b[0m");
         }
     } else if target.starts_with("~/") {
         format!("{}{}", storage_base, &target[1..])
     } else {
         // 相對路徑
-        format!("{}/{}", current_dir, target)
+        format!("{current_dir}/{target}")
     };
 
     // 驗證路徑
     let canonical = match std::fs::canonicalize(&new_path) {
         Ok(p) => p.to_string_lossy().to_string(),
-        Err(_) => return format!("\x1b[31m錯誤: 目錄不存在: {}\x1b[0m", target),
+        Err(_) => return format!("\x1b[31m錯誤: 目錄不存在: {target}\x1b[0m"),
     };
 
     // 確保在 storage 範圍內
     if !canonical.starts_with(storage_base) {
-        return format!("\x1b[31m錯誤: 無法訪問 storage 目錄之外的路徑\x1b[0m");
+        return "\x1b[31m錯誤: 無法訪問 storage 目錄之外的路徑\x1b[0m".to_string();
     }
 
     // 確保是目錄
     if !std::path::Path::new(&canonical).is_dir() {
-        return format!("\x1b[31m錯誤: 不是目錄: {}\x1b[0m", target);
+        return format!("\x1b[31m錯誤: 不是目錄: {target}\x1b[0m");
     }
 
     *current_dir = canonical;
@@ -665,15 +660,15 @@ async fn execute_external_command(cmd: &str, current_dir: &str, storage_base: &s
             if let Some(ref target) = redirect_target {
                 if !target.is_empty() {
                     let target_path = if target.starts_with('/') {
-                        format!("{}{}", storage_base, target)
+                        format!("{storage_base}{target}")
                     } else {
-                        format!("{}/{}", current_dir, target)
+                        format!("{current_dir}/{target}")
                     };
                     // 驗證路徑在 storage 內
                     if let Ok(canonical) = std::fs::canonicalize(std::path::Path::new(&target_path).parent().unwrap_or(std::path::Path::new(current_dir))) {
                         if canonical.to_string_lossy().starts_with(storage_base) {
                             if let Err(e) = tokio::fs::write(&target_path, stdout.as_bytes()).await {
-                                return format!("\x1b[31m寫入錯誤: {}\x1b[0m", e);
+                                return format!("\x1b[31m寫入錯誤: {e}\x1b[0m");
                             }
                             if !stderr.is_empty() {
                                 return format!("\x1b[31m{}\x1b[0m", stderr.replace('\n', "\r\n"));
@@ -694,12 +689,12 @@ async fn execute_external_command(cmd: &str, current_dir: &str, storage_base: &s
             }
             result.trim_end().to_string()
         }
-        Err(e) => format!("\x1b[31m執行錯誤: {}\x1b[0m", e),
+        Err(e) => format!("\x1b[31m執行錯誤: {e}\x1b[0m"),
     }
 }
 
 /// 安全地執行管道命令 — 使用 OS 層級 Pipe 串流，不將整個 stdout 載入記憶體
-/// 每個子行程的 stdout 直接接到下一個子行程的 stdin（透過 tokio::io::copy 串流），
+/// 每個子行程的 stdout 直接接到下一個子行程的 stdin（透過 `tokio::io::copy` 串流），
 /// 固定 buffer size，避免 OOM 和死鎖（如 `yes | head -n 5`）。
 async fn execute_pipeline(cmd: &str, current_dir: &str, storage_base: &str) -> String {
     use tokio::process::Command;
@@ -712,7 +707,7 @@ async fn execute_pipeline(cmd: &str, current_dir: &str, storage_base: &str) -> S
     }
 
     // 啟動第一個命令
-    let first_parts: Vec<&str> = segments[0].trim().split_whitespace().collect();
+    let first_parts: Vec<&str> = segments[0].split_whitespace().collect();
     if first_parts.is_empty() {
         return String::new();
     }
@@ -736,19 +731,16 @@ async fn execute_pipeline(cmd: &str, current_dir: &str, storage_base: &str) -> S
 
     // 依序啟動後續命令，以 tokio::io::copy 串流連接
     for segment in &segments[1..] {
-        let parts: Vec<&str> = segment.trim().split_whitespace().collect();
+        let parts: Vec<&str> = segment.split_whitespace().collect();
         if parts.is_empty() {
             continue;
         }
 
         // 取得前一個行程的 stdout
-        let prev_stdout = match prev_child.stdout.take() {
-            Some(out) => out,
-            None => {
-                // 前一個行程沒有 stdout，等待它結束
-                children.push((first_parts[0].to_string(), prev_child));
-                return "\x1b[31m管道錯誤: 無法取得前一個命令的輸出\x1b[0m".to_string();
-            }
+        let prev_stdout = if let Some(out) = prev_child.stdout.take() { out } else {
+            // 前一個行程沒有 stdout，等待它結束
+            children.push((first_parts[0].to_string(), prev_child));
+            return "\x1b[31m管道錯誤: 無法取得前一個命令的輸出\x1b[0m".to_string();
         };
 
         let mut next_child = match Command::new(parts[0])
@@ -817,7 +809,7 @@ async fn execute_pipeline(cmd: &str, current_dir: &str, storage_base: &str) -> S
             for (_, mut child) in children {
                 let _ = child.kill().await;
             }
-            format!("\x1b[31m執行錯誤: {}\x1b[0m", e)
+            format!("\x1b[31m執行錯誤: {e}\x1b[0m")
         }
     }
 }

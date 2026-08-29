@@ -3,7 +3,7 @@ use axum::{
     Router,
     middleware,
     extract::DefaultBodyLimit,
-    http::{Method, HeaderValue},
+    http::Method,
 };
 use tower_http::cors::{CorsLayer, Any};
 use tower_sessions::{SessionManagerLayer, Expiry};

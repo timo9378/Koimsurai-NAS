@@ -1,6 +1,6 @@
 //! Docker 容器管理 API 處理器
 //!
-//! 提供 RESTful API 端點用於管理 Docker 容器和鏡像。
+//! 提供 `RESTful` API 端點用於管理 Docker 容器和鏡像。
 
 use axum::{
     extract::{Path, Query, State, ws::{Message, WebSocket, WebSocketUpgrade}},
@@ -83,7 +83,7 @@ pub struct DockerResult<T> {
 }
 
 impl<T> DockerResult<T> {
-    pub fn success(data: T) -> Self {
+    pub const fn success(data: T) -> Self {
         Self {
             success: true,
             data: Some(data),
@@ -189,7 +189,7 @@ pub async fn list_containers(
     Query(query): Query<ListContainersQuery>,
 ) -> Result<Json<DockerResult<Vec<ContainerSummary>>>, AppError> {
     let service = get_docker_service(&state).await?;
-    ensure_connected(&service).await?;
+    ensure_connected(service).await?;
 
     let containers = service
         .list_containers(query.all)
@@ -217,7 +217,7 @@ pub async fn inspect_container(
     Path(id): Path<String>,
 ) -> Result<Json<DockerResult<ContainerDetails>>, AppError> {
     let service = get_docker_service(&state).await?;
-    ensure_connected(&service).await?;
+    ensure_connected(service).await?;
 
     let details = service
         .inspect_container(&id)
@@ -245,14 +245,14 @@ pub async fn start_container(
     Path(id): Path<String>,
 ) -> Result<Json<DockerResult<()>>, AppError> {
     let service = get_docker_service(&state).await?;
-    ensure_connected(&service).await?;
+    ensure_connected(service).await?;
 
     service
         .start_container(&id)
         .await
         .map_err(|e| AppError::Custom(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(DockerResult::<()>::success_message(format!("容器 {} 已啟動", id))))
+    Ok(Json(DockerResult::<()>::success_message(format!("容器 {id} 已啟動"))))
 }
 
 /// 停止容器
@@ -275,7 +275,7 @@ pub async fn stop_container(
     body: Option<Json<StopContainerRequest>>,
 ) -> Result<Json<DockerResult<()>>, AppError> {
     let service = get_docker_service(&state).await?;
-    ensure_connected(&service).await?;
+    ensure_connected(service).await?;
 
     let timeout = body.and_then(|b| b.timeout);
 
@@ -284,7 +284,7 @@ pub async fn stop_container(
         .await
         .map_err(|e| AppError::Custom(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(DockerResult::<()>::success_message(format!("容器 {} 已停止", id))))
+    Ok(Json(DockerResult::<()>::success_message(format!("容器 {id} 已停止"))))
 }
 
 /// 重啟容器
@@ -307,7 +307,7 @@ pub async fn restart_container(
     body: Option<Json<StopContainerRequest>>,
 ) -> Result<Json<DockerResult<()>>, AppError> {
     let service = get_docker_service(&state).await?;
-    ensure_connected(&service).await?;
+    ensure_connected(service).await?;
 
     let timeout = body.and_then(|b| b.timeout);
 
@@ -316,7 +316,7 @@ pub async fn restart_container(
         .await
         .map_err(|e| AppError::Custom(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(DockerResult::<()>::success_message(format!("容器 {} 已重啟", id))))
+    Ok(Json(DockerResult::<()>::success_message(format!("容器 {id} 已重啟"))))
 }
 
 /// 刪除容器
@@ -339,14 +339,14 @@ pub async fn remove_container(
     Query(query): Query<RemoveContainerQuery>,
 ) -> Result<Json<DockerResult<()>>, AppError> {
     let service = get_docker_service(&state).await?;
-    ensure_connected(&service).await?;
+    ensure_connected(service).await?;
 
     service
         .remove_container(&id, query.force)
         .await
         .map_err(|e| AppError::Custom(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(DockerResult::<()>::success_message(format!("容器 {} 已刪除", id))))
+    Ok(Json(DockerResult::<()>::success_message(format!("容器 {id} 已刪除"))))
 }
 
 /// 獲取容器日誌
@@ -370,7 +370,7 @@ pub async fn container_logs(
     Query(query): Query<LogsQuery>,
 ) -> Result<Json<DockerResult<Vec<LogEntry>>>, AppError> {
     let service = get_docker_service(&state).await?;
-    ensure_connected(&service).await?;
+    ensure_connected(service).await?;
 
     let logs = service
         .container_logs(&id, query.tail.as_deref(), query.since)
@@ -398,7 +398,7 @@ pub async fn container_stats(
     Path(id): Path<String>,
 ) -> Result<Json<DockerResult<ContainerStats>>, AppError> {
     let service = get_docker_service(&state).await?;
-    ensure_connected(&service).await?;
+    ensure_connected(service).await?;
 
     let stats = service
         .container_stats(&id)
@@ -423,7 +423,7 @@ pub async fn list_images(
     State(state): State<AppState>,
 ) -> Result<Json<DockerResult<Vec<ImageSummary>>>, AppError> {
     let service = get_docker_service(&state).await?;
-    ensure_connected(&service).await?;
+    ensure_connected(service).await?;
 
     let images = service
         .list_images()
@@ -449,7 +449,7 @@ pub async fn pull_image(
     Json(request): Json<PullImageRequest>,
 ) -> Result<Json<DockerResult<()>>, AppError> {
     let service = get_docker_service(&state).await?;
-    ensure_connected(&service).await?;
+    ensure_connected(service).await?;
 
     service
         .pull_image(&request.image, &request.tag)
@@ -482,14 +482,14 @@ pub async fn remove_image(
     Query(query): Query<RemoveImageQuery>,
 ) -> Result<Json<DockerResult<()>>, AppError> {
     let service = get_docker_service(&state).await?;
-    ensure_connected(&service).await?;
+    ensure_connected(service).await?;
 
     service
         .remove_image(&id, query.force)
         .await
         .map_err(|e| AppError::Custom(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(DockerResult::<()>::success_message(format!("已刪除鏡像 {}", id))))
+    Ok(Json(DockerResult::<()>::success_message(format!("已刪除鏡像 {id}"))))
 }
 
 // ==================== 網絡操作 ====================
@@ -507,7 +507,7 @@ pub async fn list_networks(
     State(state): State<AppState>,
 ) -> Result<Json<DockerResult<Vec<crate::services::docker::NetworkSummary>>>, AppError> {
     let service = get_docker_service(&state).await?;
-    ensure_connected(&service).await?;
+    ensure_connected(service).await?;
 
     let networks = service
         .list_networks()
@@ -538,7 +538,7 @@ pub async fn container_exec(
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
     let service = get_docker_service(&state).await?;
-    ensure_connected(&service).await?;
+    ensure_connected(service).await?;
 
     // 1. 創建 Exec 實例
     // 使用預設 shell，如果失敗可以嘗試 sh
@@ -551,7 +551,7 @@ pub async fn container_exec(
                 .await
                 .map_err(|e| AppError::Custom(
                     StatusCode::INTERNAL_SERVER_ERROR, 
-                    format!("Failed to create exec instance: {}", e)
+                    format!("Failed to create exec instance: {e}")
                 ))?
         }
     };
@@ -571,7 +571,7 @@ async fn handle_exec_socket(socket: WebSocket, state: AppState, exec_id: String)
     let start_result = match service.start_exec(&exec_id).await {
         Ok(res) => res,
         Err(e) => {
-            let _ = ws_sender.send(Message::Text(format!("Failed to start exec: {}", e))).await;
+            let _ = ws_sender.send(Message::Text(format!("Failed to start exec: {e}"))).await;
             return;
         }
     };
@@ -649,9 +649,9 @@ async fn handle_exec_socket(socket: WebSocket, state: AppState, exec_id: String)
 
 // ==================== 輔助函數 ====================
 
-/// 從 AppState 獲取 DockerService
+/// 從 `AppState` 獲取 `DockerService`
 async fn get_docker_service(state: &AppState) -> Result<&DockerService, AppError> {
-    state.docker_service.as_ref().map(|arc| arc.as_ref()).ok_or_else(|| {
+    state.docker_service.as_ref().map(std::convert::AsRef::as_ref).ok_or_else(|| {
         AppError::Custom(
             StatusCode::SERVICE_UNAVAILABLE,
             "Docker 服務未啟用".to_string(),
@@ -666,7 +666,7 @@ async fn ensure_connected(service: &DockerService) -> Result<(), AppError> {
         service.connect().await.map_err(|e| {
             AppError::Custom(
                 StatusCode::SERVICE_UNAVAILABLE,
-                format!("無法連接到 Docker daemon: {}", e),
+                format!("無法連接到 Docker daemon: {e}"),
             )
         })?;
     }

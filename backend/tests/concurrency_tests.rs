@@ -50,8 +50,8 @@ async fn test_concurrent_file_writes_with_different_names() {
             // 等待所有任務準備就緒，同時開始
             barrier.wait().await;
 
-            let file_path = dir.join(format!("file_{}.txt", i));
-            let content = format!("Content from task {}", i);
+            let file_path = dir.join(format!("file_{i}.txt"));
+            let content = format!("Content from task {i}");
 
             match fs::write(&file_path, &content).await {
                 Ok(()) => {
@@ -62,7 +62,7 @@ async fn test_concurrent_file_writes_with_different_names() {
                     }
                 }
                 Err(e) => {
-                    eprintln!("Task {} failed: {}", i, e);
+                    eprintln!("Task {i} failed: {e}");
                 }
             }
         }));
@@ -97,7 +97,7 @@ async fn test_concurrent_writes_same_file_last_writer_wins() {
         handles.push(tokio::spawn(async move {
             barrier.wait().await;
 
-            let content = format!("Written by task {}", i);
+            let content = format!("Written by task {i}");
             // 使用 OpenOptions 進行寫入
             let mut file = tokio::fs::OpenOptions::new()
                 .write(true)
@@ -142,12 +142,12 @@ async fn test_concurrent_append_operations() {
         handles.push(tokio::spawn(async move {
             barrier.wait().await;
 
-            let content = format!("Line {}\n", i);
+            let content = format!("Line {i}\n");
             // Use blocking std::fs append inside spawn_blocking to ensure a single
             // blocking write syscall per append, avoiding async write interleaving.
             let path = file_path.clone();
             let data = content.into_bytes();
-            let _ = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
+            let () = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
                 use std::io::Write;
                 let mut f = std::fs::OpenOptions::new()
                     .create(true)
@@ -247,9 +247,7 @@ async fn test_transcode_semaphore_simulation() {
             let current = active.fetch_add(1, Ordering::SeqCst) + 1;
             assert!(
                 current <= max_transcodes,
-                "Too many concurrent transcodes: {} > {}",
-                current,
-                max_transcodes
+                "Too many concurrent transcodes: {current} > {max_transcodes}"
             );
 
             // 模擬轉碼時間
@@ -258,7 +256,7 @@ async fn test_transcode_semaphore_simulation() {
             active.fetch_sub(1, Ordering::SeqCst);
             completed.fetch_add(1, Ordering::SeqCst);
 
-            format!("Transcode {} completed", i)
+            format!("Transcode {i} completed")
         }));
     }
 
@@ -380,7 +378,7 @@ async fn test_concurrent_directory_creation() {
                     exists_count.fetch_add(1, Ordering::SeqCst);
                 }
                 Err(e) => {
-                    panic!("Unexpected error: {}", e);
+                    panic!("Unexpected error: {e}");
                 }
             }
         }));
@@ -426,7 +424,7 @@ async fn test_create_dir_all_is_idempotent() {
                     success_count.fetch_add(1, Ordering::SeqCst);
                 }
                 Err(e) => {
-                    panic!("Unexpected error: {}", e);
+                    panic!("Unexpected error: {e}");
                 }
             }
         }));
@@ -474,7 +472,7 @@ async fn test_concurrent_read_while_writing() {
             for _ in 0..5 {
                 let _read_lock = lock.read().await;
                 let content = fs::read_to_string(&file_path).await.unwrap();
-                assert!(!content.is_empty(), "Reader {} got empty content", i);
+                assert!(!content.is_empty(), "Reader {i} got empty content");
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
         }));
@@ -491,7 +489,7 @@ async fn test_concurrent_read_while_writing() {
 
             for j in 0..3 {
                 let _write_lock = lock.write().await;
-                let content = format!("Written by writer {} iteration {}", i, j);
+                let content = format!("Written by writer {i} iteration {j}");
                 fs::write(&file_path, &content).await.unwrap();
                 tokio::time::sleep(Duration::from_millis(20)).await;
             }
@@ -525,7 +523,7 @@ async fn test_cleanup_on_concurrent_failures() {
         handles.push(tokio::spawn(async move {
             barrier.wait().await;
 
-            let temp_file = dir.join(format!("temp_{}.txt", i));
+            let temp_file = dir.join(format!("temp_{i}.txt"));
 
             // 模擬資源獲取
             fs::write(&temp_file, "temp data").await.unwrap();

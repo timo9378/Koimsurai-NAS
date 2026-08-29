@@ -80,11 +80,11 @@ pub async fn restore_version(
     fs::copy(&version_path, &full_path).await.map_err(AppError::from)?;
 
     // Audit Log
-    let _ = state.audit.log(
+    let () = state.audit.log(
         user_id,
         "restore_version",
         &path,
-        Some(format!("Restored version: {}", version_id)),
+        Some(format!("Restored version: {version_id}")),
         None
     ).await;
 

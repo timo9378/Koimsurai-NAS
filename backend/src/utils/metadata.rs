@@ -93,9 +93,9 @@ fn extract_audio_metadata(path: &Path) -> FileMetadata {
     let mut metadata = AudioMetadata::default();
     
     if let Ok(tag) = id3::Tag::read_from_path(path) {
-        metadata.title = tag.title().map(|s| s.to_string());
-        metadata.artist = tag.artist().map(|s| s.to_string());
-        metadata.album = tag.album().map(|s| s.to_string());
+        metadata.title = tag.title().map(std::string::ToString::to_string);
+        metadata.artist = tag.artist().map(std::string::ToString::to_string);
+        metadata.album = tag.album().map(std::string::ToString::to_string);
         // id3 crate doesn't always provide duration easily without full parsing, 
         // but let's see if we can get it from mp3 header or similar if needed.
         // For now, basic tags.
@@ -109,7 +109,7 @@ fn extract_video_metadata(path: &Path) -> FileMetadata {
         Ok(f) => f,
         Err(_) => return FileMetadata::None,
     };
-    let size = file.metadata().map(|m| m.len()).unwrap_or(0);
+    let size = file.metadata().map_or(0, |m| m.len());
     let reader = BufReader::new(file);
 
     let mut metadata = VideoMetadata::default();
@@ -120,8 +120,8 @@ fn extract_video_metadata(path: &Path) -> FileMetadata {
         // usually in tracks.
         for track in mp4.tracks().values() {
             if track.track_type().ok() == Some(mp4::TrackType::Video) {
-                metadata.width = Some(track.width() as u32);
-                metadata.height = Some(track.height() as u32);
+                metadata.width = Some(u32::from(track.width()));
+                metadata.height = Some(u32::from(track.height()));
                 break;
             }
         }

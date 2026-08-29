@@ -23,20 +23,20 @@ impl GpuAcceleration {
             .to_lowercase();
         
         match gpu_type.as_str() {
-            "nvidia" | "cuda" | "nvenc" => GpuAcceleration::Nvidia,
-            "intel" | "qsv" | "quicksync" => GpuAcceleration::Intel,
-            "amd" | "amf" => GpuAcceleration::Amd,
-            _ => GpuAcceleration::None,
+            "nvidia" | "cuda" | "nvenc" => Self::Nvidia,
+            "intel" | "qsv" | "quicksync" => Self::Intel,
+            "amd" | "amf" => Self::Amd,
+            _ => Self::None,
         }
     }
     
     /// 是否啟用 GPU
     pub fn is_enabled(&self) -> bool {
-        *self != GpuAcceleration::None
+        *self != Self::None
     }
 }
 
-/// FFmpeg 命令建構器
+/// `FFmpeg` 命令建構器
 pub struct FfmpegCommand {
     gpu: GpuAcceleration,
     input_path: String,
@@ -88,7 +88,7 @@ impl FfmpegCommand {
         match self.gpu {
             GpuAcceleration::Nvidia => {
                 // NVIDIA: 使用 scale_cuda 濾鏡避免 GPU<->CPU 記憶體複製
-                cmd.arg("-vf").arg(format!("scale_cuda={}", resolution))
+                cmd.arg("-vf").arg(format!("scale_cuda={resolution}"))
                    .arg("-c:v").arg("h264_nvenc")
                    .arg("-preset").arg("p4")      // 效能/畫質平衡
                    .arg("-tune").arg("ll")        // 低延遲
@@ -96,18 +96,18 @@ impl FfmpegCommand {
                    .arg("-cq").arg("23");
             }
             GpuAcceleration::Intel => {
-                cmd.arg("-vf").arg(format!("scale_qsv={}:format=nv12", resolution))
+                cmd.arg("-vf").arg(format!("scale_qsv={resolution}:format=nv12"))
                    .arg("-c:v").arg("h264_qsv")
                    .arg("-preset").arg("faster")
                    .arg("-global_quality").arg("23");
             }
             GpuAcceleration::Amd => {
-                cmd.arg("-vf").arg(format!("scale={}", resolution))
+                cmd.arg("-vf").arg(format!("scale={resolution}"))
                    .arg("-c:v").arg("h264_amf")
                    .arg("-quality").arg("balanced");
             }
             GpuAcceleration::None => {
-                cmd.arg("-vf").arg(format!("scale={}", resolution))
+                cmd.arg("-vf").arg(format!("scale={resolution}"))
                    .arg("-c:v").arg("libx264")
                    .arg("-preset").arg("ultrafast")
                    .arg("-crf").arg("23");
@@ -155,16 +155,14 @@ impl FfmpegCommand {
         
         // 縮放濾鏡
         let scale_filter = format!(
-            "scale='if(gt(iw,ih),{0},-2)':'if(gt(iw,ih),-2,{0})'",
-            max_dimension
+            "scale='if(gt(iw,ih),{max_dimension},-2)':'if(gt(iw,ih),-2,{max_dimension})'"
         );
         
         match self.gpu {
             GpuAcceleration::Nvidia => {
                 // NVIDIA GPU 縮放
                 let scale_filter = format!(
-                    "scale_cuda='if(gt(iw,ih),{0},-2)':'if(gt(iw,ih),-2,{0})'",
-                    max_dimension
+                    "scale_cuda='if(gt(iw,ih),{max_dimension},-2)':'if(gt(iw,ih),-2,{max_dimension})'"
                 );
                 cmd.arg("-vf").arg(scale_filter);
             }
@@ -182,7 +180,7 @@ impl FfmpegCommand {
     }
     
     /// 建構影片 Proxy (低碼率預覽版) 生成命令
-    /// 用於 GoPro 等高碼率影片的瀏覽器預覽
+    /// 用於 `GoPro` 等高碼率影片的瀏覽器預覽
     pub fn generate_proxy(&self, output_path: &str, target_height: u32, bitrate_kbps: u32) -> Command {
         let mut cmd = Command::new("ffmpeg");
         
@@ -201,25 +199,25 @@ impl FfmpegCommand {
         cmd.arg("-i").arg(&self.input_path);
         
         // 縮放到目標解析度 (保持比例)
-        let scale = format!("-2:{}", target_height);
+        let scale = format!("-2:{target_height}");
         
         match self.gpu {
             GpuAcceleration::Nvidia => {
-                cmd.arg("-vf").arg(format!("scale_cuda={}", scale))
+                cmd.arg("-vf").arg(format!("scale_cuda={scale}"))
                    .arg("-c:v").arg("h264_nvenc")
                    .arg("-preset").arg("p4")
-                   .arg("-b:v").arg(format!("{}k", bitrate_kbps));
+                   .arg("-b:v").arg(format!("{bitrate_kbps}k"));
             }
             GpuAcceleration::Intel => {
-                cmd.arg("-vf").arg(format!("scale_qsv={}:format=nv12", scale))
+                cmd.arg("-vf").arg(format!("scale_qsv={scale}:format=nv12"))
                    .arg("-c:v").arg("h264_qsv")
-                   .arg("-b:v").arg(format!("{}k", bitrate_kbps));
+                   .arg("-b:v").arg(format!("{bitrate_kbps}k"));
             }
             _ => {
-                cmd.arg("-vf").arg(format!("scale={}", scale))
+                cmd.arg("-vf").arg(format!("scale={scale}"))
                    .arg("-c:v").arg("libx264")
                    .arg("-preset").arg("fast")
-                   .arg("-b:v").arg(format!("{}k", bitrate_kbps));
+                   .arg("-b:v").arg(format!("{bitrate_kbps}k"));
             }
         }
         
@@ -256,7 +254,7 @@ impl FfmpegCommand {
         
         match self.gpu {
             GpuAcceleration::Nvidia => {
-                cmd.arg("-vf").arg(format!("scale_cuda={}", scale))
+                cmd.arg("-vf").arg(format!("scale_cuda={scale}"))
                    .arg("-c:v").arg("h264_nvenc")
                    .arg("-preset").arg("p4")
                    .arg("-b:v").arg(format!("{}k", quality.video_bitrate_kbps))
@@ -264,12 +262,12 @@ impl FfmpegCommand {
                    .arg("-bufsize").arg(format!("{}k", quality.video_bitrate_kbps * 2));
             }
             GpuAcceleration::Intel => {
-                cmd.arg("-vf").arg(format!("scale_qsv={}:format=nv12", scale))
+                cmd.arg("-vf").arg(format!("scale_qsv={scale}:format=nv12"))
                    .arg("-c:v").arg("h264_qsv")
                    .arg("-b:v").arg(format!("{}k", quality.video_bitrate_kbps));
             }
             _ => {
-                cmd.arg("-vf").arg(format!("scale={}", scale))
+                cmd.arg("-vf").arg(format!("scale={scale}"))
                    .arg("-c:v").arg("libx264")
                    .arg("-preset").arg("fast")
                    .arg("-b:v").arg(format!("{}k", quality.video_bitrate_kbps))
@@ -283,8 +281,8 @@ impl FfmpegCommand {
            .arg("-b:a").arg(format!("{}k", quality.audio_bitrate_kbps));
         
         // HLS 特定參數
-        let playlist_path = format!("{}/playlist.m3u8", output_dir);
-        let segment_pattern = format!("{}/segment_%03d.ts", output_dir);
+        let playlist_path = format!("{output_dir}/playlist.m3u8");
+        let segment_pattern = format!("{output_dir}/segment_%03d.ts");
         
         cmd.arg("-f").arg("hls")
            .arg("-hls_time").arg("6")           // 每個 segment 6 秒
@@ -303,7 +301,7 @@ impl FfmpegCommand {
         use std::fs::File;
         use std::io::Write;
         
-        let master_path = format!("{}/master.m3u8", output_dir);
+        let master_path = format!("{output_dir}/master.m3u8");
         let mut file = File::create(&master_path)?;
         
         writeln!(file, "#EXTM3U")?;
@@ -393,14 +391,13 @@ impl HlsQuality {
     }
 }
 
-/// 檢測 FFmpeg 是否支援指定的硬體加速
+/// 檢測 `FFmpeg` 是否支援指定的硬體加速
 pub fn detect_gpu_support() -> GpuAcceleration {
     // 嘗試檢測 NVIDIA
     if Command::new("ffmpeg")
         .args(["-hide_banner", "-encoders"])
         .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).contains("h264_nvenc"))
-        .unwrap_or(false)
+        .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).contains("h264_nvenc"))
     {
         info!("NVIDIA GPU acceleration (NVENC) detected");
         return GpuAcceleration::Nvidia;
@@ -410,8 +407,7 @@ pub fn detect_gpu_support() -> GpuAcceleration {
     if Command::new("ffmpeg")
         .args(["-hide_banner", "-encoders"])
         .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).contains("h264_qsv"))
-        .unwrap_or(false)
+        .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).contains("h264_qsv"))
     {
         info!("Intel Quick Sync Video detected");
         return GpuAcceleration::Intel;
@@ -482,7 +478,7 @@ mod tests {
     
     /// Helper to get args from Command
     fn get_command_args(cmd: &Command) -> Vec<String> {
-        let debug_str = format!("{:?}", cmd);
+        let debug_str = format!("{cmd:?}");
         // Parse args from debug output - this is a workaround since Command doesn't expose args directly
         // Format: "ffmpeg" "-hwaccel" "cuda" ...
         let mut args = Vec::new();

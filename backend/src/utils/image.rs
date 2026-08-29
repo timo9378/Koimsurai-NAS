@@ -2,12 +2,12 @@ use std::path::Path;
 use std::process::Command;
 use tracing::{debug, error, warn};
 
-/// 圖片大小限制 (50MB) - 超過此大小的圖片將使用 FFmpeg 處理
-/// Image size limit (50MB) - Images larger than this will be processed with FFmpeg
+/// 圖片大小限制 (50MB) - 超過此大小的圖片將使用 `FFmpeg` 處理
+/// Image size limit (50MB) - Images larger than this will be processed with `FFmpeg`
 const LARGE_IMAGE_THRESHOLD: u64 = 50 * 1024 * 1024;
 
-/// 使用 FFmpeg 生成縮圖 (支援更多格式，包括 HEIC/HEIF，且不會 OOM)
-/// Generate thumbnails using FFmpeg (supports more formats including HEIC/HEIF, won't OOM)
+/// 使用 `FFmpeg` 生成縮圖 (支援更多格式，包括 HEIC/HEIF，且不會 OOM)
+/// Generate thumbnails using `FFmpeg` (supports more formats including HEIC/HEIF, won't OOM)
 pub async fn generate_thumbnails(file_path: std::path::PathBuf, storage_root: std::path::PathBuf) {
     tokio::task::spawn_blocking(move || {
         generate_thumbnails_sync(&file_path, &storage_root);
@@ -84,8 +84,7 @@ fn generate_thumbnails_sync(file_path: &std::path::Path, storage_root: &std::pat
 
     // 檢查檔案大小來決定處理方式
     let file_size = std::fs::metadata(file_path)
-        .map(|m| m.len())
-        .unwrap_or(0);
+        .map_or(0, |m| m.len());
 
     if file_size > LARGE_IMAGE_THRESHOLD {
         warn!("Large image detected ({}MB), using FFmpeg for safety", file_size / 1024 / 1024);
@@ -99,7 +98,7 @@ fn generate_thumbnails_sync(file_path: &std::path::Path, storage_root: &std::pat
     ];
 
     for (size_name, max_dimension) in sizes {
-        let output_path = thumb_dir.join(format!("{}.{}.jpg", file_name, size_name));
+        let output_path = thumb_dir.join(format!("{file_name}.{size_name}.jpg"));
         
         // 跳過已存在的縮圖
         if output_path.exists() {
@@ -116,8 +115,7 @@ fn generate_thumbnails_sync(file_path: &std::path::Path, storage_root: &std::pat
             .arg(file_path)
             .arg("-vf")
             .arg(format!(
-                "scale='if(gt(iw,ih),{0},-2)':'if(gt(iw,ih),-2,{0})'",
-                max_dimension
+                "scale='if(gt(iw,ih),{max_dimension},-2)':'if(gt(iw,ih),-2,{max_dimension})'"
             ))
             .arg("-frames:v")
             .arg("1")

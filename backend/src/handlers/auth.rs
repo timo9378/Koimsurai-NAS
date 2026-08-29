@@ -200,7 +200,7 @@ pub async fn login(
     Ok((jar, Json(LoginResponse::Done(EmptyResponse {}))))
 }
 
-/// 第二階段：用 temp_token + 6 位 code（或 backup code）換 cookie
+/// 第二階段：用 `temp_token` + 6 位 code（或 backup code）換 cookie
 #[utoipa::path(
     post,
     path = "/api/auth/2fa/login",
@@ -524,8 +524,7 @@ pub async fn two_factor_status(
     let remaining = if user.totp_enabled == 1 {
         user.totp_backup_codes.as_deref()
             .and_then(|s| serde_json::from_str::<Vec<String>>(s).ok())
-            .map(|v| v.len())
-            .unwrap_or(0)
+            .map_or(0, |v| v.len())
     } else { 0 };
 
     Ok(Json(TwoFactorStatusResponse {

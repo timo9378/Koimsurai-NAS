@@ -1,6 +1,6 @@
 use tantivy::collector::TopDocs;
 use tantivy::query::QueryParser;
-use tantivy::schema::*;
+use tantivy::schema::{Schema, STRING, STORED, TEXT, Term};
 use tantivy::{Index, IndexWriter, ReloadPolicy, doc};
 use tantivy::schema::{TantivyDocument, Value};
 use std::path::PathBuf;
@@ -210,7 +210,7 @@ pub async fn search_by_ai_tag(
     let limit = limit.unwrap_or(50);
 
     let results = sqlx::query_as::<_, (String, String, f64)>(
-        r#"
+        r"
         SELECT t.file_path, t.tag_name, t.confidence
         FROM image_ai_tags t
         INNER JOIN files f ON t.file_path = f.path
@@ -218,10 +218,10 @@ pub async fn search_by_ai_tag(
           AND t.confidence >= ?
         ORDER BY t.confidence DESC
         LIMIT ?
-        "#,
+        ",
     )
-    .bind(format!("%{}%", tag_query))
-    .bind(min_conf as f64)
+    .bind(format!("%{tag_query}%"))
+    .bind(f64::from(min_conf))
     .bind(limit)
     .fetch_all(pool)
     .await
@@ -249,13 +249,13 @@ pub async fn search_by_ai_tag(
 /// Get all available AI tags (for autocomplete)
 pub async fn get_all_ai_tags(pool: &Pool<Sqlite>) -> Result<Vec<(String, i32)>, AppError> {
     let results = sqlx::query_as::<_, (String, i32)>(
-        r#"
+        r"
         SELECT tag_name, COUNT(*) as count 
         FROM image_ai_tags
         GROUP BY tag_name
         ORDER BY count DESC
         LIMIT 100
-        "#,
+        ",
     )
     .fetch_all(pool)
     .await

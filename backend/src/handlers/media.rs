@@ -48,22 +48,18 @@ pub async fn stream_media(
     if let Some(resolution) = params.resolution {
         // 嘗試獲取轉碼許可 (非阻塞)
         // Try to acquire transcode permit (non-blocking)
-        let permit = match state.transcode_semaphore.clone().try_acquire_owned() {
-            Ok(permit) => permit,
-            Err(_) => {
-                // 所有轉碼槽位都在使用中
-                // All transcode slots are busy
-                let max_transcodes = crate::state::get_max_concurrent_transcodes();
-                warn!("Transcode request rejected: all {} slots busy", max_transcodes);
-                return Response::builder()
-                    .status(503)
-                    .header("Retry-After", "5")
-                    .body(Body::from(format!(
-                        "Server is busy with {} concurrent transcodes. Please try again later.",
-                        max_transcodes
-                    )))
-                    .unwrap();
-            }
+        let permit = if let Ok(permit) = state.transcode_semaphore.try_acquire_owned() { permit } else {
+            // 所有轉碼槽位都在使用中
+            // All transcode slots are busy
+            let max_transcodes = crate::state::get_max_concurrent_transcodes();
+            warn!("Transcode request rejected: all {} slots busy", max_transcodes);
+            return Response::builder()
+                .status(503)
+                .header("Retry-After", "5")
+                .body(Body::from(format!(
+                    "Server is busy with {max_transcodes} concurrent transcodes. Please try again later."
+                )))
+                .unwrap();
         };
 
         info!("Starting transcode for {} at resolution {}", params.path, resolution);
@@ -95,7 +91,7 @@ pub async fn stream_media(
                 // permit 會在這裡被 drop，自動釋放
                 Response::builder()
                     .status(500)
-                    .body(Body::from(format!("Failed to start transcoding: {}", e)))
+                    .body(Body::from(format!("Failed to start transcoding: {e}")))
                     .unwrap()
             }
         }
@@ -185,15 +181,14 @@ pub async fn get_timeline(
     };
 
     let sql = format!(
-        r#"
+        r"
         SELECT
-            strftime('{}', modified) as date_group,
+            strftime('{group_format}', modified) as date_group,
             name, is_dir, size, modified, mime_type, parent_path
         FROM files
         WHERE mime_type LIKE 'image/%' OR mime_type LIKE 'video/%'
         ORDER BY modified DESC
-        "#,
-        group_format
+        "
     );
 
     let rows = sqlx::query_as::<_, (String, String, bool, i64, chrono::NaiveDateTime, Option<String>, String)>(&sql)
@@ -208,7 +203,7 @@ pub async fn get_timeline(
         let full_path = if parent_path.is_empty() {
             name.clone()
         } else {
-            format!("{}/{}", parent_path, name)
+            format!("{parent_path}/{name}")
         };
 
         let has_permission = sqlx::query_scalar::<_, bool>(
@@ -253,7 +248,7 @@ pub async fn get_timeline(
 //                         HLS 串流
 // ============================================================
 
-/// HLS 快取目錄 (相對於 STORAGE_PATH)
+/// HLS 快取目錄 (相對於 `STORAGE_PATH`)
 const HLS_CACHE_DIR: &str = ".hls_cache";
 
 /// HLS 狀態響應
@@ -480,7 +475,7 @@ pub async fn hls_serve(
 fn rewrite_hls_urls(content: &str, video_path: &str, playlist_file: &str) -> String {
     let mut result = String::new();
     let base_dir = if playlist_file.contains('/') {
-        playlist_file.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("")
+        playlist_file.rsplit_once('/').map_or("", |(dir, _)| dir)
     } else {
         ""
     };
@@ -493,7 +488,7 @@ fn rewrite_hls_urls(content: &str, video_path: &str, playlist_file: &str) -> Str
             let file_ref = if base_dir.is_empty() {
                 line.to_string()
             } else {
-                format!("{}/{}", base_dir, line)
+                format!("{base_dir}/{line}")
             };
             let url = format!("/api/media/hls/serve?path={}&file={}", 
                 urlencoding::encode(video_path),

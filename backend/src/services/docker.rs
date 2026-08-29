@@ -31,10 +31,10 @@ pub enum DockerError {
 impl fmt::Display for DockerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DockerError::ConnectionFailed(msg) => write!(f, "Docker daemon 無法連接: {}", msg),
-            DockerError::ContainerError(msg) => write!(f, "容器操作失敗: {}", msg),
-            DockerError::ImageError(msg) => write!(f, "鏡像操作失敗: {}", msg),
-            DockerError::ApiError(e) => write!(f, "Docker API 錯誤: {}", e),
+            Self::ConnectionFailed(msg) => write!(f, "Docker daemon 無法連接: {msg}"),
+            Self::ContainerError(msg) => write!(f, "容器操作失敗: {msg}"),
+            Self::ImageError(msg) => write!(f, "鏡像操作失敗: {msg}"),
+            Self::ApiError(e) => write!(f, "Docker API 錯誤: {e}"),
         }
     }
 }
@@ -43,7 +43,7 @@ impl std::error::Error for DockerError {}
 
 impl From<bollard::errors::Error> for DockerError {
     fn from(err: bollard::errors::Error) -> Self {
-        DockerError::ApiError(err)
+        Self::ApiError(err)
     }
 }
 
@@ -295,7 +295,7 @@ impl DockerService {
             state: ContainerState {
                 status: state
                     .and_then(|s| s.status.as_ref())
-                    .map(|s| s.to_string())
+                    .map(std::string::ToString::to_string)
                     .unwrap_or_default(),
                 running: state.and_then(|s| s.running).unwrap_or(false),
                 paused: state.and_then(|s| s.paused).unwrap_or(false),
@@ -457,7 +457,7 @@ impl DockerService {
             let system_delta = cpu_stats.and_then(|c| c.system_cpu_usage).unwrap_or(0) as f64
                 - precpu_stats.and_then(|c| c.system_cpu_usage).unwrap_or(0) as f64;
 
-            let num_cpus = cpu_stats.and_then(|c| c.online_cpus).unwrap_or(1) as f64;
+            let num_cpus = f64::from(cpu_stats.and_then(|c| c.online_cpus).unwrap_or(1));
 
             let cpu_percent = if system_delta > 0.0 {
                 (cpu_delta / system_delta) * num_cpus * 100.0
@@ -475,34 +475,32 @@ impl DockerService {
             let (network_rx, network_tx) = stats
                 .networks
                 .as_ref()
-                .map(|networks| {
+                .map_or((0, 0), |networks| {
                     networks.values().fold((0u64, 0u64), |(rx, tx), net| {
                         (
                             rx + net.rx_bytes.unwrap_or(0),
                             tx + net.tx_bytes.unwrap_or(0),
                         )
                     })
-                })
-                .unwrap_or((0, 0));
+                });
 
             // 磁碟 I/O
             let blkio_stats = stats.blkio_stats.as_ref();
             let (block_read, block_write) = blkio_stats
                 .and_then(|b| b.io_service_bytes_recursive.as_ref())
-                .map(|io| {
+                .map_or((0, 0), |io| {
                     io.iter().fold((0u64, 0u64), |(read, write), entry| {
                         match entry.op.as_deref() {
-                            Some("read") | Some("Read") => {
+                            Some("read" | "Read") => {
                                 (read + entry.value.unwrap_or(0), write)
                             }
-                            Some("write") | Some("Write") => {
+                            Some("write" | "Write") => {
                                 (read, write + entry.value.unwrap_or(0))
                             }
                             _ => (read, write),
                         }
                     })
-                })
-                .unwrap_or((0, 0));
+                });
 
             return Ok(ContainerStats {
                 cpu_percent,
@@ -587,8 +585,7 @@ impl DockerService {
             .map(|n| {
                 let container_count = n.containers
                     .as_ref()
-                    .map(|c| c.len() as i32)
-                    .unwrap_or(0);
+                    .map_or(0, |c| c.len() as i32);
                 NetworkSummary {
                     id: n.id.unwrap_or_default(),
                     name: n.name.unwrap_or_default(),

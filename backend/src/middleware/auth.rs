@@ -19,14 +19,14 @@ pub async fn require_auth(
         .and_then(|h| h.to_str().ok());
 
     let mut token_opt: Option<String> = None;
-    let is_bearer_auth;
+    
 
     if let Some(h) = auth_header {
         if let Some(bearer) = h.strip_prefix("Bearer ") {
             token_opt = Some(bearer.to_string());
         }
     }
-    is_bearer_auth = token_opt.is_some();
+    let is_bearer_auth = token_opt.is_some();
 
     // Fallback to Cookie (using axum-extra CookieJar for correct parsing)
     if token_opt.is_none() {
@@ -47,13 +47,13 @@ pub async fn require_auth(
         {
             let origin = request.headers().get(header::ORIGIN)
                 .and_then(|h| h.to_str().ok())
-                .map(|s| s.to_string());
+                .map(std::string::ToString::to_string);
             let referer = request.headers().get(header::REFERER)
                 .and_then(|h| h.to_str().ok())
-                .map(|s| s.to_string());
+                .map(std::string::ToString::to_string);
             let host = request.headers().get(header::HOST)
                 .and_then(|h| h.to_str().ok())
-                .map(|s| s.to_string());
+                .map(std::string::ToString::to_string);
 
             // 如果有 Origin header，驗證它是否匹配 Host
             if let Some(ref origin_val) = origin {

@@ -29,7 +29,7 @@ pub fn verify_code(secret: &str, code: &str) -> Result<bool> {
 fn build_totp(secret: &str, label: &str) -> Result<TOTP> {
     let bytes = Secret::Encoded(secret.to_string())
         .to_bytes()
-        .map_err(|e| anyhow!("invalid secret: {:?}", e))?;
+        .map_err(|e| anyhow!("invalid secret: {e:?}"))?;
     TOTP::new(
         Algorithm::SHA1,
         6,
@@ -39,7 +39,7 @@ fn build_totp(secret: &str, label: &str) -> Result<TOTP> {
         Some(ISSUER.to_string()),
         label.to_string(),
     )
-    .map_err(|e| anyhow!("totp build failed: {:?}", e))
+    .map_err(|e| anyhow!("totp build failed: {e:?}"))
 }
 
 /// 產生 8 組 backup codes（每組 10 字母+數字，dashes 分組讀感佳）

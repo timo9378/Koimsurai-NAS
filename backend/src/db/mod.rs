@@ -20,7 +20,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
     // 如果資料庫檔案不存在，則建立它
     // Create database file if it doesn't exist
     if !Sqlite::database_exists(&database_url).await.unwrap_or(false) {
-        println!("Creating database {}", database_url);
+        println!("Creating database {database_url}");
         Sqlite::create_database(&database_url).await?;
     }
 
@@ -49,7 +49,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
         .unwrap_or(256);
     
     let mmap_size_bytes = mmap_size_mb * 1024 * 1024;
-    sqlx::query(&format!("PRAGMA mmap_size={}", mmap_size_bytes))
+    sqlx::query(&format!("PRAGMA mmap_size={mmap_size_bytes}"))
         .execute(&pool)
         .await?;
     
@@ -58,14 +58,14 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
     // 建立使用者表格
     // Create users table
     sqlx::query(
-        r#"
+        r"
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL UNIQUE,
             password_hash TEXT NOT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        "#
+        "
     )
     .execute(&pool)
     .await?;
@@ -73,7 +73,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
     // 建立分享連結表格
     // Create share_links table
     sqlx::query(
-        r#"
+        r"
         CREATE TABLE IF NOT EXISTS share_links (
             id TEXT PRIMARY KEY,
             file_path TEXT NOT NULL,
@@ -83,7 +83,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             creator_id INTEGER,
             FOREIGN KEY(creator_id) REFERENCES users(id)
         );
-        "#
+        "
     )
     .execute(&pool)
     .await?;
@@ -91,7 +91,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
     // 建立權限表格
     // Create permissions table
     sqlx::query(
-        r#"
+        r"
         CREATE TABLE IF NOT EXISTS permissions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -101,7 +101,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             FOREIGN KEY(user_id) REFERENCES users(id),
             UNIQUE(user_id, path)
         );
-        "#
+        "
     )
     .execute(&pool)
     .await?;
@@ -109,7 +109,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
     // 建立檔案索引表格
     // Create files index table
     sqlx::query(
-        r#"
+        r"
         CREATE TABLE IF NOT EXISTS files (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             path TEXT NOT NULL UNIQUE,
@@ -123,7 +123,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             hash TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_files_parent_path ON files(parent_path);
-        "#
+        "
     )
     .execute(&pool)
     .await?;
@@ -131,7 +131,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
     // 建立任務表格
     // Create jobs table
     sqlx::query(
-        r#"
+        r"
         CREATE TABLE IF NOT EXISTS jobs (
             id TEXT PRIMARY KEY,
             job_type TEXT NOT NULL,
@@ -141,7 +141,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             error TEXT
         );
-        "#
+        "
     )
     .execute(&pool)
     .await?;
@@ -149,7 +149,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
     // 建立上傳 Session 表格
     // Create upload_sessions table
     sqlx::query(
-        r#"
+        r"
         CREATE TABLE IF NOT EXISTS upload_sessions (
             id TEXT PRIMARY KEY,
             user_id INTEGER NOT NULL,
@@ -161,7 +161,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
-        "#
+        "
     )
     .execute(&pool)
     .await?;
@@ -169,7 +169,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
     // 建立檔案標籤表格
     // Create file_tags table
     sqlx::query(
-        r#"
+        r"
         CREATE TABLE IF NOT EXISTS file_tags (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -180,7 +180,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             FOREIGN KEY(user_id) REFERENCES users(id),
             UNIQUE(user_id, file_path, tag_name)
         );
-        "#
+        "
     )
     .execute(&pool)
     .await?;
@@ -188,7 +188,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
     // 建立檔案收藏表格
     // Create file_stars table
     sqlx::query(
-        r#"
+        r"
         CREATE TABLE IF NOT EXISTS file_stars (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -197,7 +197,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             FOREIGN KEY(user_id) REFERENCES users(id),
             UNIQUE(user_id, file_path)
         );
-        "#
+        "
     )
     .execute(&pool)
     .await?;
@@ -205,7 +205,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
     // 建立審計日誌表格
     // Create audit_logs table
     sqlx::query(
-        r#"
+        r"
         CREATE TABLE IF NOT EXISTS audit_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -216,7 +216,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
-        "#
+        "
     )
     .execute(&pool)
     .await?;
@@ -224,13 +224,13 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
     // 建立系統設定表格 (用於追蹤掃描狀態等)
     // Create system_settings table (for tracking scan state etc.)
     sqlx::query(
-        r#"
+        r"
         CREATE TABLE IF NOT EXISTS system_settings (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        "#
+        "
     )
     .execute(&pool)
     .await?;
@@ -238,7 +238,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
     // 建立 AI 圖片標籤表格
     // Create image_ai_tags table for AI-detected labels (CLIP/ResNet)
     sqlx::query(
-        r#"
+        r"
         CREATE TABLE IF NOT EXISTS image_ai_tags (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             file_path TEXT NOT NULL,
@@ -251,7 +251,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
         CREATE INDEX IF NOT EXISTS idx_image_ai_tags_file_path ON image_ai_tags(file_path);
         CREATE INDEX IF NOT EXISTS idx_image_ai_tags_tag_name ON image_ai_tags(tag_name);
         CREATE INDEX IF NOT EXISTS idx_image_ai_tags_confidence ON image_ai_tags(confidence);
-        "#
+        "
     )
     .execute(&pool)
     .await?;
@@ -259,21 +259,21 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
     // 建立 AI 分析狀態表格 (追蹤哪些圖片已分析)
     // Create ai_analysis_status table (track which images have been analyzed)
     sqlx::query(
-        r#"
+        r"
         CREATE TABLE IF NOT EXISTS ai_analysis_status (
             file_path TEXT PRIMARY KEY,
             analyzed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             model_version TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'completed'
         );
-        "#
+        "
     )
     .execute(&pool)
     .await?;
 
     // 建立 refresh_tokens 表格 (用於儲存 refresh tokens)
     sqlx::query(
-        r#"
+        r"
         CREATE TABLE IF NOT EXISTS refresh_tokens (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -286,14 +286,14 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
 
         CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
         CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token);
-        "#
+        "
     )
     .execute(&pool)
     .await?;
 
     // 建立上傳連結表格 (反向分享 - 讓其他人上傳檔案用)
     sqlx::query(
-        r#"
+        r"
         CREATE TABLE IF NOT EXISTS upload_links (
             id TEXT PRIMARY KEY,
             target_path TEXT NOT NULL,
@@ -306,7 +306,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             creator_id INTEGER,
             FOREIGN KEY(creator_id) REFERENCES users(id)
         );
-        "#
+        "
     )
     .execute(&pool)
     .await?;
@@ -314,7 +314,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
     // 建立垃圾桶 metadata 表格 (記錄原始路徑，以便還原到正確位置)
     // Create trash_metadata table (record original path for correct restore)
     sqlx::query(
-        r#"
+        r"
         CREATE TABLE IF NOT EXISTS trash_metadata (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             trash_name TEXT NOT NULL UNIQUE,
@@ -323,7 +323,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(deleted_by) REFERENCES users(id)
         );
-        "#
+        "
     )
     .execute(&pool)
     .await?;
@@ -346,8 +346,7 @@ async fn ensure_column(
     definition: &str,
 ) -> Result<()> {
     let row: (i64,) = sqlx::query_as(&format!(
-        "SELECT COUNT(*) FROM pragma_table_info('{}') WHERE name = ?",
-        table
+        "SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = ?"
     ))
     .bind(column)
     .fetch_one(pool)
@@ -355,8 +354,7 @@ async fn ensure_column(
 
     if row.0 == 0 {
         sqlx::query(&format!(
-            "ALTER TABLE {} ADD COLUMN {} {}",
-            table, column, definition
+            "ALTER TABLE {table} ADD COLUMN {column} {definition}"
         ))
         .execute(pool)
         .await?;

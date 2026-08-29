@@ -9,3 +9,56 @@
 [workspace]
 resolver = "2"
 members = ["backend"]
+
+# ─── Lint ────────────────────────────────────────────────────────────
+# 規則本體與 sora-to-ki 同一份（同一把尺）。**但 allow 清單是本 repo 自己量的** ——
+# 那邊的數字反映的是那包 code，照抄數字等於沒量。
+#
+# 邊界：`-D warnings` 是 CI 的跑法（ci.yml 與 pre-commit 都是），所以這裡的
+# **warn 在合流時等同 deny**。不要因為「它只是 warn」就放著不管。
+[workspace.lints.clippy]
+# priority = -1 讓下面個別的 allow 蓋得過整組
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+
+# nursery 整組不開，只個別挑有實質價值的進來。
+or_fun_call = "warn"                   # `unwrap_or(expensive())` 無條件求值
+significant_drop_in_scrutinee = "warn" # match/if-let 的 scrutinee 裡持有鎖 guard
+significant_drop_tightening = "warn"   # 鎖 guard 活得比臨界區久
+redundant_clone = "warn"
+missing_const_for_fn = "warn"
+use_self = "warn"
+
+# ─── allow：實際量過是噪音的 ──────────────────────────────────────────
+# 每條後面是導入當下、本 repo 的數量。要拿掉某條之前先想「這些真的每個都該改嗎」。
+missing_errors_doc = "allow"     # 248；Err variant 自己 AppError 描述就夠
+missing_panics_doc = "allow"     # 18；同上取向
+too_many_lines = "allow"         # 16；handler 本來就長，拆不拆看語意不看行數
+must_use_candidate = "allow"     # 58；幾乎每個 fn 都會被建議加 #[must_use]
+items_after_statements = "allow" # 4；區域 fn 就近定義比搬到頂端好讀
+similar_names = "allow"          # 4
+unreadable_literal = "allow"     # 4；port 與短常數加底線反而難讀
+#
+# ⚠️ sora-to-ki 另外 allow 了 doc_markdown（那邊 468 個），這裡**刻意不列** ——
+# 本 repo 原有 55 個，導入時已由 `cargo clippy --fix` 全數補上反引號，現存 0。
+# allow 一條已經不存在的問題，只會讓它日後長回來時沒人擋。
+
+# ─── restriction：整組絕對不要開，只個別挑 ────────────────────────────
+todo = "deny"           # 現存 0。半成品不准 merge
+unimplemented = "deny"  # 現存 0
+dbg_macro = "deny"      # 現存 0。上 commit 前清掉
+print_stdout = "deny"   # 現存 3（export_types 那支 codegen CLI 檔內 allow；db/mod.rs 兩處要改走 tracing）
+print_stderr = "deny"   # 正式碼現存 0。要輸出走 tracing，才進得了結構化 log
+
+# ⚠️ `unwrap_used` **不在這裡**，它寫在 crate root 的 `#![deny(...)]`
+# （backend/src/lib.rs、main.rs、bin/export_types.rs），理由見 lib.rs 上面那段。
+# 一句話版本：`[lints]` 是 package 層級、會連 tests/ 一起管，而這條的意圖只針對正式碼。
+
+# ─── rustc 自己的 lint ────────────────────────────────────────────────
+# 預設 warn 的那些在 `-D warnings` 下本來就會擋，這裡只列「預設是 allow、
+# 要主動打開才有」的。同樣每條都量過現存數量。
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny" # 現存 0（本專案沒有 unsafe）
+unused_must_use = "deny"        # Result 不能默默扔掉（預設 warn，這裡升 deny）
+trivial_numeric_casts = "warn"  # 現存 0
+unused_lifetimes = "warn"       # 現存 0

@@ -45,7 +45,7 @@ pub async fn create_folder(
 ) -> Result<StatusCode, AppError> {
     // 1. 組合路徑
     let parent_path = if payload.path.is_empty() || payload.path == "/" {
-        "".to_string()
+        String::new()
     } else {
         payload.path.trim_start_matches('/').to_string()
     };
@@ -83,7 +83,7 @@ pub async fn create_folder(
     fs::create_dir_all(&target_path).await.map_err(AppError::from)?;
 
     // 5. 寫入 Audit Log
-    let _ = state.audit.log(
+    let () = state.audit.log(
         user_id,
         "create_folder",
         &full_relative_path,
@@ -154,7 +154,7 @@ pub async fn rename_file(
     let mut tx = state.pool.begin().await.map_err(AppError::from)?;
 
     // 查出所有受影響的 files 路徑（包含目標本身與子路徑）
-    let like_pattern = format!("{}/%", normalized_old);
+    let like_pattern = format!("{normalized_old}/%");
     let affected_paths: Vec<String> = sqlx::query_scalar(
         "SELECT path FROM files WHERE path = ? OR path LIKE ?"
     )
@@ -238,7 +238,7 @@ pub async fn rename_file(
     tx.commit().await.map_err(AppError::from)?;
 
     // Audit Log
-    let _ = state.audit.log(
+    let () = state.audit.log(
         user_id,
         "rename_file",
         &path,
@@ -328,7 +328,7 @@ pub async fn list_files(
 
     // Normalize path for DB query (remove trailing slash if any, ensure forward slashes)
     let normalized_path = path.trim_end_matches('/').replace('\\', "/");
-    let parent_path = if normalized_path.is_empty() { "".to_string() } else { normalized_path };
+    let parent_path = if normalized_path.is_empty() { String::new() } else { normalized_path };
 
     let mut sql = String::from("SELECT name, is_dir, size, modified, mime_type, parent_path FROM files WHERE ");
     let mut params = Vec::new();
@@ -340,13 +340,13 @@ pub async fn list_files(
         if parent_path.is_empty() {
             // Root directory: search all files
             sql.push_str("name LIKE ?");
-            params.push(format!("%{}%", search));
+            params.push(format!("%{search}%"));
         } else {
             // Specific directory: search within this directory tree
             sql.push_str("(parent_path = ? OR parent_path LIKE ?) AND name LIKE ?");
             params.push(parent_path.clone());
-            params.push(format!("{}/%", parent_path));
-            params.push(format!("%{}%", search));
+            params.push(format!("{parent_path}/%"));
+            params.push(format!("%{search}%"));
         }
     } else {
         sql.push_str("parent_path = ?");
@@ -356,7 +356,7 @@ pub async fn list_files(
     // Sorting
     let sort_column = match query.sort_by.as_deref() {
         Some("size") => "size",
-        Some("modified") | Some("date") => "modified",
+        Some("modified" | "date") => "modified",
         _ => "name", // Default sort by name
     };
     
@@ -365,7 +365,7 @@ pub async fn list_files(
         _ => "ASC",
     };
 
-    sql.push_str(&format!(" ORDER BY is_dir DESC, {} {}", sort_column, order));
+    sql.push_str(&format!(" ORDER BY is_dir DESC, {sort_column} {order}"));
 
     // Pagination
     let limit = query.limit.unwrap_or(50);
@@ -401,18 +401,16 @@ pub async fn list_files(
             let db_path = if effective_parent.is_empty() {
                 name.clone()
             } else {
-                format!("{}/{}", effective_parent, name)
+                format!("{effective_parent}/{name}")
             };
             stale_paths.push(db_path);
             continue; // 跳過這個檔案
         }
         
-        let metadata = if !is_dir {
-            if let Some(ref mime) = mime_type {
-                crate::utils::metadata::extract_metadata(&file_path, mime)
-            } else {
-                crate::utils::metadata::FileMetadata::None
-            }
+        let metadata = if is_dir {
+            crate::utils::metadata::FileMetadata::None
+        } else if let Some(ref mime) = mime_type {
+            crate::utils::metadata::extract_metadata(&file_path, mime)
         } else {
             crate::utils::metadata::FileMetadata::None
         };
@@ -421,7 +419,7 @@ pub async fn list_files(
         let file_db_path = if effective_parent.is_empty() {
             name.clone()
         } else {
-            format!("{}/{}", effective_parent, name)
+            format!("{effective_parent}/{name}")
         };
 
         let tags = sqlx::query_as::<_, (String, Option<String>)>(
@@ -502,7 +500,7 @@ pub async fn list_files_root(
     Extension(user_id): Extension<i64>,
     query: axum::extract::Query<ListFilesQuery>,
 ) -> Result<Json<Vec<FileInfo>>, AppError> {
-    list_files(State(state), Extension(user_id), AxumPath("".to_string()), query).await
+    list_files(State(state), Extension(user_id), AxumPath(String::new()), query).await
 }
 
 
@@ -620,14 +618,14 @@ pub async fn upload_file(
 
                 // Insert or update files table
                 if let Err(e) = sqlx::query(
-                    r#"
+                    r"
                     INSERT INTO files (path, name, size, mime_type, parent_path, is_dir, modified)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(path) DO UPDATE SET
                         size = excluded.size,
                         modified = excluded.modified,
                         mime_type = excluded.mime_type
-                    "#,
+                    ",
                 )
                 .bind(&full_relative_path)
                 .bind(&file_name)
@@ -681,7 +679,7 @@ pub async fn upload_file_root(
     State(state): State<AppState>,
     multipart: Multipart,
 ) -> Result<StatusCode, AppError> {
-    upload_file(State(state), AxumPath("".to_string()), multipart).await
+    upload_file(State(state), AxumPath(String::new()), multipart).await
 }
 
 #[utoipa::path(
@@ -716,7 +714,7 @@ pub async fn get_thumbnail(
     let thumb_dir = thumb_root.join(relative_path.parent().unwrap_or(Path::new("")));
     let file_name = full_path.file_name().unwrap_or_default().to_string_lossy();
     
-    let thumb_name = format!("{}.{}.jpg", file_name, size);
+    let thumb_name = format!("{file_name}.{size}.jpg");
     let thumb_path = thumb_dir.join(thumb_name);
 
     if !thumb_path.exists() {
@@ -775,7 +773,7 @@ pub async fn move_to_trash(
     // Handle collision by appending timestamp
     let (final_trash_path, trash_name) = if trash_path.exists() {
         let timestamp = chrono::Utc::now().timestamp();
-        let new_name = format!("{}.{}", file_name, timestamp);
+        let new_name = format!("{file_name}.{timestamp}");
         (trash_root.join(&new_name), new_name)
     } else {
         (trash_path, file_name.to_string())
@@ -798,7 +796,7 @@ pub async fn move_to_trash(
     // Remove from files table (including children if it's a directory)
     sqlx::query("DELETE FROM files WHERE path = ? OR path LIKE ?")
         .bind(&normalized_path)
-        .bind(format!("{}/%", normalized_path))
+        .bind(format!("{normalized_path}/%"))
         .execute(pool)
         .await
         .map_err(AppError::from)?;
@@ -840,7 +838,7 @@ pub async fn delete_file(
     move_to_trash(&state.storage_path, &state.pool, &path, user_id).await?;
 
     // Audit Log
-    let _ = state.audit.log(
+    let () = state.audit.log(
         user_id,
         "delete_file",
         &path,
@@ -945,8 +943,8 @@ pub async fn batch_copy(
     Ok(StatusCode::ACCEPTED)
 }
 
-/// 我的最愛檔案資訊（包含 starred_at 時間戳）
-/// Favorite file info with starred_at timestamp
+/// 我的最愛檔案資訊（包含 `starred_at` 時間戳）
+/// Favorite file info with `starred_at` timestamp
 #[derive(serde::Serialize, ToSchema, specta::Type)]
 pub struct FavoriteFileInfo {
     pub name: String,
@@ -973,7 +971,7 @@ pub async fn list_favorites(
     // Join file_stars with files to get metadata
     // 聯結 file_stars 與 files 資料表取得完整資訊
     let rows = sqlx::query_as::<_, (String, String, bool, i64, chrono::NaiveDateTime, Option<String>, chrono::NaiveDateTime)>(
-        r#"
+        r"
         SELECT 
             f.name,
             f.path,
@@ -986,7 +984,7 @@ pub async fn list_favorites(
         JOIN file_stars s ON f.path = s.file_path
         WHERE s.user_id = ?
         ORDER BY s.created_at DESC
-        "#
+        "
     )
     .bind(user_id)
     .fetch_all(&state.pool)

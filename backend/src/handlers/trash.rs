@@ -8,7 +8,7 @@ use crate::state::AppState;
 use crate::error::AppError;
 use crate::models::FileInfo;
 
-/// Trash file info with original_path for frontend restore
+/// Trash file info with `original_path` for frontend restore
 #[derive(serde::Serialize)]
 pub struct TrashFileInfo {
     pub name: String,
@@ -58,7 +58,7 @@ pub async fn list_trash(
 
             files.push(TrashFileInfo {
                 name: trash_name.clone(),
-                path: format!(".trash/{}", trash_name),
+                path: format!(".trash/{trash_name}"),
                 original_path,
                 is_dir: metadata.is_dir(),
                 size: metadata.len(),
@@ -125,16 +125,14 @@ pub async fn restore_file(
 
     // Handle name collision at restore destination
     let final_restore_path = if restore_path.exists() {
-        let stem = restore_path.file_stem()
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_else(|| filename.clone());
+        let stem = restore_path.file_stem().map_or_else(|| filename.clone(), |s| s.to_string_lossy().to_string());
         let ext = restore_path.extension()
             .map(|e| format!(".{}", e.to_string_lossy()))
             .unwrap_or_default();
         let parent = restore_path.parent().unwrap_or(&state.storage_path);
         let mut counter = 1;
         loop {
-            let new_name = format!("{} ({}){}", stem, counter, ext);
+            let new_name = format!("{stem} ({counter}){ext}");
             let candidate = parent.join(&new_name);
             if !candidate.exists() {
                 break candidate;
@@ -174,14 +172,14 @@ pub async fn restore_file(
                 .to_string();
 
             let _ = sqlx::query(
-                r#"
+                r"
                 INSERT INTO files (path, name, size, mime_type, parent_path, is_dir, modified)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(path) DO UPDATE SET
                     size = excluded.size,
                     modified = excluded.modified,
                     mime_type = excluded.mime_type
-                "#
+                "
             )
             .bind(&relative_path)
             .bind(&name)

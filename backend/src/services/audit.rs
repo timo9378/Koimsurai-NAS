@@ -7,7 +7,7 @@ pub struct AuditService {
 }
 
 impl AuditService {
-    pub fn new(pool: Pool<Sqlite>) -> Self {
+    pub const fn new(pool: Pool<Sqlite>) -> Self {
         Self { pool }
     }
 

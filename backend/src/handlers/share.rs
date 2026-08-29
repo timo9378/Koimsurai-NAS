@@ -71,7 +71,7 @@ pub async fn create_share_link(
 
     Ok(Json(ShareLinkResponse {
         id: id.clone(),
-        url: format!("/s/{}", id),
+        url: format!("/s/{id}"),
         expires_at: expires_at.map(|t| t.to_rfc3339()),
     }))
 }
@@ -139,10 +139,8 @@ pub async fn access_share_link(
     if is_directory {
         // === Directory: create zip and stream ===
         let dir_name = Path::new(clean_path)
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "download".to_string());
-        let zip_file_name = format!("{}.zip", dir_name);
+            .file_name().map_or_else(|| "download".to_string(), |n| n.to_string_lossy().to_string());
+        let zip_file_name = format!("{dir_name}.zip");
 
         let temp_path = std::env::temp_dir().join(format!("nas_share_{}.zip", Uuid::new_v4()));
         let full_path_for_zip = full_path.clone();
@@ -224,9 +222,7 @@ pub async fn access_share_link(
         let file_size = metadata.len();
 
         let file_name = Path::new(clean_path)
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "download".to_string());
+            .file_name().map_or_else(|| "download".to_string(), |n| n.to_string_lossy().to_string());
 
         let mime_type = mime_guess::from_path(&full_path)
             .first_or_octet_stream()
@@ -305,21 +301,17 @@ pub async fn get_share_info(
 
     // 獲取文件名和大小
     let file_name = Path::new(clean_path)
-        .file_name()
-        .map(|s| s.to_string_lossy().to_string())
-        .unwrap_or_else(|| "unknown".to_string());
+        .file_name().map_or_else(|| "unknown".to_string(), |s| s.to_string_lossy().to_string());
     
     let file_size = if is_directory {
         // Calculate total directory size by walking all files
         let full_path_for_size = full_path.clone();
         tokio::task::spawn_blocking(move || {
             let mut total: u64 = 0;
-            for entry in WalkDir::new(&full_path_for_size).follow_links(false) {
-                if let Ok(entry) = entry {
-                    if entry.path().is_file() {
-                        if let Ok(meta) = std::fs::metadata(entry.path()) {
-                            total += meta.len();
-                        }
+            for entry in WalkDir::new(&full_path_for_size).follow_links(false).into_iter().flatten() {
+                if entry.path().is_file() {
+                    if let Ok(meta) = std::fs::metadata(entry.path()) {
+                        total += meta.len();
                     }
                 }
             }
@@ -329,8 +321,7 @@ pub async fn get_share_info(
         .unwrap_or(0)
     } else {
         tokio::fs::metadata(&full_path).await
-            .map(|m| m.len())
-            .unwrap_or(0)
+            .map_or(0, |m| m.len())
     };
 
     // 猜測 MIME 類型

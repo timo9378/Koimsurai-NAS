@@ -1,7 +1,7 @@
 //! AI 圖片標籤服務
 //!
 //! 使用 CLIP 模型進行圖片智能標籤。
-//! 設計為可選功能，透過 ENABLE_AI_LABELLING 環境變數控制。
+//! 設計為可選功能，透過 `ENABLE_AI_LABELLING` 環境變數控制。
 //!
 //! 使用 `candle` crate 進行推理，支援 CUDA GPU 加速。
 
@@ -155,8 +155,7 @@ impl AiService {
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(4),
             use_gpu: std::env::var("AI_USE_GPU")
-                .map(|v| v.to_lowercase() == "true")
-                .unwrap_or(true),
+                .map_or(true, |v| v.to_lowercase() == "true"),
             max_tags: std::env::var("AI_MAX_TAGS")
                 .ok()
                 .and_then(|s| s.parse().ok())
@@ -457,14 +456,14 @@ impl AiService {
             // 只儲存信心度超過門檻的標籤
             if tag.confidence >= self.config.min_confidence {
                 sqlx::query(
-                    r#"
+                    r"
                     INSERT OR REPLACE INTO image_ai_tags (file_path, tag_name, confidence, model_name)
                     VALUES (?, ?, ?, ?)
-                    "#,
+                    ",
                 )
                 .bind(&result.file_path)
                 .bind(&tag.name)
-                .bind(tag.confidence as f64)
+                .bind(f64::from(tag.confidence))
                 .bind(&result.model_name)
                 .execute(&self.pool)
                 .await?;
@@ -483,10 +482,10 @@ impl AiService {
     /// 標記圖片為處理中
     async fn mark_processing(&self, image_path: &str) -> Result<()> {
         sqlx::query(
-            r#"
+            r"
             INSERT OR REPLACE INTO ai_analysis_status (file_path, model_version, status)
             VALUES (?, ?, 'processing')
-            "#,
+            ",
         )
         .bind(image_path)
         .bind(&self.config.model_name)
@@ -499,10 +498,10 @@ impl AiService {
     /// 標記圖片為已分析
     async fn mark_analyzed(&self, image_path: &str) -> Result<()> {
         sqlx::query(
-            r#"
+            r"
             INSERT OR REPLACE INTO ai_analysis_status (file_path, model_version, status)
             VALUES (?, ?, 'completed')
-            "#,
+            ",
         )
         .bind(image_path)
         .bind(&self.config.model_name)
@@ -515,10 +514,10 @@ impl AiService {
     /// 標記圖片分析失敗
     async fn mark_failed(&self, image_path: &str, error_msg: &str) -> Result<()> {
         sqlx::query(
-            r#"
+            r"
             INSERT OR REPLACE INTO ai_analysis_status (file_path, model_version, status)
             VALUES (?, ?, 'failed')
-            "#,
+            ",
         )
         .bind(image_path)
         .bind(&self.config.model_name)
@@ -556,14 +555,14 @@ impl AiService {
         let min_conf = min_confidence.unwrap_or(self.config.min_confidence);
 
         let results = sqlx::query_scalar::<_, String>(
-            r#"
+            r"
             SELECT DISTINCT file_path FROM image_ai_tags
             WHERE tag_name LIKE ? AND confidence >= ?
             ORDER BY confidence DESC
-            "#,
+            ",
         )
-        .bind(format!("%{}%", tag_name))
-        .bind(min_conf as f64)
+        .bind(format!("%{tag_name}%"))
+        .bind(f64::from(min_conf))
         .fetch_all(&self.pool)
         .await?;
 
@@ -573,12 +572,12 @@ impl AiService {
     /// 獲取所有可用標籤 (用於自動完成)
     pub async fn get_all_tags(&self) -> Result<Vec<(String, i32)>> {
         let results = sqlx::query_as::<_, (String, i32)>(
-            r#"
+            r"
             SELECT tag_name, COUNT(*) as count FROM image_ai_tags
             GROUP BY tag_name
             ORDER BY count DESC
             LIMIT 100
-            "#,
+            ",
         )
         .fetch_all(&self.pool)
         .await?;
@@ -618,13 +617,13 @@ impl AiService {
                 .await?;
 
         let pending_images = sqlx::query_scalar::<_, i32>(
-            r#"
+            r"
             SELECT COUNT(*) FROM files f
             WHERE f.mime_type LIKE 'image/%'
             AND NOT EXISTS (
                 SELECT 1 FROM ai_analysis_status a WHERE a.file_path = f.path
             )
-            "#,
+            ",
         )
         .fetch_one(&self.pool)
         .await
@@ -694,11 +693,11 @@ pub fn is_image_file(path: &Path) -> bool {
     let extension = path
         .extension()
         .and_then(|e| e.to_str())
-        .map(|e| e.to_lowercase());
+        .map(str::to_lowercase);
 
     matches!(
         extension.as_deref(),
-        Some("jpg") | Some("jpeg") | Some("png") | Some("gif") | Some("webp") | Some("bmp")
+        Some("jpg" | "jpeg" | "png" | "gif" | "webp" | "bmp")
     )
 }
 

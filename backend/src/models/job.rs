@@ -14,10 +14,10 @@ pub enum JobStatus {
 impl ToString for JobStatus {
     fn to_string(&self) -> String {
         match self {
-            JobStatus::Pending => "pending".to_string(),
-            JobStatus::Processing => "processing".to_string(),
-            JobStatus::Completed => "completed".to_string(),
-            JobStatus::Failed => "failed".to_string(),
+            Self::Pending => "pending".to_string(),
+            Self::Processing => "processing".to_string(),
+            Self::Completed => "completed".to_string(),
+            Self::Failed => "failed".to_string(),
         }
     }
 }
@@ -25,11 +25,11 @@ impl ToString for JobStatus {
 impl From<String> for JobStatus {
     fn from(s: String) -> Self {
         match s.as_str() {
-            "pending" => JobStatus::Pending,
-            "processing" => JobStatus::Processing,
-            "completed" => JobStatus::Completed,
-            "failed" => JobStatus::Failed,
-            _ => JobStatus::Failed,
+            "pending" => Self::Pending,
+            "processing" => Self::Processing,
+            "completed" => Self::Completed,
+            "failed" => Self::Failed,
+            _ => Self::Failed,
         }
     }
 }

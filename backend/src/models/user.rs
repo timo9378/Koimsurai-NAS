@@ -11,7 +11,7 @@ pub struct User {
     #[serde(skip)]
     pub password_hash: String,
     pub created_at: NaiveDateTime,
-    /// base32 secret，None = 未啟用過 2FA；Some + totp_enabled=0 = setup 中尚未驗證
+    /// base32 secret，None = 未啟用過 2FA；Some + `totp_enabled=0` = setup 中尚未驗證
     #[serde(skip)]
     pub totp_secret: Option<String>,
     /// 0 = 未啟用，1 = 已啟用

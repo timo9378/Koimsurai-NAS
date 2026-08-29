@@ -12,13 +12,13 @@ pub async fn set_permission(
     Json(payload): Json<CreatePermissionRequest>,
 ) -> Result<StatusCode, AppError> {
     sqlx::query(
-        r#"
+        r"
         INSERT INTO permissions (user_id, path, can_read, can_write)
         VALUES (?, ?, ?, ?)
         ON CONFLICT(user_id, path) DO UPDATE SET
             can_read = excluded.can_read,
             can_write = excluded.can_write
-        "#
+        "
     )
     .bind(payload.user_id)
     .bind(&payload.path)

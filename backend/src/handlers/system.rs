@@ -122,7 +122,7 @@ fn get_cpu_temperature() -> Option<f32> {
 
     // Look for CPU temperature sensors
     // Common sensor names: "coretemp", "k10temp", "cpu_thermal", "Package", "Core"
-    for component in components.iter() {
+    for component in &components {
         let label = component.label().to_lowercase();
         if label.contains("core")
             || label.contains("cpu")
@@ -137,7 +137,7 @@ fn get_cpu_temperature() -> Option<f32> {
     }
 
     // Fallback: return first component temperature if available
-    components.iter().next().and_then(|c| c.temperature())
+    components.iter().next().and_then(sysinfo::Component::temperature)
 }
 
 /// Get top processes (by real, delta-based CPU%) from the shared `System` snapshot.
@@ -342,14 +342,13 @@ pub async fn verify_consistency(State(state): State<AppState>) -> Json<Consisten
             total_db_entries: total,
             removed_orphans: removed,
             message: format!(
-                "Consistency check complete. Checked {} entries, removed {} orphaned records.",
-                total, removed
+                "Consistency check complete. Checked {total} entries, removed {removed} orphaned records."
             ),
         }),
         Err(e) => Json(ConsistencyCheckResult {
             total_db_entries: 0,
             removed_orphans: 0,
-            message: format!("Consistency check failed: {}", e),
+            message: format!("Consistency check failed: {e}"),
         }),
     }
 }
@@ -380,7 +379,7 @@ pub async fn trigger_rescan(State(state): State<AppState>) -> Json<RescanResult>
         }),
         Err(e) => Json(RescanResult {
             success: false,
-            message: format!("Rescan failed: {}", e),
+            message: format!("Rescan failed: {e}"),
         }),
     }
 }

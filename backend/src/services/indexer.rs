@@ -25,7 +25,7 @@ pub struct Indexer {
 }
 
 impl Indexer {
-    pub fn new(pool: Pool<Sqlite>, storage_path: PathBuf) -> Self {
+    pub const fn new(pool: Pool<Sqlite>, storage_path: PathBuf) -> Self {
         Self { pool, storage_path }
     }
 
@@ -45,11 +45,11 @@ impl Indexer {
     async fn set_last_full_scan_time(&self, time: NaiveDateTime) -> anyhow::Result<()> {
         let time_str = time.format("%Y-%m-%d %H:%M:%S").to_string();
         sqlx::query(
-            r#"
+            r"
             INSERT INTO system_settings (key, value, updated_at) 
             VALUES ('last_full_scan_time', ?, CURRENT_TIMESTAMP)
             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
-            "#
+            "
         )
         .bind(&time_str)
         .execute(&self.pool)
@@ -95,7 +95,7 @@ impl Indexer {
         let mut disk_paths: HashSet<String> = HashSet::new();
         let walker = WalkDir::new(&self.storage_path).into_iter();
 
-        for entry in walker.filter_map(|e| e.ok()) {
+        for entry in walker.filter_map(std::result::Result::ok) {
             let path = entry.path();
             if path == self.storage_path { continue; }
 
@@ -159,7 +159,7 @@ impl Indexer {
         let walker = WalkDir::new(&self.storage_path).into_iter();
         let mut scanned = 0;
 
-        for entry in walker.filter_map(|e| e.ok()) {
+        for entry in walker.filter_map(std::result::Result::ok) {
             let path = entry.path();
             if path == self.storage_path { continue; }
 
@@ -193,13 +193,13 @@ impl Indexer {
         info!("Starting quick scan...");
 
         // 只掃描根目錄一層和最近 24 小時內有修改的目錄
-        let threshold = std::time::SystemTime::now() - std::time::Duration::from_secs(24 * 60 * 60);
+        let threshold = std::time::SystemTime::now() - std::time::Duration::from_hours(24);
 
         let walker = WalkDir::new(&self.storage_path)
             .max_depth(1)
             .into_iter();
 
-        for entry in walker.filter_map(|e| e.ok()) {
+        for entry in walker.filter_map(std::result::Result::ok) {
             let path = entry.path();
             if path == self.storage_path { continue; }
 
@@ -216,10 +216,8 @@ impl Indexer {
                         }
                     }
                 }
-            } else {
-                if let Err(e) = self.index_file(path).await {
-                    error!("Failed to index file {:?}: {}", path, e);
-                }
+            } else if let Err(e) = self.index_file(path).await {
+                error!("Failed to index file {:?}: {}", path, e);
             }
         }
 
@@ -231,7 +229,7 @@ impl Indexer {
     async fn scan_directory(&self, dir: &Path) -> anyhow::Result<()> {
         let walker = WalkDir::new(dir).into_iter();
 
-        for entry in walker.filter_map(|e| e.ok()) {
+        for entry in walker.filter_map(std::result::Result::ok) {
             let path = entry.path();
             
             if entry.file_name().to_string_lossy().starts_with('.') {
@@ -245,7 +243,7 @@ impl Indexer {
         Ok(())
     }
 
-    /// 舊的 initial_scan 方法 - 維持向後相容性，現在呼叫 smart_scan
+    /// 舊的 `initial_scan` 方法 - 維持向後相容性，現在呼叫 `smart_scan`
     pub async fn initial_scan(&self) -> anyhow::Result<()> {
         self.smart_scan().await
     }
@@ -288,7 +286,7 @@ impl Indexer {
         };
 
         sqlx::query(
-            r#"
+            r"
             INSERT INTO files (path, name, size, mime_type, parent_path, is_dir, modified)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(path) DO UPDATE SET
@@ -297,7 +295,7 @@ impl Indexer {
                 mime_type = excluded.mime_type,
                 parent_path = excluded.parent_path,
                 is_dir = excluded.is_dir
-            "#
+            "
         )
         .bind(&relative_path)
         .bind(&name)
@@ -322,7 +320,7 @@ impl Indexer {
 
         sqlx::query("DELETE FROM files WHERE path = ? OR path LIKE ?")
             .bind(&relative_path)
-            .bind(format!("{}/%", relative_path)) // Delete children if it's a dir
+            .bind(format!("{relative_path}/%")) // Delete children if it's a dir
             .execute(&self.pool)
             .await?;
             
@@ -381,7 +379,7 @@ impl Indexer {
                         Ok(event) => {
                             for path in event.paths {
                                 // Check if it's a hidden file/dir
-                                if path.file_name().map(|s| s.to_string_lossy().starts_with('.')).unwrap_or(false) {
+                                if path.file_name().is_some_and(|s| s.to_string_lossy().starts_with('.')) {
                                     continue;
                                 }
                                 pending_paths.insert(path);
@@ -398,10 +396,8 @@ impl Indexer {
                                 if let Err(e) = self.index_file(&path).await {
                                     error!("Failed to index file {:?}: {}", path, e);
                                 }
-                            } else {
-                                if let Err(e) = self.remove_file(&path).await {
-                                    error!("Failed to remove file index {:?}: {}", path, e);
-                                }
+                            } else if let Err(e) = self.remove_file(&path).await {
+                                error!("Failed to remove file index {:?}: {}", path, e);
                             }
                         }
                     }

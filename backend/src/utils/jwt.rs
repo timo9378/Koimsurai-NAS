@@ -43,8 +43,8 @@ pub fn verify_token_with_secret(token: &str, secret: &str) -> Result<Claims, jso
     Ok(token_data.claims)
 }
 
-/// 向下相容：從環境變數讀取 JWT_SECRET（僅用於尚未遷移到 AppState 的呼叫點）
-/// Backward compatible: read JWT_SECRET from env var (for call sites not yet migrated to AppState)
+/// 向下相容：從環境變數讀取 `JWT_SECRET（僅用於尚未遷移到` `AppState` 的呼叫點）
+/// Backward compatible: read `JWT_SECRET` from env var (for call sites not yet migrated to `AppState`)
 pub fn create_access_token(user_id: i64) -> Result<String, jsonwebtoken::errors::Error> {
     let secret = env::var("JWT_SECRET")
         .map_err(|_| jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidKeyFormat))?;

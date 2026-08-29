@@ -6,7 +6,6 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use crate::state::AppState;
 use crate::error::AppError;
-use crate::models::Tag;
 use utoipa::ToSchema;
 
 #[derive(Deserialize, ToSchema, specta::Type)]
@@ -149,13 +148,13 @@ pub async fn list_tags(
     Extension(user_id): Extension<i64>,
 ) -> Result<Json<Vec<UserTag>>, AppError> {
     let tags = sqlx::query_as::<_, (String, Option<String>, i64)>(
-        r#"
+        r"
         SELECT tag_name, color, COUNT(*) as count
         FROM file_tags
         WHERE user_id = ?
         GROUP BY tag_name, color
         ORDER BY tag_name
-        "#
+        "
     )
     .bind(user_id)
     .fetch_all(&state.pool)
@@ -187,12 +186,12 @@ pub async fn list_files_by_tag(
     AxumPath(tag_name): AxumPath<String>,
 ) -> Result<Json<Vec<TaggedFile>>, AppError> {
     let files = sqlx::query_as::<_, (String,)>(
-        r#"
+        r"
         SELECT file_path
         FROM file_tags
         WHERE user_id = ? AND tag_name = ?
         ORDER BY file_path
-        "#
+        "
     )
     .bind(user_id)
     .bind(&tag_name)
@@ -217,7 +216,7 @@ pub async fn list_files_by_tag(
                 .unwrap_or_default();
             
             Some(TaggedFile {
-                path: path.clone(),
+                path,
                 name,
                 is_dir,
                 size,

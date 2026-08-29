@@ -205,14 +205,14 @@ pub async fn upload_chunk(
             .unwrap_or_default();
         
         sqlx::query(
-            r#"
+            r"
             INSERT INTO files (path, name, size, mime_type, parent_path, is_dir, modified)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(path) DO UPDATE SET
                 size = excluded.size,
                 modified = excluded.modified,
                 mime_type = excluded.mime_type
-            "#
+            "
         )
         .bind(&full_relative_path)
         .bind(&session.file_name)

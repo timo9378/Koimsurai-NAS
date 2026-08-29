@@ -50,14 +50,14 @@ pub async fn cleanup_hls_cache(
         
         for entry in WalkDir::new(&cache_dir)
             .into_iter()
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
             .filter(|e| e.file_type().is_file())
         {
             let path = entry.path();
             
             // 只處理 HLS 相關檔案
             let extension = path.extension().and_then(|e| e.to_str());
-            if !matches!(extension, Some("ts") | Some("m3u8")) {
+            if !matches!(extension, Some("ts" | "m3u8")) {
                 continue;
             }
 
@@ -82,7 +82,7 @@ pub async fn cleanup_hls_cache(
             Ok(metadata) => {
                 let size = metadata.len();
                 match fs::remove_file(&path).await {
-                    Ok(_) => {
+                    Ok(()) => {
                         deleted_count += 1;
                         freed_bytes += size;
                         debug!("Deleted expired HLS file: {:?}", path);
@@ -121,7 +121,7 @@ async fn cleanup_empty_dirs(dir: &PathBuf) -> anyhow::Result<u64> {
     let mut dirs: Vec<PathBuf> = Vec::new();
     for entry in WalkDir::new(dir)
         .into_iter()
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|e| e.file_type().is_dir())
     {
         let path = entry.path().to_path_buf();
@@ -140,7 +140,7 @@ async fn cleanup_empty_dirs(dir: &PathBuf) -> anyhow::Result<u64> {
                 // 檢查目錄是否為空
                 if entries.next_entry().await?.is_none() {
                     match fs::remove_dir(&dir_path).await {
-                        Ok(_) => {
+                        Ok(()) => {
                             removed_count += 1;
                             debug!("Removed empty directory: {:?}", dir_path);
                         }
@@ -172,7 +172,7 @@ fn format_bytes(bytes: u64) -> String {
     } else if bytes >= KB {
         format!("{:.2} KB", bytes as f64 / KB as f64)
     } else {
-        format!("{} bytes", bytes)
+        format!("{bytes} bytes")
     }
 }
 

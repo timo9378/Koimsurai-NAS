@@ -2,7 +2,7 @@
 //!
 //! 為什麼值得釘住：這個協定曾經**整條都是壞的，而且完全沒有症狀**。
 //! 後端把 `JobUpdate` 裸序列化丟上 socket（沒有 `type` 欄位），
-//! 而 `WsServerMessage` 用的是 PascalCase 的 variant 名；前端則在比對
+//! 而 `WsServerMessage` 用的是 `PascalCase` 的 variant 名；前端則在比對
 //! `'job_update'` / `'docker_stats'`。三者互不相符，於是背景工作的
 //! 進度與完成通知從來沒有送達過 —— 沒有錯誤、沒有 log，只是安靜地什麼都不發生。
 //!
