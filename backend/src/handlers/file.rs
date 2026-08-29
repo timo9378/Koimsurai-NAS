@@ -1,0 +1,1011 @@
+use serde::Deserialize;
+use axum::{
+    extract::{State, Path as AxumPath, Multipart, Request, Extension},
+    http::StatusCode,
+    Json,
+    response::IntoResponse,
+};
+
+use tokio::fs;
+use tokio::io::AsyncWriteExt;
+use std::path::PathBuf;
+use crate::state::AppState;
+use crate::models::FileInfo;
+use crate::error::AppError;
+// use crate::utils::image::generate_thumbnails;
+use tower_http::services::ServeFile;
+use tower::util::ServiceExt; // for oneshot
+use std::path::{Path, Component};
+use utoipa::ToSchema;
+
+#[derive(Deserialize, ToSchema)]
+pub struct CreateFolderRequest {
+    /// 父目錄路徑，例如 "Documents"。空字串表示根目錄
+    /// Parent directory path, e.g. "Documents". Empty string means root.
+    pub path: String,
+    /// 新資料夾名稱，例如 "New Folder"
+    /// New folder name, e.g. "New Folder"
+    pub folder_name: String,
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/files/folder",
+    request_body = CreateFolderRequest,
+    responses(
+        (status = 201, description = "資料夾建立成功 / Folder created"),
+        (status = 403, description = "沒有寫入權限 / No write permission"),
+        (status = 409, description = "資料夾已存在 / Folder already exists")
+    )
+)]
+pub async fn create_folder(
+    State(state): State<AppState>,
+    Extension(user_id): Extension<i64>,
+    Json(payload): Json<CreateFolderRequest>,
+) -> Result<StatusCode, AppError> {
+    // 1. 組合路徑
+    let parent_path = if payload.path.is_empty() || payload.path == "/" {
+        "".to_string()
+    } else {
+        payload.path.trim_start_matches('/').to_string()
+    };
+    
+    let full_relative_path = if parent_path.is_empty() {
+        payload.folder_name.clone()
+    } else {
+        format!("{}/{}", parent_path, payload.folder_name)
+    };
+
+    // 2. 權限檢查 (檢查父目錄是否有寫入權限)
+    let has_permission = sqlx::query_scalar::<_, bool>(
+        "SELECT can_write FROM permissions WHERE user_id = ? AND path = ?"
+    )
+    .bind(user_id)
+    .bind(&parent_path)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(AppError::from)?;
+
+    if let Some(can_write) = has_permission {
+        if !can_write {
+            return Err(AppError::Status(StatusCode::FORBIDDEN));
+        }
+    }
+
+    // 3. 驗證並建立實體路徑
+    let target_path = validate_path(&state.storage_path, &full_relative_path)?;
+
+    if target_path.exists() {
+        return Err(AppError::Status(StatusCode::CONFLICT));
+    }
+
+    // 4. 建立資料夾
+    fs::create_dir_all(&target_path).await.map_err(AppError::from)?;
+
+    // 5. 寫入 Audit Log
+    let _ = state.audit.log(
+        user_id,
+        "create_folder",
+        &full_relative_path,
+        Some("Created new directory".to_string()),
+        None
+    ).await;
+
+    // 資料夾會由 file watcher 自動索引到資料庫
+    // Folder will be automatically indexed by file watcher
+
+    Ok(StatusCode::CREATED)
+}
+
+#[derive(Deserialize)]
+pub struct RenameRequest {
+    pub new_path: String,
+}
+
+pub async fn rename_file(
+    State(state): State<AppState>,
+    Extension(user_id): Extension<i64>,
+    AxumPath(path): AxumPath<String>,
+    Json(payload): Json<RenameRequest>,
+) -> Result<StatusCode, AppError> {
+    // Check write permission
+    let has_permission = sqlx::query_scalar::<_, bool>(
+        "SELECT can_write FROM permissions WHERE user_id = ? AND path = ?"
+    )
+    .bind(user_id)
+    .bind(&path)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(AppError::from)?;
+
+    if let Some(can_write) = has_permission {
+        if !can_write {
+            return Err(AppError::Status(StatusCode::FORBIDDEN));
+        }
+    }
+
+    let old_path = validate_path(&state.storage_path, &path)?;
+    let new_path = validate_path(&state.storage_path, &payload.new_path)?;
+
+    if !old_path.exists() {
+        return Err(AppError::Status(StatusCode::NOT_FOUND));
+    }
+
+    if new_path.exists() {
+        return Err(AppError::Status(StatusCode::CONFLICT));
+    }
+
+    // Ensure parent directory of new path exists
+    if let Some(parent) = new_path.parent() {
+        if !parent.exists() {
+            fs::create_dir_all(parent).await.map_err(AppError::from)?;
+        }
+    }
+
+    fs::rename(old_path, new_path).await.map_err(AppError::from)?;
+
+    // 更新資料庫中的路徑（files、file_tags、file_stars、permissions、share_links、AI tables）
+    // 使用 Transaction 確保原子性：所有更新要麼全成功，要麼全回滾
+    // Normalize paths stored in DB (no leading slash)
+    let normalized_old = path.replace('\\', "/").trim_start_matches('/').to_string();
+    let normalized_new = payload.new_path.replace('\\', "/").trim_start_matches('/').to_string();
+
+    // 開始事務
+    let mut tx = state.pool.begin().await.map_err(AppError::from)?;
+
+    // 查出所有受影響的 files 路徑（包含目標本身與子路徑）
+    let like_pattern = format!("{}/%", normalized_old);
+    let affected_paths: Vec<String> = sqlx::query_scalar(
+        "SELECT path FROM files WHERE path = ? OR path LIKE ?"
+    )
+    .bind(&normalized_old)
+    .bind(&like_pattern)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(AppError::from)?;
+
+    for old_db_path in affected_paths {
+        let new_db_path = old_db_path.replacen(&normalized_old, &normalized_new, 1);
+        let new_parent = std::path::Path::new(&new_db_path)
+            .parent()
+            .map(|p| p.to_string_lossy().to_string().replace('\\', "/"))
+            .unwrap_or_default();
+        let new_name = std::path::Path::new(&new_db_path)
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        // 更新 files
+        sqlx::query(
+            "UPDATE files SET path = ?, parent_path = ?, name = ? WHERE path = ?"
+        )
+        .bind(&new_db_path)
+        .bind(&new_parent)
+        .bind(&new_name)
+        .bind(&old_db_path)
+        .execute(&mut *tx)
+        .await
+        .map_err(AppError::from)?;
+
+        // 更新 file_tags
+        sqlx::query("UPDATE file_tags SET file_path = ? WHERE file_path = ?")
+            .bind(&new_db_path)
+            .bind(&old_db_path)
+            .execute(&mut *tx)
+            .await
+            .map_err(AppError::from)?;
+
+        // 更新 file_stars
+        sqlx::query("UPDATE file_stars SET file_path = ? WHERE file_path = ?")
+            .bind(&new_db_path)
+            .bind(&old_db_path)
+            .execute(&mut *tx)
+            .await
+            .map_err(AppError::from)?;
+
+        // 更新 permissions
+        sqlx::query("UPDATE permissions SET path = ? WHERE path = ?")
+            .bind(&new_db_path)
+            .bind(&old_db_path)
+            .execute(&mut *tx)
+            .await
+            .map_err(AppError::from)?;
+
+        // 更新 share_links
+        sqlx::query("UPDATE share_links SET file_path = ? WHERE file_path = ?")
+            .bind(&new_db_path)
+            .bind(&old_db_path)
+            .execute(&mut *tx)
+            .await
+            .map_err(AppError::from)?;
+
+        // 更新 AI 相關表格
+        sqlx::query("UPDATE image_ai_tags SET file_path = ? WHERE file_path = ?")
+            .bind(&new_db_path)
+            .bind(&old_db_path)
+            .execute(&mut *tx)
+            .await
+            .map_err(AppError::from)?;
+        sqlx::query("UPDATE ai_analysis_status SET file_path = ? WHERE file_path = ?")
+            .bind(&new_db_path)
+            .bind(&old_db_path)
+            .execute(&mut *tx)
+            .await
+            .map_err(AppError::from)?;
+    }
+
+    // 提交事務：所有更新成功才會寫入
+    tx.commit().await.map_err(AppError::from)?;
+
+    // Audit Log
+    let _ = state.audit.log(
+        user_id,
+        "rename_file",
+        &path,
+        Some(format!("Renamed to {}", payload.new_path)),
+        None
+    ).await;
+
+    Ok(StatusCode::OK)
+}
+
+
+// 驗證路徑，防止 Path Traversal
+// Validate path to prevent Path Traversal
+pub fn validate_path(base: &Path, user_path: &str) -> Result<PathBuf, AppError> {
+    let path = Path::new(user_path);
+    let mut full_path = base.to_path_buf();
+
+    // 逐層檢查路徑組件，防止 ".." 回到上一層
+    for component in path.components() {
+        match component {
+            Component::Normal(c) => full_path.push(c),
+            Component::RootDir => continue, // 忽略開頭的 /
+            _ => return Err(AppError::Status(StatusCode::FORBIDDEN)), // 遇到 .. 或其他特殊字元直接拒絕
+        }
+    }
+    
+    // 雙重保險：檢查最終路徑是否真的在 storage 底下 (防止符號連結攻擊)
+    // 注意：這步只對「已存在」的檔案有效，上傳時要視情況調整
+    if full_path.exists() {
+         if let Ok(canonical_path) = full_path.canonicalize() {
+             if let Ok(canonical_base) = base.canonicalize() {
+                 if !canonical_path.starts_with(canonical_base) {
+                     return Err(AppError::Status(StatusCode::FORBIDDEN));
+                 }
+             }
+         }
+    }
+
+    Ok(full_path)
+}
+
+#[derive(Deserialize)]
+pub struct ListFilesQuery {
+    pub sort_by: Option<String>, // name, size, modified
+    pub order: Option<String>,   // asc, desc
+    pub search: Option<String>,
+    pub page: Option<i64>,
+    pub limit: Option<i64>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/files/{path}",
+    params(
+        ("path" = String, Path, description = "Directory path"),
+        ("sort_by" = Option<String>, Query, description = "Sort by field"),
+        ("order" = Option<String>, Query, description = "Sort order"),
+        ("search" = Option<String>, Query, description = "Search query"),
+        ("page" = Option<i64>, Query, description = "Page number"),
+        ("limit" = Option<i64>, Query, description = "Items per page")
+    ),
+    responses(
+        (status = 200, description = "List files in directory", body = Vec<FileInfo>)
+    )
+)]
+pub async fn list_files(
+    State(state): State<AppState>,
+    Extension(user_id): Extension<i64>,
+    AxumPath(path): AxumPath<String>,
+    axum::extract::Query(query): axum::extract::Query<ListFilesQuery>,
+) -> Result<Json<Vec<FileInfo>>, AppError> {
+    // Check permissions
+    let has_permission = sqlx::query_scalar::<_, bool>(
+        "SELECT can_read FROM permissions WHERE user_id = ? AND path = ?"
+    )
+    .bind(user_id)
+    .bind(&path)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(AppError::from)?;
+
+    if let Some(can_read) = has_permission {
+        if !can_read {
+            return Err(AppError::Status(StatusCode::FORBIDDEN));
+        }
+    }
+
+    // Normalize path for DB query (remove trailing slash if any, ensure forward slashes)
+    let normalized_path = path.trim_end_matches('/').replace('\\', "/");
+    let parent_path = if normalized_path.is_empty() { "".to_string() } else { normalized_path };
+
+    let mut sql = String::from("SELECT name, is_dir, size, modified, mime_type, parent_path FROM files WHERE ");
+    let mut params = Vec::new();
+
+    let is_search = query.search.is_some();
+
+    if let Some(search) = &query.search {
+        // Search within current directory and its subdirectories
+        if parent_path.is_empty() {
+            // Root directory: search all files
+            sql.push_str("name LIKE ?");
+            params.push(format!("%{}%", search));
+        } else {
+            // Specific directory: search within this directory tree
+            sql.push_str("(parent_path = ? OR parent_path LIKE ?) AND name LIKE ?");
+            params.push(parent_path.clone());
+            params.push(format!("{}/%", parent_path));
+            params.push(format!("%{}%", search));
+        }
+    } else {
+        sql.push_str("parent_path = ?");
+        params.push(parent_path.clone());
+    }
+
+    // Sorting
+    let sort_column = match query.sort_by.as_deref() {
+        Some("size") => "size",
+        Some("modified") | Some("date") => "modified",
+        _ => "name", // Default sort by name
+    };
+    
+    let order = match query.order.as_deref() {
+        Some("desc") => "DESC",
+        _ => "ASC",
+    };
+
+    sql.push_str(&format!(" ORDER BY is_dir DESC, {} {}", sort_column, order));
+
+    // Pagination
+    let limit = query.limit.unwrap_or(50);
+    let offset = (query.page.unwrap_or(1) - 1) * limit;
+    
+    sql.push_str(" LIMIT ? OFFSET ?");
+
+    let mut query_builder = sqlx::query_as::<_, (String, bool, i64, chrono::NaiveDateTime, Option<String>, Option<String>)>(&sql);
+    
+    for param in params {
+        query_builder = query_builder.bind(param);
+    }
+    query_builder = query_builder.bind(limit).bind(offset);
+
+    let rows = query_builder.fetch_all(&state.pool).await.map_err(AppError::from)?;
+
+    let mut files = Vec::new();
+    let mut stale_paths: Vec<String> = Vec::new();
+    
+    for (name, is_dir, size, modified, mime_type, row_parent_path) in rows {
+        // For search results, use the actual parent_path from DB; otherwise use the requested parent_path
+        let effective_parent = if is_search {
+            row_parent_path.as_deref().unwrap_or("").to_string()
+        } else {
+            parent_path.clone()
+        };
+
+        // 驗證檔案是否真的存在
+        // Verify the file actually exists on disk
+        let file_path = state.storage_path.join(&effective_parent).join(&name);
+        if !file_path.exists() {
+            // 記錄不存在的檔案，稍後清理
+            let db_path = if effective_parent.is_empty() {
+                name.clone()
+            } else {
+                format!("{}/{}", effective_parent, name)
+            };
+            stale_paths.push(db_path);
+            continue; // 跳過這個檔案
+        }
+        
+        let metadata = if !is_dir {
+            if let Some(ref mime) = mime_type {
+                crate::utils::metadata::extract_metadata(&file_path, mime)
+            } else {
+                crate::utils::metadata::FileMetadata::None
+            }
+        } else {
+            crate::utils::metadata::FileMetadata::None
+        };
+
+        // Query tags
+        let file_db_path = if effective_parent.is_empty() {
+            name.clone()
+        } else {
+            format!("{}/{}", effective_parent, name)
+        };
+
+        let tags = sqlx::query_as::<_, (String, Option<String>)>(
+            "SELECT tag_name, color FROM file_tags WHERE user_id = ? AND file_path = ?"
+        )
+        .bind(user_id)
+        .bind(&file_db_path)
+        .fetch_all(&state.pool)
+        .await
+        .map_err(AppError::from)?
+        .into_iter()
+        .map(|(name, color)| crate::models::Tag { name, color })
+        .collect();
+
+        // Query starred status
+        let is_starred = sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS(SELECT 1 FROM file_stars WHERE user_id = ? AND file_path = ?)"
+        )
+        .bind(user_id)
+        .bind(&file_db_path)
+        .fetch_one(&state.pool)
+        .await
+        .map_err(AppError::from)?;
+
+        files.push(FileInfo {
+            name,
+            path: file_db_path.clone(),
+            is_dir,
+            size: size as u64,
+            modified: modified.and_utc().timestamp().to_string(),
+            mime_type,
+            metadata: Some(metadata),
+            tags,
+            is_starred,
+        });
+    }
+
+    // 異步清理不存在的檔案記錄（不阻塞回應）
+    // Async cleanup of stale file records (non-blocking)
+    if !stale_paths.is_empty() {
+        let pool = state.pool.clone();
+        tokio::spawn(async move {
+            for path in stale_paths {
+                if let Err(e) = sqlx::query("DELETE FROM files WHERE path = ?")
+                    .bind(&path)
+                    .execute(&pool)
+                    .await
+                {
+                    tracing::error!("Failed to cleanup stale file {}: {}", path, e);
+                } else {
+                    tracing::debug!("Cleaned up stale file record: {}", path);
+                }
+            }
+        });
+    }
+
+    Ok(Json(files))
+}
+
+// 用於根目錄列表
+// For root directory listing
+#[utoipa::path(
+    get,
+    path = "/api/files",
+    params(
+        ("sort_by" = Option<String>, Query, description = "Sort by field"),
+        ("order" = Option<String>, Query, description = "Sort order"),
+        ("search" = Option<String>, Query, description = "Search query"),
+        ("page" = Option<i64>, Query, description = "Page number"),
+        ("limit" = Option<i64>, Query, description = "Items per page")
+    ),
+    responses(
+        (status = 200, description = "List files in root", body = Vec<FileInfo>)
+    )
+)]
+pub async fn list_files_root(
+    State(state): State<AppState>,
+    Extension(user_id): Extension<i64>,
+    query: axum::extract::Query<ListFilesQuery>,
+) -> Result<Json<Vec<FileInfo>>, AppError> {
+    list_files(State(state), Extension(user_id), AxumPath("".to_string()), query).await
+}
+
+
+#[utoipa::path(
+    get,
+    path = "/api/download/{path}",
+    params(
+        ("path" = String, Path, description = "File path")
+    ),
+    responses(
+        (status = 200, description = "Download file")
+    )
+)]
+pub async fn download_file(
+    State(state): State<AppState>,
+    AxumPath(path): AxumPath<String>,
+    req: Request,
+) -> Result<impl IntoResponse, AppError> {
+    let full_path = validate_path(&state.storage_path, &path)?;
+    
+    if !full_path.exists() || !full_path.is_file() {
+        return Err(AppError::Status(StatusCode::NOT_FOUND));
+    }
+
+    // ServeFile 自動處理 Range header，支援影片串流
+    // ServeFile automatically handles Range header, supporting video streaming
+    let service = ServeFile::new(full_path);
+    let result = service.oneshot(req).await;
+    
+    match result {
+        Ok(response) => Ok(response.into_response()),
+        Err(_) => Err(AppError::Status(StatusCode::INTERNAL_SERVER_ERROR)),
+    }
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/upload/{path}",
+    params(
+        ("path" = String, Path, description = "Target directory")
+    ),
+    request_body(content = String, description = "Multipart form data", content_type = "multipart/form-data"),
+    responses(
+        (status = 201, description = "File uploaded")
+    )
+)]
+pub async fn upload_file(
+    State(state): State<AppState>,
+    AxumPath(path): AxumPath<String>,
+    mut multipart: Multipart,
+) -> Result<StatusCode, AppError> {
+    tracing::info!("upload_file called with path: {:?}", path);
+    
+    let target_dir = validate_path(&state.storage_path, &path)?;
+    tracing::info!("Target directory: {:?}", target_dir);
+
+    if !target_dir.exists() {
+        fs::create_dir_all(&target_dir).await.map_err(AppError::from)?;
+    }
+
+    while let Some(mut field) = multipart.next_field().await.map_err(|e| {
+        tracing::error!("Failed to get next multipart field: {:?}", e);
+        AppError::Status(StatusCode::BAD_REQUEST)
+    })? {
+        let file_name = field.file_name().ok_or(AppError::Status(StatusCode::BAD_REQUEST))?.to_string();
+        
+        // 防止檔名中的 Path Traversal
+        // Prevent Path Traversal in filename
+        if file_name.contains("..") || file_name.contains('/') || file_name.contains('\\') {
+            continue;
+        }
+
+        let file_path = target_dir.join(&file_name);
+        tracing::info!("Processing file: {} -> {:?}", file_name, file_path);
+        
+        // 串流寫入檔案，避免佔用過多記憶體
+        // Stream write to file to avoid excessive memory usage
+        // Versioning: if file exists, move it to versions
+        if file_path.exists() {
+            if let Err(e) = crate::utils::versioning::create_version(&file_path, &state.storage_path).await {
+                tracing::error!("Failed to create version for {:?}: {:?}", file_path, e);
+            }
+        }
+
+        let mut file = fs::File::create(&file_path).await.map_err(AppError::from)?;
+
+        let mut total_written: usize = 0;
+        while let Some(chunk) = field.chunk().await.map_err(|e| {
+            tracing::error!("Failed to read chunk: {:?}", e);
+            AppError::Status(StatusCode::BAD_REQUEST)
+        })? {
+            file.write_all(&chunk).await.map_err(AppError::from)?;
+            total_written += chunk.len();
+        }
+        tracing::info!("File {} written successfully, {} bytes", file_name, total_written);
+
+        // NOTE: thumbnail generation will be enqueued after we determine mime_type
+        
+        // ====== 將檔案寫入 files 資料表，並 enqueue 索引（與 upload_chunk 的行為一致） ======
+        let full_relative_path = if path.is_empty() {
+            file_name.clone()
+        } else {
+            format!("{}/{}", path.trim_start_matches('/'), file_name)
+        };
+        let full_relative_path = full_relative_path.replace('\\', "/");
+
+        if let Ok(metadata) = tokio::fs::metadata(&file_path).await {
+            if let Ok(modified_time) = metadata.modified() {
+                let modified = chrono::DateTime::<chrono::Utc>::from(modified_time).naive_utc();
+                let mime_type = mime_guess::from_path(&file_path).first_or_octet_stream().to_string();
+                let parent_path = std::path::Path::new(&full_relative_path)
+                    .parent()
+                    .map(|p| p.to_string_lossy().to_string().replace('\\', "/"))
+                    .unwrap_or_default();
+
+                // Insert or update files table
+                if let Err(e) = sqlx::query(
+                    r#"
+                    INSERT INTO files (path, name, size, mime_type, parent_path, is_dir, modified)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(path) DO UPDATE SET
+                        size = excluded.size,
+                        modified = excluded.modified,
+                        mime_type = excluded.mime_type
+                    "#,
+                )
+                .bind(&full_relative_path)
+                .bind(&file_name)
+                .bind(metadata.len() as i64)
+                .bind(&mime_type)
+                .bind(&parent_path)
+                .bind(false)
+                .bind(modified)
+                .execute(&state.pool)
+                .await
+                {
+                    tracing::error!("Failed to insert/update files table for {}: {:?}", full_relative_path, e);
+                } else {
+                    // Enqueue index job
+                    let index_job = crate::utils::queue::JobType::IndexFile { path: full_relative_path.clone() };
+                    if let Err(e) = state.queue.enqueue(index_job).await {
+                        tracing::error!("Failed to enqueue index job for {}: {}", full_relative_path, e);
+                    }
+
+                    // Enqueue thumbnail generation only for detected images/videos
+                    if mime_type.starts_with("image/") || mime_type.starts_with("video/") || crate::utils::image::is_likely_media(&file_path) {
+                        let thumb_job = crate::utils::queue::JobType::GenerateThumbnail {
+                            input_path: file_path.clone(),
+                            output_path: file_path.clone(),
+                        };
+                        if let Err(e) = state.queue.enqueue(thumb_job).await {
+                            tracing::error!("Failed to enqueue thumbnail job for {}: {}", full_relative_path, e);
+                        }
+                    }
+                }
+            }
+        }
+        // ======================================================================
+    }
+
+    Ok(StatusCode::CREATED)
+}
+
+
+// 用於根目錄上傳
+// For root directory upload
+#[utoipa::path(
+    post,
+    path = "/api/upload",
+    request_body(content = String, description = "Multipart form data", content_type = "multipart/form-data"),
+    responses(
+        (status = 201, description = "File uploaded")
+    )
+)]
+pub async fn upload_file_root(
+    State(state): State<AppState>,
+    multipart: Multipart,
+) -> Result<StatusCode, AppError> {
+    upload_file(State(state), AxumPath("".to_string()), multipart).await
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/thumbnail/{size}/{path}",
+    params(
+        ("size" = String, Path, description = "Thumbnail size (small, medium, large)"),
+        ("path" = String, Path, description = "File path")
+    ),
+    responses(
+        (status = 200, description = "Download thumbnail")
+    )
+)]
+pub async fn get_thumbnail(
+    State(state): State<AppState>,
+    AxumPath((size, path)): AxumPath<(String, String)>,
+    req: Request,
+) -> Result<impl IntoResponse, AppError> {
+    // Validate path first
+    let full_path = validate_path(&state.storage_path, &path)?;
+    
+    // Check if the original file exists
+    if !full_path.exists() {
+        return Err(AppError::Status(StatusCode::NOT_FOUND));
+    }
+    
+    // Construct thumbnail path
+    // storage/.thumbnails/path/to/file.jpg.small.jpg
+    
+    let relative_path = full_path.strip_prefix(&state.storage_path).map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+    let thumb_root = state.storage_path.join(".thumbnails");
+    let thumb_dir = thumb_root.join(relative_path.parent().unwrap_or(Path::new("")));
+    let file_name = full_path.file_name().unwrap_or_default().to_string_lossy();
+    
+    let thumb_name = format!("{}.{}.jpg", file_name, size);
+    let thumb_path = thumb_dir.join(thumb_name);
+
+    if !thumb_path.exists() {
+        // Thumbnail doesn't exist - enqueue generation job and serve original file
+        // This ensures the thumbnail will be available on future requests
+        let thumb_job = crate::utils::queue::JobType::GenerateThumbnail {
+            input_path: full_path.clone(),
+            output_path: thumb_path.clone(),
+        };
+        if let Err(e) = state.queue.enqueue(thumb_job).await {
+            tracing::warn!("Failed to enqueue thumbnail job for {:?}: {}", full_path, e);
+        }
+        
+        // Serve original file instead of returning 404
+        let service = ServeFile::new(&full_path);
+        let result = service.oneshot(req).await;
+        
+        return match result {
+            Ok(response) => Ok(response.into_response()),
+            Err(_) => Err(AppError::Status(StatusCode::INTERNAL_SERVER_ERROR)),
+        };
+    }
+
+    let service = ServeFile::new(thumb_path);
+    let result = service.oneshot(req).await;
+    
+    match result {
+        Ok(response) => Ok(response.into_response()),
+        Err(_) => Err(AppError::Status(StatusCode::INTERNAL_SERVER_ERROR)),
+    }
+}
+
+/// 將檔案移動到垃圾桶的共用邏輯
+/// Shared utility: move a file/directory to the .trash folder and record metadata
+pub async fn move_to_trash(
+    storage_path: &std::path::Path,
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    file_path: &str,
+    user_id: i64,
+) -> Result<String, AppError> {
+    let full_path = validate_path(storage_path, file_path)?;
+    
+    if !full_path.exists() {
+        return Err(AppError::Status(StatusCode::NOT_FOUND));
+    }
+
+    let trash_root = storage_path.join(".trash");
+    if !trash_root.exists() {
+        fs::create_dir_all(&trash_root).await.map_err(AppError::from)?;
+    }
+
+    // Flatten trash structure: move directly to trash root
+    let file_name = full_path.file_name().unwrap_or_default().to_string_lossy();
+    let trash_path = trash_root.join(file_name.as_ref());
+    
+    // Handle collision by appending timestamp
+    let (final_trash_path, trash_name) = if trash_path.exists() {
+        let timestamp = chrono::Utc::now().timestamp();
+        let new_name = format!("{}.{}", file_name, timestamp);
+        (trash_root.join(&new_name), new_name)
+    } else {
+        (trash_path, file_name.to_string())
+    };
+
+    fs::rename(&full_path, &final_trash_path).await.map_err(AppError::from)?;
+
+    // Record original path in trash_metadata for correct restore
+    let normalized_path = file_path.replace('\\', "/");
+    let _ = sqlx::query(
+        "INSERT OR REPLACE INTO trash_metadata (trash_name, original_path, deleted_by) VALUES (?, ?, ?)"
+    )
+    .bind(&trash_name)
+    .bind(&normalized_path)
+    .bind(user_id)
+    .execute(pool)
+    .await;
+
+    // 從 files 資料表移除記錄
+    // Remove from files table (including children if it's a directory)
+    sqlx::query("DELETE FROM files WHERE path = ? OR path LIKE ?")
+        .bind(&normalized_path)
+        .bind(format!("{}/%", normalized_path))
+        .execute(pool)
+        .await
+        .map_err(AppError::from)?;
+
+    Ok(trash_name)
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/files/{path}",
+    params(
+        ("path" = String, Path, description = "File path")
+    ),
+    responses(
+        (status = 200, description = "File moved to trash")
+    )
+)]
+pub async fn delete_file(
+    State(state): State<AppState>,
+    Extension(user_id): Extension<i64>,
+    AxumPath(path): AxumPath<String>,
+) -> Result<StatusCode, AppError> {
+    // Check write permission
+    let has_permission = sqlx::query_scalar::<_, bool>(
+        "SELECT can_write FROM permissions WHERE user_id = ? AND path = ?"
+    )
+    .bind(user_id)
+    .bind(&path)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(AppError::from)?;
+
+    if let Some(can_write) = has_permission {
+        if !can_write {
+            return Err(AppError::Status(StatusCode::FORBIDDEN));
+        }
+    }
+
+    move_to_trash(&state.storage_path, &state.pool, &path, user_id).await?;
+
+    // Audit Log
+    let _ = state.audit.log(
+        user_id,
+        "delete_file",
+        &path,
+        Some("Moved to trash".to_string()),
+        None
+    ).await;
+
+    Ok(StatusCode::OK)
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct BatchOperationRequest {
+    pub paths: Vec<String>,
+    pub destination: Option<String>, // For move/copy
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/files/batch/delete",
+    request_body = BatchOperationRequest,
+    responses(
+        (status = 200, description = "Batch delete initiated")
+    )
+)]
+pub async fn batch_delete(
+    State(state): State<AppState>,
+    Extension(user_id): Extension<i64>,
+    Json(payload): Json<BatchOperationRequest>,
+) -> Result<StatusCode, AppError> {
+    for path in payload.paths {
+        if let Err(e) = move_to_trash(&state.storage_path, &state.pool, &path, user_id).await {
+            tracing::error!("Failed to move '{}' to trash: {:?}", path, e);
+            // Continue with remaining files instead of aborting
+            continue;
+        }
+    }
+
+    Ok(StatusCode::OK)
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/files/batch/move",
+    request_body = BatchOperationRequest,
+    responses(
+        (status = 200, description = "Batch move initiated")
+    )
+)]
+pub async fn batch_move(
+    State(state): State<AppState>,
+    Json(payload): Json<BatchOperationRequest>,
+) -> Result<StatusCode, AppError> {
+    let destination = payload.destination.ok_or(AppError::Status(StatusCode::BAD_REQUEST))?;
+    let dest_path = validate_path(&state.storage_path, &destination)?;
+
+    if !dest_path.exists() {
+        fs::create_dir_all(&dest_path).await.map_err(AppError::from)?;
+    }
+
+    for path in payload.paths {
+        let src_path = validate_path(&state.storage_path, &path)?;
+        if !src_path.exists() {
+            continue;
+        }
+
+        let file_name = src_path.file_name().ok_or(AppError::Status(StatusCode::BAD_REQUEST))?;
+        let target_path = dest_path.join(file_name);
+
+        if let Err(e) = fs::rename(src_path, target_path).await {
+             tracing::error!("Failed to move file: {}", e);
+        }
+    }
+
+    Ok(StatusCode::OK)
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/files/batch/copy",
+    request_body = BatchOperationRequest,
+    responses(
+        (status = 200, description = "Batch copy initiated")
+    )
+)]
+pub async fn batch_copy(
+    State(state): State<AppState>,
+    Json(payload): Json<BatchOperationRequest>,
+) -> Result<StatusCode, AppError> {
+    let destination = payload.destination.ok_or(AppError::Status(StatusCode::BAD_REQUEST))?;
+    
+    // Enqueue copy job
+    let job_type = crate::utils::queue::JobType::CopyFiles {
+        paths: payload.paths,
+        destination,
+    };
+
+    state.queue.enqueue(job_type).await.map_err(|e| {
+        tracing::error!("Failed to enqueue copy job: {}", e);
+        AppError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+    })?;
+
+    Ok(StatusCode::ACCEPTED)
+}
+
+/// 我的最愛檔案資訊（包含 starred_at 時間戳）
+/// Favorite file info with starred_at timestamp
+#[derive(serde::Serialize, ToSchema)]
+pub struct FavoriteFileInfo {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+    pub size: u64,
+    pub modified: String,
+    pub mime_type: Option<String>,
+    pub starred_at: String,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/favorites",
+    responses(
+        (status = 200, description = "取得我的最愛檔案列表 / Get favorites list", body = Vec<FavoriteFileInfo>)
+    )
+)]
+pub async fn list_favorites(
+    State(state): State<AppState>,
+    Extension(user_id): Extension<i64>,
+) -> Result<Json<Vec<FavoriteFileInfo>>, AppError> {
+    // Join file_stars with files to get metadata
+    // 聯結 file_stars 與 files 資料表取得完整資訊
+    let rows = sqlx::query_as::<_, (String, String, bool, i64, chrono::NaiveDateTime, Option<String>, chrono::NaiveDateTime)>(
+        r#"
+        SELECT 
+            f.name,
+            f.path,
+            f.is_dir,
+            f.size,
+            f.modified,
+            f.mime_type,
+            s.created_at as starred_at
+        FROM files f
+        JOIN file_stars s ON f.path = s.file_path
+        WHERE s.user_id = ?
+        ORDER BY s.created_at DESC
+        "#
+    )
+    .bind(user_id)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(AppError::from)?;
+
+    let favorites: Vec<FavoriteFileInfo> = rows
+        .into_iter()
+        .map(|(name, path, is_dir, size, modified, mime_type, starred_at)| {
+            FavoriteFileInfo {
+                name,
+                path,
+                is_dir,
+                size: size as u64,
+                modified: modified.and_utc().timestamp().to_string(),
+                mime_type,
+                starred_at: starred_at.and_utc().timestamp().to_string(),
+            }
+        })
+        .collect();
+
+    Ok(Json(favorites))
+}
