@@ -3,6 +3,19 @@
 Next.js 16 → Vite + TanStack Router（純 SPA），收攏後端成 monorepo，
 工具鏈對齊 `sora-to-ki`（`/home/timo9378/Server/web`）**並補上它缺的 oxfmt**。
 
+## 進度
+
+| Phase | 狀態 |
+|---|---|
+| 0 · monorepo 收攏 | ✅ `829f069`（外加資安事件處理，見 §9）|
+| 1 · Next → Vite SPA | ✅ `0f638a6` |
+| 2 · 型別橋（specta）| ⬜ |
+| 3 · 工具鏈落地 | ⬜ |
+| 4 · 部署（ServeDir + GlitchTip）| ⬜ |
+
+**Phase 3 待辦（已知）**：82 個既有的未使用宣告要清，同時把 `tsconfig.json` 的
+`noUnusedLocals` / `noUnusedParameters` 改回 `true`。
+
 ---
 
 ## 0. 現況體檢
@@ -371,3 +384,44 @@ nginx `nas-koimsurai` 的 `location /` 由 `13001` 改指 `127.0.0.1:3000`；
 - Phase 0 的 `git subtree` 不可逆 → 先 `git tag pre-monorepo`
 - `Koimsurai-NAS-backend` 保留唯讀備份，CI 全綠後再封存
 - Tailwind v4 換到 `@tailwindcss/vite` 是設定層改動，`globals.css` 內容不動
+
+---
+
+## 9. 附錄：Phase 0 期間處理的資安事件
+
+驗證 subtree 結果時發現，不在原計畫內。
+
+`backend/.env` 從 `init RustNAS project` 這個**初始 commit** 起就被追蹤，
+而 `timo9378/Koimsurai-NAS-backend` 是**公開** repo —— `JWT_SECRET`（63 字元）、
+`SESSION_SECRET`（64）、`REGISTRATION_INVITE_CODE`（23）全是真值，
+在該 repo 的整個生命週期都是公開可讀的。
+
+成因是 `.gitignore` 寫成 `! .env`，兩層都失效：
+1. 驚嘆號後面有空格，不是有效的 gitignore 語法
+2. 就算語法對，它是「取消忽略」—— 而前面根本沒有任何忽略 `.env` 的規則
+
+### 已處理
+
+| 項目 | 做法 |
+|---|---|
+| 金鑰輪替 | 三個金鑰換新值，其餘 20 個鍵逐字元不變（`.env.bak-pre-rotation-*` 留底）|
+| 歷史清除 | `git filter-repo --invert-paths --path .env`，40 個 commit 全清後 force push |
+| gitignore | 兩邊都修好；`.env.bak-*` 也一併擋掉（裡面是舊金鑰）|
+| 備份 | `/home/timo9378/Server/backup-*-20260830-012053.git` 兩個 mirror |
+| monorepo | subtree 重做一次，接的是清理後的後端歷史，`.env` 從未進入本 repo |
+
+⚠️ **`git filter-repo` 會連工作區的檔案一起刪掉**（`.env` 當時是被追蹤的），
+重跑類似操作前要先另存一份。
+
+### 仍待執行
+
+- **重啟後端容器套用新金鑰**。金鑰是建立容器時烙進 `Config.Env` 的，
+  改 `.env` 不會自動生效 —— **在重啟之前，外洩的舊 `JWT_SECRET` 依然有效**：
+  ```bash
+  docker compose -f /home/timo9378/Server/docker-compose.yml \
+    up -d --force-recreate koimsurai-nas-backend
+  ```
+  （會把所有使用者登出。）
+- `REGISTRATION_INVITE_CODE` 公開過 → 查 users 表有無非預期帳號
+- `docker-compose.yml` 的 `env_file: ./Koimsurai-NAS-backend/.env`
+  在 Phase 4 要改指 `./Koimsurai-NAS/backend/.env`
