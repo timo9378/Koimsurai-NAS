@@ -9,7 +9,7 @@ Next.js 16 → Vite + TanStack Router（純 SPA），收攏後端成 monorepo，
 |---|---|
 | 0 · monorepo 收攏 | ✅ `829f069`（外加資安事件處理，見 §9）|
 | 1 · Next → Vite SPA | ✅ `0f638a6` |
-| 2 · 型別橋（specta）| ⬜ |
+| 2 · 型別橋（specta）| ✅ `5b76798`（發現 5 處前後端不一致，見 §10）|
 | 3 · 工具鏈落地 | ⬜ |
 | 4 · 部署（ServeDir + GlitchTip）| ⬜ |
 
@@ -425,3 +425,57 @@ nginx `nas-koimsurai` 的 `location /` 由 `13001` 改指 `127.0.0.1:3000`；
 - `REGISTRATION_INVITE_CODE` 公開過 → 查 users 表有無非預期帳號
 - `docker-compose.yml` 的 `env_file: ./Koimsurai-NAS-backend/.env`
   在 Phase 4 要改指 `./Koimsurai-NAS/backend/.env`
+
+---
+
+## 10. 附錄：Phase 2 對拍出來的前後端不一致
+
+手寫型別換成 specta 產生之後，`tsc` 立刻報出 18 個錯 —— 每一個都是真的不一致。
+下面前四項**已在 `5b76798` 修掉**，第五項是**未解、需要你裁示**的。
+
+### 已修
+
+| # | 問題 | 影響 |
+|---|---|---|
+| 1 | `f32/f64` 實際是 `number \| null`（serde_json 把 NaN/Infinity 序列化成 null），手寫型別宣告成 `number` | `cpu_usage` 讀不到取樣時是 NaN → `.toFixed(1)` 當場拋錯。13 處補 `?? 0` |
+| 2 | `InitUploadResponse.uploaded_size` 是 `Option<i64>` → 序列化成 **null 而非省略欄位** | `!== undefined` 永遠成立，斷點續傳的 `startOffset` 被設成 `null` |
+| 3 | `LoginRequest` 只有 `username`/`password`，前端多送 `remember` | serde 靜默丟棄 → **登入頁的「記住我」從來沒作用過**。已停止送出並標 TODO |
+| 4 | `JobUpdate` 沒有 `type` 欄位 | 手寫版憑空多宣告，toast 顯示 `undefined` |
+
+### ⚠️ 未解：WebSocket 協定完全對不上
+
+**後端送的**（`WsServerMessage`，`#[serde(tag="type", content="payload")]`，無 `rename_all`）：
+
+```json
+{ "type": "DockerStats",  "payload": { "container_id": "...", "cpu_percent": 1.2, ... } }
+{ "type": "DockerStatsError", "payload": {...} }
+{ "type": "Error", "payload": {...} }
+{ "type": "Pong" }
+```
+
+**前端比對的**（`socket-provider.tsx`）：
+
+```ts
+case 'docker_stats':   // → data 鍵
+case 'job_update':
+case 'file_change':
+```
+
+查證結果：
+- `docker_stats` / `job_update` / `file_change` 這三個字串在**整個 Rust 後端出現 0 次**
+- 後端只有一個 `/ws` 路由，只送 `WsServerMessage` 那四個 variant
+- 所以前端這三個 case **永遠不會命中**
+
+實際後果：Docker 即時統計沒有更新、背景工作完成/失敗的 toast 不會跳、
+檔案變更不會觸發查詢失效（`useDockerStats` / `useJobProgress` 兩個 hook
+本身也是空殼，只呼叫 `useSocket()` 什麼都不做）。
+
+修法要選一邊，兩者都不是純機械改動，所以留給你裁示：
+
+| 選項 | 做法 | 代價 |
+|---|---|---|
+| A | 後端 `WsServerMessage` 加 `#[serde(rename_all = "snake_case")]`、content 鍵改 `data`，並補送 `job_update` / `file_change` | 要實作兩個從未存在的訊息來源 |
+| B | 前端改用產生版的 `WsServerMessage` 判別聯集，並移除 `job_update` / `file_change` 兩個從來沒有對應的分支 | 那兩個功能等於正式承認沒做 |
+
+無論選哪邊，改完之後前端都應該直接用 `WsServerMessage`，
+不要再手刻一份 `WebSocketMessage`。
