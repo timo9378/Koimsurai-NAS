@@ -1,7 +1,19 @@
+/* 字體改為 self-host（原本是 next/font/google 的 Geist）。
+   next/font 會自動產生 --font-geist-sans / --font-geist-mono 兩個 CSS 變數並掛在
+   <body> 的 className 上；換成 @fontsource 之後要自己定義，否則下面 @theme inline
+   裡的 --font-sans / --font-mono 會解析成空值，全站掉回瀏覽器預設字體。 */
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
 @import "tailwindcss";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-geist-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Noto Sans TC", sans-serif;
+  --font-geist-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+}
 
 @theme inline {
   --color-background: var(--background);

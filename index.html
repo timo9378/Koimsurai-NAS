@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-TW" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- viewport-fit=cover：PWA standalone 下讓內容延伸到瀏海/圓角區，配合 CSS 的 env(safe-area-inset-*) -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <title>Koimsurai NAS</title>
+    <meta name="description" content="Koimsurai NAS Frontend" />
+
+    <!-- 原本由 src/app/layout.tsx 的 metadata / viewport export 產生 -->
+    <meta name="theme-color" content="#09090b" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/Images/logo.svg" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Koimsurai NAS" />
+
+    <!--
+      首屏底色先鋪上，避免 SPA 在 JS 進來之前閃一下白底。
+      深色是這個站的預設（themeColor 也是 #09090b）；next-themes 之後會依
+      使用者偏好把 .dark 從 <html> 上拿掉。
+    -->
+    <style>
+      html { background: #09090b; }
+    </style>
+  </head>
+  <body class="antialiased overflow-hidden">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

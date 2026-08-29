@@ -1,0 +1,14 @@
+{
+  "name": "Koimsurai NAS",
+  "short_name": "NAS",
+  "description": "Koimsurai NAS — 檔案、監控、UPS",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

@@ -1,7 +1,5 @@
-'use client';
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams } from 'next/navigation';
+import { createFileRoute } from '@tanstack/react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Upload,
@@ -151,9 +149,8 @@ function groupByTopFolder(entries: { file: File; relativePath: string }[]): Uplo
 /*  Component                                                          */
 /* ================================================================== */
 
-export default function UploadPage() {
-  const params = useParams();
-  const uploadId = params.id as string;
+function UploadPage() {
+  const { id: uploadId } = Route.useParams();
 
   const [status, setStatus] = useState<PageStatus>('loading');
   const [uploadInfo, setUploadInfo] = useState<UploadLinkInfo | null>(null);
@@ -775,3 +772,7 @@ export default function UploadPage() {
     </div>
   );
 }
+
+export const Route = createFileRoute('/u/$id')({
+  component: UploadPage,
+});

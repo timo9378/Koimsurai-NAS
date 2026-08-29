@@ -13,17 +13,17 @@ import { Photos } from '@/components/apps/Photos';
 import { FilePreview } from '@/components/apps/FilePreview';
 import { Calculator } from '@/components/apps/Calculator';
 import { Settings } from '@/components/apps/Settings';
-import dynamic from 'next/dynamic';
+import { lazyComponent } from '@/lib/lazy-component';
 
-const ContainerTerminal = dynamic(() => import('@/components/apps/ContainerTerminal').then(mod => mod.ContainerTerminal), {
-  ssr: false,
-  loading: () => <div className="h-full w-full bg-[#1e1e1e] animate-pulse" />
-});
+const ContainerTerminal = lazyComponent(
+  () => import('@/components/apps/ContainerTerminal').then(mod => mod.ContainerTerminal),
+  <div className="h-full w-full bg-[#1e1e1e] animate-pulse" />,
+);
 
-const Terminal = dynamic(() => import('@/components/apps/Terminal').then(mod => mod.Terminal), {
-  ssr: false,
-  loading: () => <div className="h-full w-full bg-[#1a1a2e] animate-pulse" />
-});
+const Terminal = lazyComponent(
+  () => import('@/components/apps/Terminal').then(mod => mod.Terminal),
+  <div className="h-full w-full bg-[#1a1a2e] animate-pulse" />,
+);
 
 const WindowContent = ({ appType, props, windowId }: { appType: string, props?: any, windowId: string }) => {
   switch (appType) {

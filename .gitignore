@@ -13,10 +13,6 @@
 # testing
 /coverage
 
-# next.js
-/.next/
-/out/
-
 # production
 /build
 
@@ -33,15 +29,15 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
-# vercel
-.vercel
-
 # typescript
 *.tsbuildinfo
-next-env.d.ts
 
 # Rust（workspace root 在此，target/ 與 Cargo.lock 都落在根目錄）
 /target
 
 # monorepo 產物
 /packages/*/dist
+
+# Vite
+/dist
+.tanstack

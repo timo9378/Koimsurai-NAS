@@ -1,34 +1,34 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": true,
+    "target": "ESNext",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    // node：socket-provider 用到 NodeJS.Timeout；vite/client 由 src/vite-env.d.ts
+    // 的 triple-slash 引入（跟 sora-to-ki 同一個做法）
+    "types": ["node"],
+    "module": "ESNext",
     "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
+
+    /* Bundler mode */
     "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "noEmit": true,
     "jsx": "react-jsx",
-    "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+
+    /* Linting */
+    "strict": true,
+    // ⚠️ TODO(Phase 3)：這兩條要打開，對齊 sora-to-ki。
+    // 現在開起來是 82 個 TS6133/TS6192 —— 全部是既有的未使用宣告（遷移本身造成的
+    // 型別錯誤是 0），跟 oxlint 的 no-unused-vars 是同一批東西，所以留到 Phase 3
+    // 導入 oxlint 時一起清，不要在遷移的 commit 裡混進 82 個檔案的刪改。
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true
   },
-  "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts",
-    "**/*.mts"
-  ],
-  "exclude": ["node_modules"]
+  "include": ["src"]
 }

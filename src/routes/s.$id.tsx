@@ -1,7 +1,5 @@
-'use client';
-
 import React, { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Download, 
@@ -72,10 +70,10 @@ function getTimeRemaining(expiresAt: string): string {
   return `${minutes} 分鐘後過期`;
 }
 
-export default function SharePage() {
-  const params = useParams();
-  const router = useRouter();
-  const shareId = params.id as string;
+function SharePage() {
+  // Route.useParams() 是型別安全的：$id 由檔名推導，不需要 `as string`。
+  const { id: shareId } = Route.useParams();
+  const navigate = useNavigate();
   
   const [status, setStatus] = useState<ShareStatus>('loading');
   const [shareInfo, setShareInfo] = useState<ShareInfo | null>(null);
@@ -238,7 +236,7 @@ export default function SharePage() {
                   <Button
                     variant="outline"
                     className="mt-4 bg-white/10 border-white/20 text-white hover:bg-white/20"
-                    onClick={() => router.push('/')}
+                    onClick={() => navigate({ to: '/' })}
                   >
                     返回首頁
                   </Button>
@@ -264,7 +262,7 @@ export default function SharePage() {
                   <Button
                     variant="outline"
                     className="mt-4 bg-white/10 border-white/20 text-white hover:bg-white/20"
-                    onClick={() => router.push('/')}
+                    onClick={() => navigate({ to: '/' })}
                   >
                     返回首頁
                   </Button>
@@ -481,3 +479,7 @@ export default function SharePage() {
     </div>
   );
 }
+
+export const Route = createFileRoute('/s/$id')({
+  component: SharePage,
+});

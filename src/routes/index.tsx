@@ -1,15 +1,14 @@
-"use client"
-
 import { useEffect, useState } from 'react';
+import { createFileRoute } from '@tanstack/react-router';
+import { Loader2 } from 'lucide-react';
 import { DesktopLayout } from '@/components/desktop/DesktopLayout';
 import { Dock } from '@/components/desktop/Dock';
 import { MobileLayout } from '@/components/mobile/MobileLayout';
 import { LoginScreen } from '@/components/auth/LoginScreen';
 import { useCheckAuth } from '@/features/auth/api/useAuth';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { Loader2 } from 'lucide-react';
 
-export default function Home() {
+function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const checkAuth = useCheckAuth();
   const isMobile = useIsMobile();
@@ -19,11 +18,13 @@ export default function Home() {
       try {
         await checkAuth.mutateAsync();
         setIsAuthenticated(true);
-      } catch (error) {
+      } catch {
         setIsAuthenticated(false);
       }
     };
-    verifyAuth();
+    void verifyAuth();
+    // 只在掛載時驗一次；checkAuth 是 mutation，放進相依會每次 render 重跑。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (isAuthenticated === null) {
@@ -48,3 +49,7 @@ export default function Home() {
     </DesktopLayout>
   );
 }
+
+export const Route = createFileRoute('/')({
+  component: Home,
+});

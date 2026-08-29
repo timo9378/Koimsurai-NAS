@@ -36,7 +36,7 @@ import {
   type NetworkInfo
 } from '@/features/docker/api/useDocker';
 import { useWindowStore } from '../../store/window-store';
-import dynamic from 'next/dynamic';
+import { lazyComponent } from '@/lib/lazy-component';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,10 +50,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const TerminalView = dynamic(() => import('./TerminalView').then(mod => mod.TerminalView), {
-  ssr: false,
-  loading: () => <div className="h-full w-full bg-[#1e1e1e] animate-pulse" />
-});
+const TerminalView = lazyComponent(
+  () => import('./TerminalView').then(mod => mod.TerminalView),
+  <div className="h-full w-full bg-[#1e1e1e] animate-pulse" />,
+);
 
 
 
