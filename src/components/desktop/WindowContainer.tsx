@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useRef, useEffect } from 'react';
-import { useWindowStore, WindowState } from '@/store/window-store';
-import { motion, useMotionValue, useSpring, useDragControls, animate, AnimatePresence } from 'framer-motion';
+import React, { useEffect } from 'react';
+import type { WindowState } from '@/store/window-store';
+import { useWindowStore } from '@/store/window-store';
+import { motion, useMotionValue, useDragControls, animate, AnimatePresence } from 'framer-motion';
 import { X, Minus, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { AppType } from '@/store/window-store';
+import type { AppType } from '@/store/window-store';
 import { Finder } from '@/components/apps/Finder';
 import { Dashboard } from '@/components/apps/Dashboard';
 import { DockerManager } from '@/components/apps/DockerManager';
@@ -215,13 +216,13 @@ const Window = ({ window }: { window: WindowState }) => {
         setIsDragging(true);
         handleFocus();
       }}
-      onDrag={(e, info) => {
+      onDrag={(_e, info) => {
         const event = new CustomEvent('window-drag-move', {
           detail: { x: info.point.x, y: info.point.y }
         });
         globalThis.window.dispatchEvent(event);
       }}
-      onDragEnd={(e, info) => {
+      onDragEnd={(_e, info) => {
         setIsDragging(false);
 
         const event = new CustomEvent('window-drag-end', {
@@ -299,7 +300,6 @@ const Window = ({ window }: { window: WindowState }) => {
             e.preventDefault();
             e.stopPropagation();
 
-            const startX = e.clientX;
             const startY = e.clientY;
             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
             const ratioX = (e.clientX - rect.left) / rect.width;

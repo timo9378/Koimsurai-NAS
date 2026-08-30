@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useFiles, useCreateFolder, useRename, useBatchDelete, useDelete } from '@/features/files/api/useFiles';
 import { useWindowStore } from '@/store/window-store';
 import { useQueryClient } from '@tanstack/react-query';
-import { FileInfo } from '@/types/api';
+import type { FileInfo } from '@/types/api';
 import { DraggableDesktopIcon } from './DraggableDesktopIcon';
 
 // Type for storing icon positions
@@ -14,11 +14,9 @@ interface IconPosition {
 }
 
 // Default positions will be calculated based on order
-const GRID_SIZE = 100;
-const GRID_GAP = 8;
 
 export const DesktopIcons = () => {
-  const { data: files, error, refetch } = useFiles({ path: '/Desktop' });
+  const { data: files, refetch } = useFiles({ path: '/Desktop' });
   const createFolder = useCreateFolder();
   const renameFile = useRename();
   const { openWindow, windows, updateWindowAppState, focusWindow } = useWindowStore();

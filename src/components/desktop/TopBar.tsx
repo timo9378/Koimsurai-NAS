@@ -8,13 +8,8 @@ import {
   Bell,
   Sliders,
   Activity,
-  HardDrive,
   Cpu,
   RefreshCw,
-  User,
-  Loader2,
-  CheckCircle2,
-  XCircle,
   Moon,
   Sun,
   Box,
@@ -39,153 +34,16 @@ import { useSystemStatus, useRescan, useDockerContainers } from '@/features/syst
 import { SpotlightSearch } from './SpotlightSearch';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import { Job } from '@/types/api';
-import { Progress } from "@/components/ui/progress"
-import { useWindowStore, AppType } from '@/store/window-store';
+import type { AppType } from '@/store/window-store';
+import { useWindowStore } from '@/store/window-store';
 
-import { useUploadStore } from '@/store/upload-store';
 import { useTransferStore, formatSpeed } from '@/store/transfer-store';
-
-const TaskManager = () => {
-  const { data: backendTasks, refetch, isLoading } = useQuery({
-    queryKey: ['jobs'],
-    queryFn: async () => {
-      try {
-        const res = await apiClient.get<Job[]>('/tasks');
-        return Array.isArray(res.data) ? res.data : [];
-      } catch {
-        return [];
-      }
-    },
-    retry: false,
-    refetchOnWindowFocus: false,
-    staleTime: 30000,
-  });
-
-  // Get upload tasks from store
-  const uploadTasks = useUploadStore((state) => Object.values(state.tasks));
-  const { uploadSpeed, downloadSpeed } = useTransferStore();
-
-  // Combine backend jobs and frontend upload tasks
-  const allTasks = [
-    ...uploadTasks.map((t) => ({
-      id: t.id,
-      job_type: 'upload',
-      status: t.status === 'uploading' ? 'processing' : t.status,
-      progress: t.progress,
-      error: t.error,
-      file_name: t.file.name,
-    })),
-    ...(backendTasks?.slice(0, 5) || []).map((t) => ({
-      id: String(t.id),
-      job_type: t.job_type,
-      status: t.status,
-      progress: t.progress,
-      error: t.error,
-      file_name: null,
-    })),
-  ];
-
-  const activeTasks = allTasks.filter((t) => t.status === 'processing' || t.status === 'pending');
-  const displayTasks = allTasks.slice(0, 8);
-
-  return (
-    <div className="w-80 p-4">
-      {/* Speed indicator at top */}
-      {(uploadSpeed > 0 || downloadSpeed > 0) && (
-        <div className="flex items-center gap-4 mb-3 pb-3 border-b border-white/10">
-          {downloadSpeed > 0 && (
-            <div className="flex items-center gap-1 text-sm">
-              <span className="text-green-400">↓</span>
-              <span>{formatSpeed(downloadSpeed)}</span>
-            </div>
-          )}
-          {uploadSpeed > 0 && (
-            <div className="flex items-center gap-1 text-sm">
-              <span className="text-blue-400">↑</span>
-              <span>{formatSpeed(uploadSpeed)}</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="flex items-center justify-between mb-4">
-        <span className="font-semibold">Background Tasks</span>
-        <div className="flex items-center gap-2">
-          {activeTasks.length > 0 && (
-            <span className="text-xs text-blue-500 animate-pulse">{activeTasks.length} running</span>
-          )}
-          <button
-            onClick={() => refetch()}
-            disabled={isLoading}
-            className="p-1 hover:bg-white/10 rounded transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw className={cn("w-3 h-3", isLoading && "animate-spin")} />
-          </button>
-        </div>
-      </div>
-      <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar">
-        {displayTasks.length === 0 ? (
-          <div className="text-center text-muted-foreground py-4 text-sm">
-            No active tasks
-          </div>
-        ) : (
-          displayTasks.map((task) => (
-            <div key={task.id} className="bg-black/5 dark:bg-white/5 rounded-lg p-3 border border-black/5 dark:border-white/5">
-              <div className="flex items-start gap-3">
-                <div className="mt-1">
-                  {task.status === 'processing' ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                  ) : task.status === 'completed' ? (
-                    <CheckCircle2 className="w-4 h-4 text-green-500" />
-                  ) : task.status === 'error' ? (
-                    <XCircle className="w-4 h-4 text-red-500" />
-                  ) : (
-                    <Activity className="w-4 h-4 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0 space-y-2">
-                  <div className="flex justify-between items-start">
-                    <span className="text-sm font-medium capitalize truncate">
-                      {task.file_name || task.job_type.replace('_', ' ')}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground capitalize ml-2 shrink-0">{task.status}</span>
-                  </div>
-                  {task.status === 'processing' && (
-                    <div className="h-1.5 w-full bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-blue-500 transition-all duration-300"
-                        style={{ width: `${task.progress}%` }}
-                      />
-                    </div>
-                  )}
-                  {task.error && (
-                    <p className="text-xs text-red-500 truncate">{task.error}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-};
 
 const ControlCenter = () => {
   const { data: systemStatus } = useSystemStatus();
   const rescanMutation = useRescan();
   const { data: containers = [] } = useDockerContainers();
   const openWindow = useWindowStore((state) => state.openWindow);
-
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  };
 
   const usedMemoryPercent = systemStatus 
     ? Math.round((systemStatus.used_memory / systemStatus.total_memory) * 100) 
@@ -291,22 +149,6 @@ const ControlCenterPopover = () => {
   );
 };
 
-const TaskManagerPopover = () => {
-  const [open, setOpen] = React.useState(false);
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <div className="hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer transition-colors">
-          <Activity className="w-4 h-4" />
-        </div>
-      </PopoverTrigger>
-      <PopoverContent className="w-auto p-0 mr-2 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-white/20" align="end" sideOffset={8}>
-        {open && <TaskManager />}
-      </PopoverContent>
-    </Popover>
-  );
-};
-
 import { formatDistanceToNow } from 'date-fns';
 import { X } from 'lucide-react';
 
@@ -347,7 +189,7 @@ const getActionInfo = (action: string) => {
 const NotificationCenter = () => {
   const queryClient = useQueryClient();
   
-  const { data: logs, refetch } = useQuery({
+  const { data: logs } = useQuery({
     queryKey: ['audit-logs'],
     queryFn: async () => {
       const res = await apiClient.get<AuditLog[]>('/audit/logs');

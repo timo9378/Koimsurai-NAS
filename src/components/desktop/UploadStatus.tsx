@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { useUploadStore } from '@/store/upload-store';
 import { X, ChevronDown, ChevronUp, CheckCircle2, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';

@@ -7,9 +7,6 @@ import {
   FileCode,
   FileJson,
   FileSpreadsheet,
-  FileImage,
-  FileVideo,
-  FileAudio,
   FileArchive,
   FileType,
   Folder,
@@ -21,15 +18,12 @@ import {
   FileCheck,
   Presentation,
   Database,
-  FileX,
   Film,
   Music,
   Image,
   Code,
   Braces,
-  Hash,
   FileWarning,
-  FileQuestion,
   BookOpen,
   Cpu,
   Globe,
@@ -37,7 +31,6 @@ import {
   Settings,
   Package,
   Palette,
-  Clapperboard,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

@@ -24,7 +24,8 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import { cn } from '@/lib/utils';
 import { useTheme } from 'next-themes';
-import { useWindowStore, DockPosition } from '@/store/window-store';
+import type { DockPosition } from '@/store/window-store';
+import { useWindowStore } from '@/store/window-store';
 import { useSystemStatus } from '@/features/system/api/useSystem';
 import {
   useTwoFactorStatus,

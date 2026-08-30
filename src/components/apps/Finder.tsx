@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import {
   useFiles,
   useDelete,
@@ -17,7 +16,7 @@ import {
   useBatchMove
 } from '@/features/files/api/useFiles';
 import { MOVE_MIME } from '@/lib/dnd';
-import { FileInfo } from '@/types/api';
+import type { FileInfo } from '@/types/api';
 import { useUploadStore } from '@/store/upload-store';
 import { useWindowStore } from '@/store/window-store';
 import { useFileUpload } from '@/features/files/hooks/useFileUpload'; // Updated import
@@ -31,7 +30,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { cn } from '@/lib/utils';
 import { RefreshCw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -39,7 +37,6 @@ import { toast } from 'sonner';
 import { Sidebar } from './finder/Sidebar';
 import { Toolbar } from './finder/Toolbar';
 import { FileList } from './finder/FileList';
-import { UploadStatus } from '@/components/desktop/UploadStatus';
 import { ShareDialog, UploadLinkDialog, TagDialog } from '@/components/dialogs';
 import { X, Plus } from 'lucide-react';
 
@@ -206,8 +203,6 @@ export const Finder = ({ windowId }: FinderProps) => {
   const [renameValue, setRenameValue] = useState('');
   const [pendingRenameFolder, setPendingRenameFolder] = useState<string | null>(null);
 
-  const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
-  const [newFolderName, setNewFolderName] = useState('');
   const [isEmptyTrashConfirmOpen, setIsEmptyTrashConfirmOpen] = useState(false);
   const [isPermanentDeleteConfirmOpen, setIsPermanentDeleteConfirmOpen] = useState(false);
   const [filesToPermanentlyDelete, setFilesToPermanentlyDelete] = useState<string[]>([]);
@@ -228,9 +223,8 @@ export const Finder = ({ windowId }: FinderProps) => {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
-  const queryClient = useQueryClient();
 
-  const { tasks: uploadTasks, removeTask } = useUploadStore();
+  const { tasks: uploadTasks } = useUploadStore();
   const { openWindow, updateWindowAppState, windows } = useWindowStore();
 
   const { handleUploadFiles, resumeUpload } = useFileUpload(); // Use hook
@@ -391,7 +385,7 @@ export const Finder = ({ windowId }: FinderProps) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Skip keyboard handling when dialogs are open
-      if (isShareDialogOpen || isUploadLinkDialogOpen || isCreateFolderOpen || isEmptyTrashConfirmOpen || isPermanentDeleteConfirmOpen || isTagDialogOpen) {
+      if (isShareDialogOpen || isUploadLinkDialogOpen || isEmptyTrashConfirmOpen || isPermanentDeleteConfirmOpen || isTagDialogOpen) {
         return;
       }
 
@@ -473,7 +467,7 @@ export const Finder = ({ windowId }: FinderProps) => {
 
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [selectedFiles, currentFiles, renamingFile, openWindow, currentPath, deleteFile, restoreFromTrash, isShareDialogOpen, isUploadLinkDialogOpen, isCreateFolderOpen, isEmptyTrashConfirmOpen, isPermanentDeleteConfirmOpen, isTagDialogOpen]);
+  }, [selectedFiles, currentFiles, renamingFile, openWindow, currentPath, deleteFile, restoreFromTrash, isShareDialogOpen, isUploadLinkDialogOpen, isEmptyTrashConfirmOpen, isPermanentDeleteConfirmOpen, isTagDialogOpen]);
 
   // Mouse back/forward button navigation
   const finderContainerRef = React.useRef<HTMLDivElement>(null);
@@ -495,7 +489,7 @@ export const Finder = ({ windowId }: FinderProps) => {
       e.stopPropagation();
       
       // Skip navigation when dialogs are open
-      if (isShareDialogOpen || isUploadLinkDialogOpen || isCreateFolderOpen || isEmptyTrashConfirmOpen || isPermanentDeleteConfirmOpen || isTagDialogOpen) {
+      if (isShareDialogOpen || isUploadLinkDialogOpen || isEmptyTrashConfirmOpen || isPermanentDeleteConfirmOpen || isTagDialogOpen) {
         return;
       }
       
@@ -522,7 +516,7 @@ export const Finder = ({ windowId }: FinderProps) => {
         window.removeEventListener(event, handleMouseButton, { capture: true });
       });
     };
-  }, [historyIndex, history, isShareDialogOpen, isUploadLinkDialogOpen, isCreateFolderOpen, isEmptyTrashConfirmOpen, isPermanentDeleteConfirmOpen, isTagDialogOpen]);
+  }, [historyIndex, history, isShareDialogOpen, isUploadLinkDialogOpen, isEmptyTrashConfirmOpen, isPermanentDeleteConfirmOpen, isTagDialogOpen]);
 
   const handleTrashMode = () => {
     setIsTrashMode(true);

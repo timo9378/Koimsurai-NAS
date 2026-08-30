@@ -110,13 +110,6 @@ export function VideoPlayer({ src, title, poster, className, onError }: VideoPla
   }, []);
 
   // Handle seek
-  const handleSeek = useCallback((value: number[]) => {
-    const video = videoRef.current;
-    if (!video) return;
-    video.currentTime = value[0];
-    setCurrentTime(value[0]);
-  }, []);
-
   // Handle progress bar click
   const handleProgressBarClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const bar = progressBarRef.current;

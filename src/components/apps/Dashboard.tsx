@@ -9,9 +9,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
 } from 'recharts';
 import { Cpu, HardDrive, Activity, Thermometer, Monitor, Loader2, LayoutGrid, AlertTriangle, BatteryCharging, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';

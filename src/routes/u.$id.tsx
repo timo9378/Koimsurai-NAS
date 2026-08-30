@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Upload,
   Lock,
-  Clock,
   AlertCircle,
   Check,
   File,
@@ -537,16 +536,16 @@ function UploadPage() {
           {/* Limits Info */}
           {(uploadInfo?.max_files || uploadInfo?.max_file_size) && (
             <div className="flex flex-wrap gap-4 text-sm text-zinc-400">
-              {uploadInfo!.max_file_size && (
+              {uploadInfo.max_file_size && (
                 <div className="flex items-center gap-1.5">
                   <File className="h-4 w-4" />
-                  <span>單檔限制: {formatFileSize(uploadInfo!.max_file_size)}</span>
+                  <span>單檔限制: {formatFileSize(uploadInfo.max_file_size)}</span>
                 </div>
               )}
-              {uploadInfo!.max_files && (
+              {uploadInfo.max_files && (
                 <div className="flex items-center gap-1.5">
                   <Upload className="h-4 w-4" />
-                  <span>檔案數量: {uploadInfo!.uploaded_count + totalFileCount} / {uploadInfo!.max_files}</span>
+                  <span>檔案數量: {uploadInfo.uploaded_count + totalFileCount} / {uploadInfo.max_files}</span>
                 </div>
               )}
             </div>

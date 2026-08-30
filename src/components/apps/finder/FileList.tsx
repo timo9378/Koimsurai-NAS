@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useCallback, forwardRef } from 'react';
+import React, { useRef, forwardRef } from 'react';
 import { Virtuoso, VirtuosoGrid } from 'react-virtuoso';
 import {
   Upload,
@@ -22,7 +22,7 @@ import {
   Folder,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { FileInfo } from '@/types/api';
+import type { FileInfo } from '@/types/api';
 import { useThumbnail } from '@/features/files/api/useFiles';
 import { FileTypeIcon } from '@/lib/file-icons';
 import {
@@ -413,7 +413,7 @@ export const FileList = ({
               overscan={200}
               components={gridComponents}
               onScroll={(e) => { scrollOffsetRef.current = (e.target as HTMLElement).scrollTop; }}
-              itemContent={(index, file) => (
+              itemContent={(_index, file) => (
                 <ContextMenu key={file.name}>
                   <ContextMenuTrigger>
                     <div
@@ -452,7 +452,7 @@ export const FileList = ({
                           onClick={(e) => e.stopPropagation()}
                           onDoubleClick={(e) => {
                             e.stopPropagation();
-                            (e.currentTarget as HTMLInputElement).select();
+                            (e.currentTarget).select();
                           }}
                           className="text-xs text-center px-1 rounded w-full bg-white dark:bg-black border border-blue-500 focus:outline-none text-black dark:text-white"
                         />
@@ -562,7 +562,7 @@ export const FileList = ({
                 data={files ?? []}
                 overscan={200}
                 onScroll={(e) => { scrollOffsetRef.current = (e.target as HTMLElement).scrollTop; }}
-                itemContent={(index, file) => (
+                itemContent={(_index, file) => (
                 <ContextMenu key={file.name}>
                   <ContextMenuTrigger>
                     <div
@@ -604,7 +604,7 @@ export const FileList = ({
                             onClick={(e) => e.stopPropagation()}
                             onDoubleClick={(e) => {
                               e.stopPropagation();
-                              (e.currentTarget as HTMLInputElement).select();
+                              (e.currentTarget).select();
                             }}
                             className="text-sm px-1 rounded bg-white dark:bg-black border border-blue-500 focus:outline-none text-black dark:text-white flex-1 min-w-0"
                           />

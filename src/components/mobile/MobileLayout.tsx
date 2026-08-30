@@ -9,7 +9,6 @@ import {
   ChevronRight,
   Home,
   ArrowLeft,
-  Upload,
   MoreVertical,
   Search,
   X,
@@ -31,7 +30,7 @@ import {
   BatteryCharging,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { FileInfo } from '@/types/api';
+import type { FileInfo } from '@/types/api';
 import {
   useFiles,
   useDelete,
@@ -51,7 +50,6 @@ import { useUploadStore } from '@/store/upload-store';
 import { useLogout } from '@/features/auth/api/useAuth';
 import { FileTypeIcon } from '@/lib/file-icons';
 import { useThumbnail } from '@/features/files/api/useFiles';
-import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useSystemStatus } from '@/features/system/api/useSystem';
 
@@ -333,7 +331,6 @@ export const MobileLayout = () => {
   const [infoFile, setInfoFile] = useState<FileInfo | null>(null);
   const [renameFile, setRenameFile] = useState<FileInfo | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const queryClient = useQueryClient();
 
   // ─── API hooks ────────────────
   const { data: files, isLoading, refetch } = useFiles({

@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Download, 
   Lock, 
-  FileIcon, 
   Clock, 
   Shield, 
   Eye,
@@ -20,7 +19,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FileTypeIcon } from '@/lib/file-icons';
-import { cn } from '@/lib/utils';
 
 interface ShareInfo {
   id: string;

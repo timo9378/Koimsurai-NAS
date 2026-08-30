@@ -7,7 +7,6 @@ import { UploadStatus } from './UploadStatus';
 import { GlobalContextMenu } from './GlobalContextMenu';
 import { DesktopIcons } from './DesktopIcons';
 import { useFileUpload } from '@/features/files/hooks/useFileUpload'; // Updated import
-import { useUploadStore } from '@/store/upload-store';
 import { useWindowStore } from '@/store/window-store';
 import { MOVE_MIME } from '@/lib/dnd';
 
@@ -152,20 +151,6 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
   };
 
   // Calculate selection box styles
-  const getSelectionBoxStyle = () => {
-    const left = Math.min(selection.startX, selection.currentX);
-    const top = Math.min(selection.startY, selection.currentY);
-    const width = Math.abs(selection.currentX - selection.startX);
-    const height = Math.abs(selection.currentY - selection.startY);
-
-    return {
-      left: `${left}px`,
-      top: `${top}px`,
-      width: `${width}px`,
-      height: `${height}px`,
-    };
-  };
-
   // Drag and Drop handlers
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();

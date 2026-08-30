@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -11,7 +11,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
   ContextMenu,
@@ -33,7 +32,7 @@ interface TerminalProps {
   windowId?: string;
 }
 
-export const Terminal = ({ windowId }: TerminalProps) => {
+export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string>('');
   const [isConnecting, setIsConnecting] = useState(false);

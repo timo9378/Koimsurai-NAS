@@ -52,7 +52,7 @@ const aggregateSpeeds = (tasks: Record<string, TransferTask>) => {
     return { uploadSpeed, downloadSpeed };
 };
 
-export const useTransferStore = create<TransferStore>((set, get) => ({
+export const useTransferStore = create<TransferStore>((set) => ({
     tasks: {},
     uploadSpeed: 0,
     downloadSpeed: 0,

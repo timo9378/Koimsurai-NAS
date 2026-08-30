@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useWindowStore } from '@/store/window-store';
 import { cn } from '@/lib/utils';
-import { useDelete, useUpload } from '@/features/files/api/useFiles';
+import { useUpload } from '@/features/files/api/useFiles';
 import { useRescan } from '@/features/system/api/useSystem';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -44,7 +44,6 @@ export const GlobalContextMenu = ({ onWallpaperChange }: GlobalContextMenuProps)
 
   const menuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const deleteFile = useDelete();
   const upload = useUpload();
   const rescan = useRescan();
   const queryClient = useQueryClient();

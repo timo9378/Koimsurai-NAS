@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -14,8 +14,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from '@/lib/utils';
 import { X, Plus, Check } from 'lucide-react';
-import { useAddTag, useRemoveTag, TAG_COLORS, TagColorName } from '@/hooks/use-tags';
-import type { FileInfo, Tag } from '@/types/api';
+import type { TagColorName } from '@/hooks/use-tags';
+import { useAddTag, useRemoveTag, TAG_COLORS } from '@/hooks/use-tags';
+import type { FileInfo } from '@/types/api';
 
 interface TagDialogProps {
   open: boolean;

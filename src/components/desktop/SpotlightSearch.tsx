@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Command } from 'cmdk';
 import { 
   Search, 
@@ -13,18 +13,14 @@ import {
   Terminal, 
   Activity,
   Trash2,
-  FileText,
-  Music,
-  Video,
-  Archive,
-  Code,
   Equal,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { FileTypeIcon } from '@/lib/file-icons';
 import { apiClient } from '@/lib/api-client';
-import { useWindowStore, AppType } from '@/store/window-store';
-import { FileInfo } from '@/types/api';
+import type { AppType } from '@/store/window-store';
+import { useWindowStore } from '@/store/window-store';
+import type { FileInfo } from '@/types/api';
 
 interface SearchResult {
   path: string;

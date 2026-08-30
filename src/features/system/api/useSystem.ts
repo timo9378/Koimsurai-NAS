@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueries } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import { SystemStatus, DockerContainer } from '@/types/api';
+import type { SystemStatus, DockerContainer } from '@/types/api';
 
 export interface ContainerWithStats extends DockerContainer {
   cpu_percent?: number;
@@ -35,13 +35,13 @@ export const useDockerContainers = () => {
     queryKey: ['docker', 'containers'],
     queryFn: async () => {
       try {
-        const response = await apiClient.get<{ success: boolean; data?: Array<{
+        const response = await apiClient.get<{ success: boolean; data?: {
           id: string;
           names: string[];
           image: string;
           state: string;
           status: string;
-        }> }>('/docker/containers?all=true');
+        }[] }>('/docker/containers?all=true');
         
         // Transform backend format to frontend format
         const containers = response.data?.data || [];

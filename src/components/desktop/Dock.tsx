@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import { motion, useMotionValue, useSpring, useTransform, MotionValue, AnimatePresence } from 'framer-motion';
+import type { MotionValue} from 'framer-motion';
+import { motion, useMotionValue, useSpring, useTransform, AnimatePresence } from 'framer-motion';
 import {
   Folder,
   LayoutGrid,
@@ -13,12 +14,12 @@ import {
   Terminal,
   Activity,
   X,
-  Monitor,
   ArrowLeft,
   ArrowRight,
   ArrowDown
 } from 'lucide-react';
-import { useWindowStore, AppType, WindowState } from '@/store/window-store';
+import type { AppType, WindowState } from '@/store/window-store';
+import { useWindowStore } from '@/store/window-store';
 import { cn } from '@/lib/utils';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import * as Popover from '@radix-ui/react-popover';

@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { Delete, Divide, X, Minus, Plus, Equal, Percent } from 'lucide-react';
+import { Divide, X, Minus, Plus, Equal, Percent } from 'lucide-react';
 
 interface CalculatorProps {
   windowId?: string;
@@ -10,7 +10,7 @@ interface CalculatorProps {
 
 type Operation = '+' | '-' | '×' | '÷' | '%' | null;
 
-export const Calculator = ({ windowId }: CalculatorProps) => {
+export const Calculator = ({ windowId: _windowId }: CalculatorProps) => {
   const [display, setDisplay] = useState('0');
   const [previousValue, setPreviousValue] = useState<number | null>(null);
   const [operation, setOperation] = useState<Operation>(null);
@@ -23,11 +23,6 @@ export const Calculator = ({ windowId }: CalculatorProps) => {
     setOperation(null);
     setWaitingForOperand(false);
     setHistory('');
-  }, []);
-
-  const clearEntry = useCallback(() => {
-    setDisplay('0');
-    setWaitingForOperand(false);
   }, []);
 
   const toggleSign = useCallback(() => {

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { FileInfo } from '@/types/api';
+import type { FileInfo } from '@/types/api';
 import { FileTypeIcon } from '@/lib/file-icons';
 
 interface DraggableDesktopIconProps {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Share2,
@@ -9,7 +9,6 @@ import {
   Lock,
   Copy,
   Check,
-  X,
   Eye,
   EyeOff,
   Calendar,

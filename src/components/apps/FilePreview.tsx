@@ -1,12 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { FileInfo } from '@/types/api';
+import type { FileInfo } from '@/types/api';
 import { File, Download, Loader2 } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { apiClient } from '@/lib/api-client';
 import { useQuery } from '@tanstack/react-query';
-import { cn } from '@/lib/utils';
 import { useWindowStore } from '@/store/window-store';
 import { VideoPlayer } from '@/components/ui/video-player';
 import { AudioPlayer } from '@/components/ui/audio-player';
@@ -30,11 +28,11 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
   const isImage = file.mime_type?.startsWith('image/');
   const isVideo = file.mime_type?.startsWith('video/');
   const isAudio = file.mime_type?.startsWith('audio/') ||
-    !!file.name.match(/\.(mp3|wav|flac|aac|ogg|m4a|wma|opus)$/i);
+    !!(/\.(mp3|wav|flac|aac|ogg|m4a|wma|opus)$/i.exec(file.name));
   const isPdf = file.mime_type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-  const isOffice = !!file.name.match(/\.(docx?|xlsx?|pptx?)$/i);
+  const isOffice = !!(/\.(docx?|xlsx?|pptx?)$/i.exec(file.name));
   const isText = file.mime_type?.startsWith('text/') ||
-    !!file.name.match(/\.(txt|json|md|ts|tsx|js|jsx|css|html|xml|yaml|yml|toml|ini|cfg|conf|sh|bash|zsh|py|rb|rs|go|java|c|cpp|h|hpp|sql|log|env|gitignore|dockerignore|editorconfig|prettierrc|eslintrc)$/i);
+    !!(/\.(txt|json|md|ts|tsx|js|jsx|css|html|xml|yaml|yml|toml|ini|cfg|conf|sh|bash|zsh|py|rb|rs|go|java|c|cpp|h|hpp|sql|log|env|gitignore|dockerignore|editorconfig|prettierrc|eslintrc)$/i.exec(file.name));
 
   // Construct URLs with proper encoding
   // We use the /api/download endpoint which maps to the backend's download_file handler

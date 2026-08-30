@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import { Check } from "lucide-react"
-import { cn } from "@/lib/utils"
 
 const Checkbox = React.forwardRef<
   HTMLInputElement,

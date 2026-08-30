@@ -1,13 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Play,
   Square,
   RotateCw,
   Trash2,
   Terminal,
-  ExternalLink,
   MoreVertical,
   Box,
   Layers,
@@ -69,7 +68,6 @@ const ContainerCard = ({ container }: { container: ContainerInfo }) => {
   const { data: logs, isLoading: isLoadingLogs } = useContainerLogs(container.id, showLogs);
 
   const isRunning = container.state === 'running';
-  const webPort = container.ports.find(p => p.public_port);
 
   return (
     <div className="bg-white/40 dark:bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4 flex flex-col gap-3 group hover:bg-white/50 dark:hover:bg-black/50 transition-colors min-w-0">
@@ -176,7 +174,6 @@ const ContainerListItem = ({ container }: { container: ContainerInfo }) => {
   const { data: logs, isLoading: isLoadingLogs } = useContainerLogs(container.id, showLogs);
 
   const isRunning = container.state === 'running';
-  const webPort = container.ports.find(p => p.public_port);
 
   return (
     <>

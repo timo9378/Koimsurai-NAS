@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import { FileInfo, FileVersion, TagRequest, BatchOperationRequest, InitUploadRequest, InitUploadResponse, UploadSession } from '@/types/api';
+import type { FileInfo, FileVersion, TagRequest, BatchOperationRequest, InitUploadRequest, InitUploadResponse, UploadSession } from '@/types/api';
 
 interface UseFilesParams {
   path: string;
@@ -146,7 +146,7 @@ export const useRename = () => {
       const encodedPath = cleanPath.split('/').map(encodeURIComponent).join('/');
       await apiClient.put(`/files/${encodedPath}`, { new_path: newPath });
     },
-    onSuccess: async (_, variables) => {
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['files'] });
     },
   });
@@ -169,7 +169,7 @@ export const useCreateFolder = () => {
       // Return the path for use in onSuccess
       return { path, cleanPath };
     },
-    onSuccess: async (result, variables) => {
+    onSuccess: async (_result, variables) => {
       // Small delay to ensure filesystem consistency before fetching
       await new Promise(resolve => setTimeout(resolve, 200));
       
@@ -311,7 +311,7 @@ export const useRestoreVersion = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ path, versionId }: { path: string; versionId: string }) => {
+    mutationFn: async ({ versionId }: { path: string; versionId: string }) => {
       // const cleanPath = path.startsWith('/') ? path.slice(1) : path;
       // Note: The backend route seems to only require versionId: /versions/restore/{id}
       // If path is needed for invalidation, we keep it in args but not in URL if not required.

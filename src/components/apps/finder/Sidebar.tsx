@@ -11,8 +11,9 @@ import {
   Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { FileInfo, UserTag } from '@/types/api';
-import { TAG_COLORS, TagColorName } from '@/hooks/use-tags';
+import type { FileInfo, UserTag } from '@/types/api';
+import type { TagColorName } from '@/hooks/use-tags';
+import { TAG_COLORS } from '@/hooks/use-tags';
 
 interface SidebarItemProps {
   icon: React.ElementType;

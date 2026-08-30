@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useUpload, useInitUpload, useUploadChunk } from '../api/useFiles';
 import { useUploadStore } from '@/store/upload-store';
 import { apiClient } from '@/lib/api-client';
-import { FileInfo, UploadSession } from '@/types/api';
+import type { FileInfo, UploadSession } from '@/types/api';
 
 // Concurrency-limited upload queue utility
 const createUploadQueue = (concurrency: number) => {
@@ -48,7 +48,7 @@ export const useFileUpload = () => {
   const uploadFile = useUpload();
   const initUpload = useInitUpload();
   const uploadChunk = useUploadChunk();
-  const { addTask, updateTask, removeTask, tasks: uploadTasks } = useUploadStore();
+  const { addTask, updateTask, tasks: uploadTasks } = useUploadStore();
 
   const handleUploadFiles = async (files: File[], currentPath: string) => {
     const uploadPromises = files.map((file) => {
@@ -154,7 +154,7 @@ export const useFileUpload = () => {
         const chunk = file.slice(start, end);
 
         await uploadChunk.mutateAsync({
-          sessionId: upload_id!,
+          sessionId: upload_id,
           chunk
         });
 
@@ -176,7 +176,7 @@ export const useFileUpload = () => {
 
   const resumeUpload = async (taskId: string) => {
     const task = uploadTasks[taskId];
-    if (!task || !task.uploadId) return;
+    if (!task?.uploadId) return;
 
     updateTask(taskId, { status: 'uploading', error: undefined });
 

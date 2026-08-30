@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import { FileInfo } from '@/types/api';
+import type { FileInfo } from '@/types/api';
 import { format, parseISO } from 'date-fns';
 import { Search, Image as ImageIcon, Film, Calendar } from 'lucide-react';
 import { Virtuoso } from 'react-virtuoso';
@@ -36,7 +36,7 @@ export const Photos = () => {
   // Each item can be a header (date) or a row of photos
   const flattenedItems = useMemo(() => {
     if (!timeline) return [];
-    const items: Array<{ type: 'header', date: string, count: number } | { type: 'row', items: MediaItem[] }> = [];
+    const items: ({ type: 'header', date: string, count: number } | { type: 'row', items: MediaItem[] })[] = [];
     
     timeline.forEach(group => {
       items.push({ type: 'header', date: group.date, count: group.items.length });
@@ -91,7 +91,7 @@ export const Photos = () => {
           <Virtuoso
             style={{ height: '100%' }}
             data={flattenedItems}
-            itemContent={(index, item) => {
+            itemContent={(_index, item) => {
               if (item.type === 'header') {
                 return (
                   <div className="flex items-center gap-2 bg-white/80 dark:bg-black/80 backdrop-blur-md py-2 z-10 px-2 rounded-lg mb-2 mt-4">
