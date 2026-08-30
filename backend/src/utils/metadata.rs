@@ -50,10 +50,7 @@ pub fn extract_metadata(path: &Path, mime_type: &str) -> FileMetadata {
 }
 
 fn extract_image_metadata(path: &Path) -> FileMetadata {
-    let file = match File::open(path) {
-        Ok(f) => f,
-        Err(_) => return FileMetadata::None,
-    };
+    let Ok(file) = File::open(path) else { return FileMetadata::None };
     let mut bufreader = BufReader::new(&file);
     let exifreader = exif::Reader::new();
     
@@ -105,10 +102,7 @@ fn extract_audio_metadata(path: &Path) -> FileMetadata {
 }
 
 fn extract_video_metadata(path: &Path) -> FileMetadata {
-    let file = match File::open(path) {
-        Ok(f) => f,
-        Err(_) => return FileMetadata::None,
-    };
+    let Ok(file) = File::open(path) else { return FileMetadata::None };
     let size = file.metadata().map_or(0, |m| m.len());
     let reader = BufReader::new(file);
 

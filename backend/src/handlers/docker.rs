@@ -563,10 +563,7 @@ async fn handle_exec_socket(socket: WebSocket, state: AppState, exec_id: String)
     let (mut ws_sender, mut ws_receiver) = socket.split();
 
     // 2. 開始 Exec 並獲取流
-    let service = match get_docker_service(&state) {
-        Ok(s) => s,
-        Err(_) => return, // Should catch earlier
-    };
+    let Ok(service) = get_docker_service(&state) else { return };
 
     let start_result = match service.start_exec(&exec_id).await {
         Ok(res) => res,
@@ -641,7 +638,7 @@ async fn handle_exec_socket(socket: WebSocket, state: AppState, exec_id: String)
                 _ = (&mut recv_task) => send_task.abort(),
             };
         }
-        _ => {
+        bollard::exec::StartExecResults::Detached => {
             let _ = ws_sender.send(Message::Text("Detached mode not supported".to_string())).await;
         }
     }

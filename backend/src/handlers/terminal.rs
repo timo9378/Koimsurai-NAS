@@ -4,6 +4,8 @@ use axum::{
 };
 use futures::{sink::SinkExt, stream::StreamExt};
 use serde::Deserialize;
+// write! 寫進 String 需要這個 trait 在 scope（format_push_string 的建議寫法）
+use std::fmt::Write;
 use std::collections::HashSet;
 
 use crate::state::AppState;
@@ -328,7 +330,6 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
 
     let mut input_buffer = String::new();
     let mut command_history: Vec<String> = Vec::new();
-    let mut history_index: usize = 0;
 
     while let Some(Ok(msg)) = receiver.next().await {
         match msg {
@@ -353,7 +354,6 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
                             let cmd = input_buffer.trim().to_string();
                             if !cmd.is_empty() {
                                 command_history.push(cmd.clone());
-                                history_index = command_history.len();
                             }
                             
                             // 執行命令
@@ -513,8 +513,8 @@ fn find_common_prefix(strings: &[String]) -> Option<String> {
 fn get_display_path(current: &str, storage_base: &str) -> String {
     if current == storage_base {
         "~".to_string()
-    } else if current.starts_with(storage_base) {
-        format!("~{}", &current[storage_base.len()..])
+    } else if let Some(rest) = current.strip_prefix(storage_base) {
+        format!("~{rest}")
     } else {
         current.to_string()
     }
@@ -665,7 +665,7 @@ async fn execute_external_command(cmd: &str, current_dir: &str, storage_base: &s
                         format!("{current_dir}/{target}")
                     };
                     // 驗證路徑在 storage 內
-                    if let Ok(canonical) = std::fs::canonicalize(std::path::Path::new(&target_path).parent().unwrap_or(std::path::Path::new(current_dir))) {
+                    if let Ok(canonical) = std::fs::canonicalize(std::path::Path::new(&target_path).parent().unwrap_or_else(|| std::path::Path::new(current_dir))) {
                         if canonical.to_string_lossy().starts_with(storage_base) {
                             if let Err(e) = tokio::fs::write(&target_path, stdout.as_bytes()).await {
                                 return format!("\x1b[31m寫入錯誤: {e}\x1b[0m");
@@ -685,7 +685,7 @@ async fn execute_external_command(cmd: &str, current_dir: &str, storage_base: &s
                 result.push_str(&stdout.replace('\n', "\r\n"));
             }
             if !stderr.is_empty() {
-                result.push_str(&format!("\x1b[31m{}\x1b[0m", stderr.replace('\n', "\r\n")));
+                let _ = write!(result, "\x1b[31m{}\x1b[0m", stderr.replace('\n', "\r\n"));
             }
             result.trim_end().to_string()
         }
@@ -737,7 +737,7 @@ async fn execute_pipeline(cmd: &str, current_dir: &str, storage_base: &str) -> S
         }
 
         // 取得前一個行程的 stdout
-        let prev_stdout = if let Some(out) = prev_child.stdout.take() { out } else {
+        let Some(prev_stdout) = prev_child.stdout.take() else {
             // 前一個行程沒有 stdout，等待它結束
             children.push((first_parts[0].to_string(), prev_child));
             return "\x1b[31m管道錯誤: 無法取得前一個命令的輸出\x1b[0m".to_string();
@@ -800,7 +800,7 @@ async fn execute_pipeline(cmd: &str, current_dir: &str, storage_base: &str) -> S
                 result.push_str(&stdout);
             }
             if !stderr.trim().is_empty() {
-                result.push_str(&format!("\x1b[31m{}\x1b[0m", stderr.replace('\n', "\r\n")));
+                let _ = write!(result, "\x1b[31m{}\x1b[0m", stderr.replace('\n', "\r\n"));
             }
             result.trim_end().to_string()
         }

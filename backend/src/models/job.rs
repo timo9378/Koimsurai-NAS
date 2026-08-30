@@ -28,7 +28,6 @@ impl From<String> for JobStatus {
             "pending" => Self::Pending,
             "processing" => Self::Processing,
             "completed" => Self::Completed,
-            "failed" => Self::Failed,
             _ => Self::Failed,
         }
     }

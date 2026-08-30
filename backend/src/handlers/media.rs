@@ -51,7 +51,7 @@ pub async fn stream_media(
     if let Some(resolution) = params.resolution {
         // 嘗試獲取轉碼許可 (非阻塞)
         // Try to acquire transcode permit (non-blocking)
-        let permit = if let Ok(permit) = state.transcode_semaphore.try_acquire_owned() { permit } else {
+        let Ok(permit) = state.transcode_semaphore.try_acquire_owned() else {
             // 所有轉碼槽位都在使用中
             // All transcode slots are busy
             let max_transcodes = crate::state::get_max_concurrent_transcodes();
@@ -440,16 +440,20 @@ pub async fn hls_serve(
     // 讀取檔案
     match tokio::fs::read(&file_path).await {
         Ok(contents) => {
-            let content_type = if params.file.ends_with(".m3u8") {
+            let ext = std::path::Path::new(&params.file)
+                .extension()
+                .map(std::ffi::OsStr::to_ascii_lowercase);
+            let ext = ext.as_deref();
+            let content_type = if ext == Some(std::ffi::OsStr::new("m3u8")) {
                 "application/vnd.apple.mpegurl"
-            } else if params.file.ends_with(".ts") {
+            } else if ext == Some(std::ffi::OsStr::new("ts")) {
                 "video/MP2T"
             } else {
                 "application/octet-stream"
             };
             
             // 對 m3u8 檔案進行路徑重寫
-            let body = if params.file.ends_with(".m3u8") {
+            let body = if ext == Some(std::ffi::OsStr::new("m3u8")) {
                 let content = String::from_utf8_lossy(&contents);
                 let rewritten = rewrite_hls_urls(&content, &params.path, &params.file);
                 Body::from(rewritten)

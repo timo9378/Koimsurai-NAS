@@ -55,13 +55,12 @@ pub async fn init_upload(
                 uploaded_size: Some(existing.uploaded_size),
                 status: Some("resuming".to_string()),
             }));
-        } else {
-            // Different size: remove old session and start new
-            let _ = sqlx::query("DELETE FROM upload_sessions WHERE id = ?")
-                .bind(&existing.id)
-                .execute(&state.pool)
-                .await;
         }
+        // Different size: remove old session and start new
+        let _ = sqlx::query("DELETE FROM upload_sessions WHERE id = ?")
+            .bind(&existing.id)
+            .execute(&state.pool)
+            .await;
     }
 
     let upload_id = Uuid::new_v4().to_string();

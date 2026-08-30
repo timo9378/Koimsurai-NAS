@@ -10,6 +10,12 @@ use crate::state::AppState;
 use crate::models::{CreateShareLinkRequest, ShareLinkResponse};
 use crate::error::AppError;
 use crate::utils::hash::{hash_password, verify_password};
+
+/// `SELECT file_path, password_hash, expires_at`
+type ShareAccessRow = (String, Option<String>, Option<chrono::DateTime<Utc>>);
+/// `SELECT file_path, password_hash, expires_at, created_at`
+type ShareInfoRow = (String, Option<String>, Option<chrono::DateTime<Utc>>, chrono::DateTime<Utc>);
+
 use uuid::Uuid;
 use chrono::{Utc, Duration};
 use tokio_util::io::ReaderStream;
@@ -94,7 +100,7 @@ pub async fn access_share_link(
     AxumPath(id): AxumPath<String>,
     Query(query): Query<ShareQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    let row: Option<(String, Option<String>, Option<chrono::DateTime<Utc>>)> = sqlx::query_as(
+    let row: Option<ShareAccessRow> = sqlx::query_as(
         "SELECT file_path, password_hash, expires_at FROM share_links WHERE id = ?"
     )
     .bind(&id)
@@ -121,11 +127,7 @@ pub async fn access_share_link(
     }
 
     // Strip leading slash for safety
-    let clean_path = if file_path_str.starts_with('/') {
-        &file_path_str[1..]
-    } else {
-        &file_path_str
-    };
+    let clean_path = file_path_str.strip_prefix('/').unwrap_or(&file_path_str);
 
     let full_path = state.storage_path.join(clean_path);
 
@@ -267,7 +269,7 @@ pub async fn get_share_info(
     AxumPath(id): AxumPath<String>,
 ) -> Result<Json<ShareInfoResponse>, AppError> {
     // 查詢分享連結資訊
-    let row: Option<(String, Option<String>, Option<chrono::DateTime<Utc>>, chrono::DateTime<Utc>)> = sqlx::query_as(
+    let row: Option<ShareInfoRow> = sqlx::query_as(
         "SELECT file_path, password_hash, expires_at, created_at FROM share_links WHERE id = ?"
     )
     .bind(&id)
@@ -285,11 +287,7 @@ pub async fn get_share_info(
     }
 
     // 獲取文件資訊
-    let clean_path = if file_path_str.starts_with('/') {
-        &file_path_str[1..]
-    } else {
-        &file_path_str
-    };
+    let clean_path = file_path_str.strip_prefix('/').unwrap_or(&file_path_str);
     let full_path = state.storage_path.join(clean_path);
     
     if !full_path.exists() {

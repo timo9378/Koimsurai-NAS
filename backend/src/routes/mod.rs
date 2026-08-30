@@ -1,3 +1,10 @@
+//! 路由註冊與 `OpenAPI` 文件定義。
+//
+// needless_for_each 由 utoipa 的 `#[derive(OpenApi)]` 展開產生，不是這個檔案
+// 寫出來的程式碼。⚠️ 掛在 item 上的 `#[allow]` 對 derive 展開無效（實測 -D warnings
+// 仍會擋），必須放模組層級。上游改寫之後可以拿掉。
+#![allow(clippy::needless_for_each, reason = "utoipa OpenApi derive 的巨集展開")]
+
 use axum::{
     routing::{get, post, any, delete},
     Router,

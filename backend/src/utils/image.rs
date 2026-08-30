@@ -22,16 +22,10 @@ pub fn is_likely_media(file_path: &std::path::Path) -> bool {
     use std::fs::File;
     use std::io::Read;
 
-    let mut f = match File::open(file_path) {
-        Ok(f) => f,
-        Err(_) => return false,
-    };
+    let Ok(mut f) = File::open(file_path) else { return false };
 
     let mut buf = [0u8; 16];
-    let n = match f.read(&mut buf) {
-        Ok(n) => n,
-        Err(_) => return false,
-    };
+    let Ok(n) = f.read(&mut buf) else { return false };
 
     let s = &buf[..n];
 
@@ -69,13 +63,10 @@ pub fn is_likely_media(file_path: &std::path::Path) -> bool {
 
 fn generate_thumbnails_sync(file_path: &std::path::Path, storage_root: &std::path::Path) {
     // 計算相對路徑
-    let relative_path = match file_path.strip_prefix(storage_root) {
-        Ok(p) => p,
-        Err(_) => return,
-    };
+    let Ok(relative_path) = file_path.strip_prefix(storage_root) else { return };
 
     let thumb_root = storage_root.join(".thumbnails");
-    let thumb_dir = thumb_root.join(relative_path.parent().unwrap_or(Path::new("")));
+    let thumb_dir = thumb_root.join(relative_path.parent().unwrap_or_else(|| Path::new("")));
 
     if let Err(e) = std::fs::create_dir_all(&thumb_dir) {
         error!("Failed to create thumbnail directory: {}", e);

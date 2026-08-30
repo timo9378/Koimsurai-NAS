@@ -59,7 +59,7 @@ pub async fn restore_version(
     // 1. Locate the version file
     let relative_path = full_path.strip_prefix(&state.storage_path).map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
     let versions_root = state.storage_path.join(".versions");
-    let parent = relative_path.parent().unwrap_or(std::path::Path::new(""));
+    let parent = relative_path.parent().unwrap_or_else(|| std::path::Path::new(""));
     let version_path = versions_root.join(parent).join(&version_id);
 
     if !version_path.exists() {

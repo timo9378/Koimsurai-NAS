@@ -8,6 +8,8 @@ use axum::{
 
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
+// write! 寫進 String 需要這個 trait 在 scope（format_push_string 的建議寫法）
+use std::fmt::Write;
 use std::path::PathBuf;
 use crate::state::AppState;
 use crate::models::FileInfo;
@@ -260,7 +262,7 @@ pub fn validate_path(base: &Path, user_path: &str) -> Result<PathBuf, AppError> 
     for component in path.components() {
         match component {
             Component::Normal(c) => full_path.push(c),
-            Component::RootDir => continue, // 忽略開頭的 /
+            Component::RootDir => {} // 忽略開頭的 /
             _ => return Err(AppError::Status(StatusCode::FORBIDDEN)), // 遇到 .. 或其他特殊字元直接拒絕
         }
     }
@@ -365,7 +367,7 @@ pub async fn list_files(
         _ => "ASC",
     };
 
-    sql.push_str(&format!(" ORDER BY is_dir DESC, {sort_column} {order}"));
+    let _ = write!(sql, " ORDER BY is_dir DESC, {sort_column} {order}");
 
     // Pagination
     let limit = query.limit.unwrap_or(50);
@@ -711,7 +713,7 @@ pub async fn get_thumbnail(
     
     let relative_path = full_path.strip_prefix(&state.storage_path).map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
     let thumb_root = state.storage_path.join(".thumbnails");
-    let thumb_dir = thumb_root.join(relative_path.parent().unwrap_or(Path::new("")));
+    let thumb_dir = thumb_root.join(relative_path.parent().unwrap_or_else(|| Path::new("")));
     let file_name = full_path.file_name().unwrap_or_default().to_string_lossy();
     
     let thumb_name = format!("{file_name}.{size}.jpg");
@@ -870,9 +872,8 @@ pub async fn batch_delete(
 ) -> Result<StatusCode, AppError> {
     for path in payload.paths {
         if let Err(e) = move_to_trash(&state.storage_path, &state.pool, &path, user_id).await {
+            // 記錄後繼續處理其餘檔案，不整批中止
             tracing::error!("Failed to move '{}' to trash: {:?}", path, e);
-            // Continue with remaining files instead of aborting
-            continue;
         }
     }
 

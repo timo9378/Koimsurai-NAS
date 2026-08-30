@@ -15,7 +15,7 @@ pub async fn create_version(file_path: &Path, storage_root: &Path) -> Result<(),
     // Structure: .versions/path/to/dir/
     // Filename: timestamp_filename.ext
     
-    let parent = relative_path.parent().unwrap_or(Path::new(""));
+    let parent = relative_path.parent().unwrap_or_else(|| Path::new(""));
     let version_dir = versions_root.join(parent);
     
     if !version_dir.exists() {
@@ -36,7 +36,7 @@ pub async fn create_version(file_path: &Path, storage_root: &Path) -> Result<(),
 pub async fn list_versions(file_path: &Path, storage_root: &Path) -> Result<Vec<FileVersion>, AppError> {
     let relative_path = file_path.strip_prefix(storage_root).map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
     let versions_root = storage_root.join(".versions");
-    let parent = relative_path.parent().unwrap_or(Path::new(""));
+    let parent = relative_path.parent().unwrap_or_else(|| Path::new(""));
     let version_dir = versions_root.join(parent);
 
     if !version_dir.exists() {
@@ -65,7 +65,7 @@ pub async fn list_versions(file_path: &Path, storage_root: &Path) -> Result<Vec<
     }
 
     // Sort by timestamp desc
-    versions.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+    versions.sort_by_key(|v| std::cmp::Reverse(v.timestamp));
 
     Ok(versions)
 }

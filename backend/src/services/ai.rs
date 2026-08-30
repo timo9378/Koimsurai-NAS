@@ -726,7 +726,7 @@ mod tests {
     fn test_ai_config_default() {
         let config = AiConfig::default();
         assert_eq!(config.model_name, "openai/clip-vit-base-patch32");
-        assert_eq!(config.min_confidence, 0.3);
+        assert!((config.min_confidence - 0.3).abs() < f32::EPSILON);
         assert_eq!(config.max_concurrent_inferences, 4);
         assert!(config.use_gpu);
         assert_eq!(config.max_tags, 5);

@@ -131,7 +131,7 @@ async fn cleanup_empty_dirs(dir: &PathBuf) -> anyhow::Result<u64> {
     }
     
     // 按路徑長度降序排序 (深層目錄先處理)
-    dirs.sort_by(|a, b| b.as_os_str().len().cmp(&a.as_os_str().len()));
+    dirs.sort_by_key(|d| std::cmp::Reverse(d.as_os_str().len()));
 
     // 嘗試刪除空目錄
     for dir_path in dirs {

@@ -178,10 +178,7 @@ pub async fn login(
     .await
     .map_err(AppError::from)?;
 
-    let user = match user {
-        Some(u) => u,
-        None => return Err(AppError::AuthError("Invalid credentials".to_string())),
-    };
+    let Some(user) = user else { return Err(AppError::AuthError("Invalid credentials".to_string())) };
 
     let is_valid = verify_password(&payload.password, &user.password_hash)
         .map_err(AppError::from)?;

@@ -262,13 +262,10 @@ impl Indexer {
             return Ok(());
         }
 
-        let metadata = match tokio::fs::metadata(path).await {
-            Ok(m) => m,
-            Err(_) => {
+        let Ok(metadata) = tokio::fs::metadata(path).await else {
                 // File might have been deleted
                 return self.remove_file(path).await;
-            }
-        };
+            };
 
         let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
         let size = i64::try_from(metadata.len()).unwrap_or(i64::MAX);

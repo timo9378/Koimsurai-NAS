@@ -8,6 +8,13 @@ use crate::state::AppState;
 use crate::models::{CreateUploadLinkRequest, UploadLinkResponse, UploadLinkInfoResponse};
 use crate::error::AppError;
 use crate::utils::hash::{hash_password, verify_password};
+
+/// `SELECT target_path, password_hash, expires_at, max_files, max_file_size, uploaded_count, created_at`
+type UploadLinkInfoRow =
+    (String, Option<String>, Option<chrono::DateTime<Utc>>, Option<i32>, Option<i64>, i32, chrono::DateTime<Utc>);
+/// 同上但不取 `created_at`
+type UploadLinkRow = (String, Option<String>, Option<chrono::DateTime<Utc>>, Option<i32>, Option<i64>, i32);
+
 use uuid::Uuid;
 use chrono::{Utc, Duration};
 use std::path::Path;
@@ -80,7 +87,7 @@ pub async fn get_upload_link_info(
     State(state): State<AppState>,
     AxumPath(id): AxumPath<String>,
 ) -> Result<Json<UploadLinkInfoResponse>, AppError> {
-    let row: Option<(String, Option<String>, Option<chrono::DateTime<Utc>>, Option<i32>, Option<i64>, i32, chrono::DateTime<Utc>)> = sqlx::query_as(
+    let row: Option<UploadLinkInfoRow> = sqlx::query_as(
         "SELECT target_path, password_hash, expires_at, max_files, max_file_size, uploaded_count, created_at FROM upload_links WHERE id = ?"
     )
     .bind(&id)
@@ -143,7 +150,7 @@ pub async fn upload_via_link(
     mut multipart: Multipart,
 ) -> Result<impl IntoResponse, AppError> {
     // 查詢上傳連結資訊
-    let row: Option<(String, Option<String>, Option<chrono::DateTime<Utc>>, Option<i32>, Option<i64>, i32)> = sqlx::query_as(
+    let row: Option<UploadLinkRow> = sqlx::query_as(
         "SELECT target_path, password_hash, expires_at, max_files, max_file_size, uploaded_count FROM upload_links WHERE id = ?"
     )
     .bind(&id)
@@ -212,11 +219,7 @@ pub async fn upload_via_link(
         pending_relative_path = None; // Reset for next iteration
 
         // 建構完整路徑
-        let clean_target = if target_path.starts_with('/') {
-            &target_path[1..]
-        } else {
-            &target_path
-        };
+        let clean_target = target_path.strip_prefix('/').unwrap_or(&target_path);
 
         let full_path = state.storage_path.join(clean_target).join(&save_name);
 

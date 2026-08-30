@@ -52,6 +52,7 @@ impl FfmpegCommand {
         }
     }
     
+    #[must_use]
     pub fn output(mut self, path: &str) -> Self {
         self.output_path = Some(path.to_string());
         self

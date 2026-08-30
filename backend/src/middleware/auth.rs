@@ -77,7 +77,7 @@ pub async fn require_auth(
         }
     }
 
-    let token = if let Some(t) = token_opt { t } else { return Err(StatusCode::UNAUTHORIZED) };
+    let Some(token) = token_opt else { return Err(StatusCode::UNAUTHORIZED) };
 
     // 使用 AppState 中的 jwt_secret 驗證 token（避免每次讀取 env var）
     match verify_token_with_secret(&token, &state.jwt_secret) {
