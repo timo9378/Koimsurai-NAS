@@ -51,6 +51,14 @@ window.scrollTo = noop;
 window.HTMLElement.prototype.scrollIntoView = noop;
 window.HTMLElement.prototype.hasPointerCapture = () => false;
 window.HTMLElement.prototype.releasePointerCapture = noop;
+// jsdom 沒有 ResizeObserver。Terminal 用它來偵測容器變大變小後重新 fit，
+// 少了 stub 元件一掛載就 ReferenceError。
+globalThis.ResizeObserver = class {
+  observe = noop;
+  unobserve = noop;
+  disconnect = noop;
+};
+
 // useIsMobile 用 matchMedia + useSyncExternalStore。jsdom 的版本不會真的
 // 依視窗寬度變化，測試如果要模擬行動裝置，改 stub 這個。
 window.matchMedia = (query: string) =>

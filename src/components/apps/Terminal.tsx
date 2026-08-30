@@ -43,7 +43,13 @@ interface TerminalProps {
 
 export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
   const [tabs, setTabs] = useState<TerminalTab[]>(() => [makeTab(1)]);
-  const [activeTabId, setActiveTabId] = useState<string>("");
+  // ⚠️ 這個初始值一定要跟上面那個分頁對上。
+  //
+  // 之前把「掛載後用 effect 建第一個分頁」改成 lazy initializer 時，只改了
+  // tabs、漏掉這裡——activeTabId 留在 ""，於是下面「初始化 terminal」的
+  // effect 的 `if (activeTabId)` 永遠不成立，terminal 從來沒有連上過。
+  // 畫面上還是看得到分頁與外框，只是裡面永遠空白，所以肉眼很難發現。
+  const [activeTabId, setActiveTabId] = useState<string>(() => tabs[0]?.id ?? "");
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const terminalContainerRef = useRef<HTMLDivElement>(null);
