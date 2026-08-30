@@ -209,6 +209,7 @@ impl DockerService {
 
         let mut guard = self.docker.write().await;
         *guard = Some(docker);
+        drop(guard);
 
         Ok(())
     }

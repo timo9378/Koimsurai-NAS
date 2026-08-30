@@ -11,14 +11,14 @@ pub enum JobStatus {
     Failed,
 }
 
-impl ToString for JobStatus {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Pending => "pending".to_string(),
-            Self::Processing => "processing".to_string(),
-            Self::Completed => "completed".to_string(),
-            Self::Failed => "failed".to_string(),
-        }
+impl std::fmt::Display for JobStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Pending => "pending",
+            Self::Processing => "processing",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+        })
     }
 }
 

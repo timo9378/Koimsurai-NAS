@@ -43,17 +43,17 @@ pub enum JobType {
     },
 }
 
-impl ToString for JobType {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Transcode { .. } => "transcode".to_string(),
-            Self::GenerateThumbnail { .. } => "generate_thumbnail".to_string(),
-            Self::GenerateVideoProxy { .. } => "generate_video_proxy".to_string(),
-            Self::GenerateHls { .. } => "generate_hls".to_string(),
-            Self::CopyFiles { .. } => "copy_files".to_string(),
-            Self::IndexFile { .. } => "index_file".to_string(),
-            Self::AiAnalyzeImage { .. } => "ai_analyze_image".to_string(),
-        }
+impl std::fmt::Display for JobType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Transcode { .. } => "transcode",
+            Self::GenerateThumbnail { .. } => "generate_thumbnail",
+            Self::GenerateVideoProxy { .. } => "generate_video_proxy",
+            Self::GenerateHls { .. } => "generate_hls",
+            Self::CopyFiles { .. } => "copy_files",
+            Self::IndexFile { .. } => "index_file",
+            Self::AiAnalyzeImage { .. } => "ai_analyze_image",
+        })
     }
 }
 
@@ -152,7 +152,7 @@ pub async fn worker(
                 use crate::utils::image;
 
                 // Call the async helper which will spawn a blocking task.
-                image::generate_thumbnails(input_path.clone(), storage_root.clone()).await;
+                image::generate_thumbnails(input_path.clone(), storage_root.clone());
                 Ok(())
             }
             JobType::GenerateVideoProxy { input_path, output_path, target_height, bitrate_kbps } => {

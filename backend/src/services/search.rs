@@ -3,7 +3,7 @@ use tantivy::query::QueryParser;
 use tantivy::schema::{Schema, STRING, STORED, TEXT, Term};
 use tantivy::{Index, IndexWriter, ReloadPolicy, doc};
 use tantivy::schema::{TantivyDocument, Value};
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::{Arc, Mutex, atomic::{AtomicUsize, Ordering}};
 use std::time::{Duration, Instant};
 use std::env;
@@ -43,7 +43,7 @@ pub struct SearchService {
 }
 
 impl SearchService {
-    pub fn new(storage_path: &PathBuf) -> Result<Self, AppError> {
+    pub fn new(storage_path: &Path) -> Result<Self, AppError> {
         let index_path = storage_path.join(".search_index");
         if !index_path.exists() {
             std::fs::create_dir_all(&index_path).map_err(AppError::from)?;
@@ -120,6 +120,10 @@ impl SearchService {
         if should_commit {
             debug!("Batch committing {} indexed files", pending);
             writer.commit().map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
+            // ⚠️ 先放掉 writer 再去拿 last_commit。這兩把鎖原本是巢狀持有的
+            // （writer → last_commit）；flush() 用同樣順序所以不會死鎖，但沒有理由
+            // 讓 writer 在只是寫個時間戳的時候還被佔著 —— 索引寫入是全域序列化的。
+            drop(writer);
             self.pending_count.store(0, Ordering::SeqCst);
             *self.last_commit.lock().map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))? = Instant::now();
         }
@@ -135,6 +139,7 @@ impl SearchService {
             info!("Flushing {} pending index entries", pending);
             let mut writer = self.writer.lock().map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
             writer.commit().map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
+            drop(writer); // 同 index_file：不要持著 writer 去拿 last_commit
             self.pending_count.store(0, Ordering::SeqCst);
             *self.last_commit.lock().map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))? = Instant::now();
         }
@@ -165,7 +170,7 @@ impl SearchService {
             .map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
 
         let mut results = Vec::new();
-        for (_score, doc_address) in top_docs {
+        for (score, doc_address) in top_docs {
             let retrieved_doc: TantivyDocument = searcher.doc(doc_address).map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
             
             let path = retrieved_doc.get_first(path_field).and_then(|v| v.as_str()).unwrap_or_default().to_string();
@@ -174,7 +179,7 @@ impl SearchService {
             results.push(SearchResult {
                 path,
                 name,
-                score: _score,
+                score,
             });
         }
 

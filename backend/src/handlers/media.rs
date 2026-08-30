@@ -32,6 +32,9 @@ pub struct StreamParams {
         (status = 503, description = "Transcoding slots full, try again later")
     )
 )]
+// permit 刻意活到 stream 結束 —— 它會被 move 進 TranscodeStream，drop 的時機
+// 就是釋放轉碼名額的時機，那正是併發上限的機制本身，縮短它等於拿掉限流。
+#[allow(clippy::significant_drop_tightening, reason = "permit 的存活期就是併發上限的機制")]
 pub async fn stream_media(
     State(state): State<AppState>,
     Query(params): Query<StreamParams>,

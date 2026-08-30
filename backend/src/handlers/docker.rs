@@ -124,7 +124,7 @@ pub struct DockerStatus {
 pub async fn docker_status(
     State(state): State<AppState>,
 ) -> Result<Json<DockerStatus>, AppError> {
-    let service = get_docker_service(&state).await?;
+    let service = get_docker_service(&state)?;
 
     let connected = service.is_connected().await;
     let mut status = DockerStatus {
@@ -160,7 +160,7 @@ pub async fn docker_status(
 pub async fn docker_connect(
     State(state): State<AppState>,
 ) -> Result<Json<DockerResult<()>>, AppError> {
-    let service = get_docker_service(&state).await?;
+    let service = get_docker_service(&state)?;
 
     service
         .connect()
@@ -188,7 +188,7 @@ pub async fn list_containers(
     State(state): State<AppState>,
     Query(query): Query<ListContainersQuery>,
 ) -> Result<Json<DockerResult<Vec<ContainerSummary>>>, AppError> {
-    let service = get_docker_service(&state).await?;
+    let service = get_docker_service(&state)?;
     ensure_connected(service).await?;
 
     let containers = service
@@ -216,7 +216,7 @@ pub async fn inspect_container(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<DockerResult<ContainerDetails>>, AppError> {
-    let service = get_docker_service(&state).await?;
+    let service = get_docker_service(&state)?;
     ensure_connected(service).await?;
 
     let details = service
@@ -244,7 +244,7 @@ pub async fn start_container(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<DockerResult<()>>, AppError> {
-    let service = get_docker_service(&state).await?;
+    let service = get_docker_service(&state)?;
     ensure_connected(service).await?;
 
     service
@@ -274,7 +274,7 @@ pub async fn stop_container(
     Path(id): Path<String>,
     body: Option<Json<StopContainerRequest>>,
 ) -> Result<Json<DockerResult<()>>, AppError> {
-    let service = get_docker_service(&state).await?;
+    let service = get_docker_service(&state)?;
     ensure_connected(service).await?;
 
     let timeout = body.and_then(|b| b.timeout);
@@ -306,7 +306,7 @@ pub async fn restart_container(
     Path(id): Path<String>,
     body: Option<Json<StopContainerRequest>>,
 ) -> Result<Json<DockerResult<()>>, AppError> {
-    let service = get_docker_service(&state).await?;
+    let service = get_docker_service(&state)?;
     ensure_connected(service).await?;
 
     let timeout = body.and_then(|b| b.timeout);
@@ -338,7 +338,7 @@ pub async fn remove_container(
     Path(id): Path<String>,
     Query(query): Query<RemoveContainerQuery>,
 ) -> Result<Json<DockerResult<()>>, AppError> {
-    let service = get_docker_service(&state).await?;
+    let service = get_docker_service(&state)?;
     ensure_connected(service).await?;
 
     service
@@ -369,7 +369,7 @@ pub async fn container_logs(
     Path(id): Path<String>,
     Query(query): Query<LogsQuery>,
 ) -> Result<Json<DockerResult<Vec<LogEntry>>>, AppError> {
-    let service = get_docker_service(&state).await?;
+    let service = get_docker_service(&state)?;
     ensure_connected(service).await?;
 
     let logs = service
@@ -397,7 +397,7 @@ pub async fn container_stats(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<DockerResult<ContainerStats>>, AppError> {
-    let service = get_docker_service(&state).await?;
+    let service = get_docker_service(&state)?;
     ensure_connected(service).await?;
 
     let stats = service
@@ -422,7 +422,7 @@ pub async fn container_stats(
 pub async fn list_images(
     State(state): State<AppState>,
 ) -> Result<Json<DockerResult<Vec<ImageSummary>>>, AppError> {
-    let service = get_docker_service(&state).await?;
+    let service = get_docker_service(&state)?;
     ensure_connected(service).await?;
 
     let images = service
@@ -448,7 +448,7 @@ pub async fn pull_image(
     State(state): State<AppState>,
     Json(request): Json<PullImageRequest>,
 ) -> Result<Json<DockerResult<()>>, AppError> {
-    let service = get_docker_service(&state).await?;
+    let service = get_docker_service(&state)?;
     ensure_connected(service).await?;
 
     service
@@ -481,7 +481,7 @@ pub async fn remove_image(
     Path(id): Path<String>,
     Query(query): Query<RemoveImageQuery>,
 ) -> Result<Json<DockerResult<()>>, AppError> {
-    let service = get_docker_service(&state).await?;
+    let service = get_docker_service(&state)?;
     ensure_connected(service).await?;
 
     service
@@ -506,7 +506,7 @@ pub async fn remove_image(
 pub async fn list_networks(
     State(state): State<AppState>,
 ) -> Result<Json<DockerResult<Vec<crate::services::docker::NetworkSummary>>>, AppError> {
-    let service = get_docker_service(&state).await?;
+    let service = get_docker_service(&state)?;
     ensure_connected(service).await?;
 
     let networks = service
@@ -537,7 +537,7 @@ pub async fn container_exec(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let service = get_docker_service(&state).await?;
+    let service = get_docker_service(&state)?;
     ensure_connected(service).await?;
 
     // 1. 創建 Exec 實例
@@ -563,7 +563,7 @@ async fn handle_exec_socket(socket: WebSocket, state: AppState, exec_id: String)
     let (mut ws_sender, mut ws_receiver) = socket.split();
 
     // 2. 開始 Exec 並獲取流
-    let service = match get_docker_service(&state).await {
+    let service = match get_docker_service(&state) {
         Ok(s) => s,
         Err(_) => return, // Should catch earlier
     };
@@ -650,7 +650,7 @@ async fn handle_exec_socket(socket: WebSocket, state: AppState, exec_id: String)
 // ==================== 輔助函數 ====================
 
 /// 從 `AppState` 獲取 `DockerService`
-async fn get_docker_service(state: &AppState) -> Result<&DockerService, AppError> {
+fn get_docker_service(state: &AppState) -> Result<&DockerService, AppError> {
     state.docker_service.as_ref().map(std::convert::AsRef::as_ref).ok_or_else(|| {
         AppError::Custom(
             StatusCode::SERVICE_UNAVAILABLE,

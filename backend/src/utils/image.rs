@@ -8,7 +8,9 @@ const LARGE_IMAGE_THRESHOLD: u64 = 50 * 1024 * 1024;
 
 /// 使用 `FFmpeg` 生成縮圖 (支援更多格式，包括 HEIC/HEIF，且不會 OOM)
 /// Generate thumbnails using `FFmpeg` (supports more formats including HEIC/HEIF, won't OOM)
-pub async fn generate_thumbnails(file_path: std::path::PathBuf, storage_root: std::path::PathBuf) {
+// 不是 async：內部只 spawn_blocking 丟出去（fire-and-forget），沒有任何 await。
+// ⚠️ 仍需在 tokio runtime 內呼叫 —— spawn_blocking 要有 runtime context。
+pub fn generate_thumbnails(file_path: std::path::PathBuf, storage_root: std::path::PathBuf) {
     tokio::task::spawn_blocking(move || {
         generate_thumbnails_sync(&file_path, &storage_root);
     });
