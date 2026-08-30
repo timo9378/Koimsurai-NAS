@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFiles } from '@/features/files/api/useFiles';
+import { MOVE_MIME } from '@/lib/dnd';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,10 +32,32 @@ interface BreadcrumbItemProps {
   parentPath: string;
   isLast: boolean;
   onNavigate: (path: string) => void;
+  onMoveToPath?: (sourceNames: string[], destPath: string) => void;
 }
 
-const BreadcrumbItem = ({ name, path, parentPath, isLast, onNavigate }: BreadcrumbItemProps) => {
+const BreadcrumbItem = ({ name, path, parentPath, isLast, onNavigate, onMoveToPath }: BreadcrumbItemProps) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isDropTarget, setIsDropTarget] = useState(false);
+
+  // 拖移目標:最後一段是「目前目錄」,不接受 drop(搬過去 = no-op)
+  const canDrop = !isLast && !!onMoveToPath;
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!canDrop || !e.dataTransfer.types.includes(MOVE_MIME)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setIsDropTarget(true);
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    if (!canDrop || !e.dataTransfer.types.includes(MOVE_MIME)) return;
+    e.preventDefault();
+    setIsDropTarget(false);
+    try {
+      const names = JSON.parse(e.dataTransfer.getData(MOVE_MIME)) as string[];
+      if (names.length > 0) onMoveToPath?.(names, path);
+    } catch {
+      // ignore malformed payload
+    }
+  };
   
   // Fetch sibling folders (folders in the parent directory)
   // Only fetch when not the last item, or when dropdown is open
@@ -49,9 +72,13 @@ const BreadcrumbItem = ({ name, path, parentPath, isLast, onNavigate }: Breadcru
     <div className="flex items-center shrink-0">
       <button
         onClick={() => onNavigate(path)}
+        onDragOver={handleDragOver}
+        onDragLeave={() => setIsDropTarget(false)}
+        onDrop={handleDrop}
         className={cn(
           "hover:bg-black/5 dark:hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors text-sm truncate max-w-[150px]",
-          isLast ? "font-medium" : ""
+          isLast ? "font-medium" : "",
+          isDropTarget && "ring-2 ring-blue-500 bg-blue-500/20"
         )}
       >
         {name}
@@ -96,11 +123,31 @@ const BreadcrumbItem = ({ name, path, parentPath, isLast, onNavigate }: Breadcru
 interface BreadcrumbsProps {
   path: string;
   onNavigate: (path: string) => void;
+  onMoveToPath?: (sourceNames: string[], destPath: string) => void;
 }
 
-const Breadcrumbs = ({ path, onNavigate }: BreadcrumbsProps) => {
+const Breadcrumbs = ({ path, onNavigate, onMoveToPath }: BreadcrumbsProps) => {
   const parts = path.split('/').filter(Boolean);
   const [isRootOpen, setIsRootOpen] = useState(false);
+  const [isHomeDropTarget, setIsHomeDropTarget] = useState(false);
+
+  const handleHomeDragOver = (e: React.DragEvent) => {
+    if (!onMoveToPath || !e.dataTransfer.types.includes(MOVE_MIME)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setIsHomeDropTarget(true);
+  };
+  const handleHomeDrop = (e: React.DragEvent) => {
+    if (!onMoveToPath || !e.dataTransfer.types.includes(MOVE_MIME)) return;
+    e.preventDefault();
+    setIsHomeDropTarget(false);
+    try {
+      const names = JSON.parse(e.dataTransfer.getData(MOVE_MIME)) as string[];
+      if (names.length > 0) onMoveToPath(names, '/');
+    } catch {
+      // ignore malformed payload
+    }
+  };
   
   // Fetch root folders for the dropdown
   const { data: rootFiles = [] } = useFiles({ path: '/' });
@@ -112,7 +159,13 @@ const Breadcrumbs = ({ path, onNavigate }: BreadcrumbsProps) => {
       <div className="flex items-center shrink-0">
         <button
           onClick={() => onNavigate('/')}
-          className="flex items-center gap-1 hover:bg-black/5 dark:hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors"
+          onDragOver={handleHomeDragOver}
+          onDragLeave={() => setIsHomeDropTarget(false)}
+          onDrop={handleHomeDrop}
+          className={cn(
+            "flex items-center gap-1 hover:bg-black/5 dark:hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors",
+            isHomeDropTarget && "ring-2 ring-blue-500 bg-blue-500/20"
+          )}
         >
           <Home className="w-4 h-4" />
           <span>Home</span>
@@ -158,12 +211,13 @@ const Breadcrumbs = ({ path, onNavigate }: BreadcrumbsProps) => {
         return (
           <React.Fragment key={currentPath}>
             <span className="text-gray-400 shrink-0">/</span>
-            <BreadcrumbItem 
-              name={part} 
-              path={currentPath} 
+            <BreadcrumbItem
+              name={part}
+              path={currentPath}
               parentPath={parentPath}
               isLast={isLast}
-              onNavigate={onNavigate} 
+              onNavigate={onNavigate}
+              onMoveToPath={onMoveToPath}
             />
           </React.Fragment>
         );
@@ -187,6 +241,7 @@ interface ToolbarProps {
   onCreateUploadLink?: () => void;
   onViewModeChange: (mode: 'grid' | 'list') => void;
   onSearchChange: (query: string) => void;
+  onMoveToPath?: (sourceNames: string[], destPath: string) => void;
 }
 
 export const Toolbar = ({
@@ -204,6 +259,7 @@ export const Toolbar = ({
   onCreateUploadLink,
   onViewModeChange,
   onSearchChange,
+  onMoveToPath,
 }: ToolbarProps) => {
   return (
     <div className="h-14 flex items-center justify-between px-4 border-b border-white/10 bg-white/40 dark:bg-black/40 backdrop-blur-md shrink-0">
@@ -239,7 +295,7 @@ export const Toolbar = ({
             </button>
           </div>
         ) : (
-          <Breadcrumbs path={currentPath} onNavigate={onNavigate} />
+          <Breadcrumbs path={currentPath} onNavigate={onNavigate} onMoveToPath={onMoveToPath} />
         )}
       </div>
 

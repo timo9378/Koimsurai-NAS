@@ -13,8 +13,10 @@ import {
   useFavorites,
   useDownload,
   useCreateShare,
-  useCreateFolder
+  useCreateFolder,
+  useBatchMove
 } from '@/features/files/api/useFiles';
+import { MOVE_MIME } from '@/lib/dnd';
 import { FileInfo } from '@/types/api';
 import { useUploadStore } from '@/store/upload-store';
 import { useWindowStore } from '@/store/window-store';
@@ -288,6 +290,7 @@ export const Finder = ({ windowId }: FinderProps) => {
   const downloadFile = useDownload();
   const createShare = useCreateShare();
   const createFolder = useCreateFolder();
+  const batchMove = useBatchMove();
 
   const currentFilesRaw = isTrashMode ? trashFiles : files;
   const isCurrentLoading = selectedTag ? isTagLoading : (isTrashMode ? isTrashLoading : isLoading);
@@ -690,6 +693,8 @@ export const Finder = ({ windowId }: FinderProps) => {
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    // 內部拖拉移動不是上傳,別顯示「Drop files to upload」遮罩
+    if (e.dataTransfer.types.includes(MOVE_MIME)) return;
     if (!isDragging && !isTrashMode) setIsDragging(true);
   };
 
@@ -706,6 +711,9 @@ export const Finder = ({ windowId }: FinderProps) => {
     setIsDragging(false);
 
     if (isTrashMode) return;
+
+    // 內部拖拉移動(檔案 → 資料夾)由 FileList 的資料夾 onDrop 處理,這裡只管 OS 拖檔上傳
+    if (e.dataTransfer.types.includes(MOVE_MIME)) return;
 
     const items = e.dataTransfer.items;
     if (!items || items.length === 0) return;
@@ -751,32 +759,37 @@ export const Finder = ({ windowId }: FinderProps) => {
       const allFilesWithPaths: { file: File; relativePath: string }[] = [];
       const dirsToCreate = new Set<string>();
 
-      // Process all dropped items
+      // 先「同步」snapshot 所有 entry：DataTransferItemList 只在 drop 事件同步期間有效，
+      // 一旦下面第一個 await 發生，瀏覽器就會清空 items → 之前 webkitGetAsEntry() 只有第一個檔案拿得到，
+      // 其餘回傳 null（這就是「拖多檔只上傳第一個、要一張一張傳」的根因）。
+      const droppedEntries: FileSystemEntry[] = [];
       for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        const entry = item.webkitGetAsEntry?.();
-        if (entry) {
-          if (entry.isDirectory) {
-            // Collect directory path to create
-            dirsToCreate.add(entry.name);
-          }
-          const filesFromEntry = await readEntriesRecursively(entry, entry.isDirectory ? entry.name : '');
+        const entry = items[i].webkitGetAsEntry?.();
+        if (entry) droppedEntries.push(entry);
+      }
 
-          // Collect all subdirectories that need to be created
-          filesFromEntry.forEach(({ relativePath }) => {
-            const parts = relativePath.split('/');
-            if (parts.length > 1) {
-              // Add all parent directories
-              let dirPath = '';
-              for (let j = 0; j < parts.length - 1; j++) {
-                dirPath = dirPath ? `${dirPath}/${parts[j]}` : parts[j];
-                dirsToCreate.add(dirPath);
-              }
-            }
-          });
-
-          allFilesWithPaths.push(...filesFromEntry);
+      // Process all dropped items
+      for (const entry of droppedEntries) {
+        if (entry.isDirectory) {
+          // Collect directory path to create
+          dirsToCreate.add(entry.name);
         }
+        const filesFromEntry = await readEntriesRecursively(entry, entry.isDirectory ? entry.name : '');
+
+        // Collect all subdirectories that need to be created
+        filesFromEntry.forEach(({ relativePath }) => {
+          const parts = relativePath.split('/');
+          if (parts.length > 1) {
+            // Add all parent directories
+            let dirPath = '';
+            for (let j = 0; j < parts.length - 1; j++) {
+              dirPath = dirPath ? `${dirPath}/${parts[j]}` : parts[j];
+              dirsToCreate.add(dirPath);
+            }
+          }
+        });
+
+        allFilesWithPaths.push(...filesFromEntry);
       }
 
       // Create directories first (sorted by depth to create parents first)
@@ -822,8 +835,11 @@ export const Finder = ({ windowId }: FinderProps) => {
       );
       await Promise.allSettled(uploadPromises);
 
-      // Refresh file list
-      await queryClient.invalidateQueries({ queryKey: ['files'] });
+      // 後端 watcher 非同步索引 → 輪詢到剛上傳的頂層項目出現(取代單次刷新,免手動重整)
+      const topLevelNames = droppedEntries.map((en) => en.name);
+      await pollRefetchUntil((list) =>
+        topLevelNames.every((n) => list.some((f) => f.name === n))
+      );
     } catch (error) {
       console.error('Folder upload failed:', error);
       // Fallback to simple file upload
@@ -832,6 +848,49 @@ export const Finder = ({ windowId }: FinderProps) => {
         await handleUploadFiles(files, currentPath);
       }
     }
+  };
+
+  // 後端是 watcher 非同步索引(create_folder/upload 只寫 FS,DB 由 watcher 補進)。
+  // 單次 refetch 常拿到尚未索引的舊清單 → 改「輪詢到一致為止」,免使用者手動重整。
+  const pollRefetchUntil = async (
+    predicate: (files: FileInfo[]) => boolean,
+    tries = 8,
+    intervalMs = 400,
+  ) => {
+    for (let i = 0; i < tries; i++) {
+      const { data } = await refetch();
+      if (data && predicate(data)) return;
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+  };
+
+  // #2 拖拉移動:把 sourceNames(目前目錄下的檔名)搬到 destRel(相對 storage 根、無前導斜線),
+  // 搬完輪詢到它們離開目前目錄(後端 watcher 非同步索引)。
+  const moveNamesToDir = async (sourceNames: string[], destRel: string) => {
+    const srcRel = currentPath === '/' ? '' : currentPath.replace(/^\//, '');
+    if (destRel === srcRel) return; // 同目錄,免搬
+    const toSrc = (n: string) => (srcRel ? `${srcRel}/${n}` : n);
+    const names = sourceNames.filter((n) => toSrc(n) !== destRel); // 不能搬進自己
+    if (names.length === 0) return;
+    try {
+      await batchMove.mutateAsync({ paths: names.map(toSrc), destination: destRel });
+      setSelectedFiles(new Set());
+      await pollRefetchUntil((list) => names.every((n) => !list.some((f) => f.name === n)));
+    } catch (error) {
+      console.error('Move failed:', error);
+      alert('移動失敗');
+    }
+  };
+
+  // 拖到資料夾:搬進目前目錄下的該資料夾
+  const handleMoveFiles = (sourceNames: string[], targetFolderName: string) => {
+    const srcRel = currentPath === '/' ? '' : currentPath.replace(/^\//, '');
+    return moveNamesToDir(sourceNames, srcRel ? `${srcRel}/${targetFolderName}` : targetFolderName);
+  };
+
+  // 拖到 breadcrumb:搬到該祖先路徑(Home = 根)
+  const handleMoveToPath = (sourceNames: string[], destPath: string) => {
+    return moveNamesToDir(sourceNames, destPath === '/' ? '' : destPath.replace(/^\//, ''));
   };
 
   const handleCreateFolder = async () => {
@@ -876,8 +935,8 @@ export const Finder = ({ windowId }: FinderProps) => {
       // Set pending rename - useEffect will handle entering rename mode when folder appears
       setPendingRenameFolder(name);
 
-      // Refetch to get the new folder
-      await refetch();
+      // 後端 watcher 非同步索引 → 輪詢到新資料夾出現(取代單次 refetch,免手動重整)
+      await pollRefetchUntil((list) => list.some((f) => f.name === name));
     } catch (error) {
       console.error('Failed to create folder:', error);
       alert('Failed to create folder');
@@ -990,6 +1049,7 @@ export const Finder = ({ windowId }: FinderProps) => {
           onCreateUploadLink={() => setIsUploadLinkDialogOpen(true)}
           onViewModeChange={setViewMode}
           onSearchChange={setSearchQuery}
+          onMoveToPath={handleMoveToPath}
         />
 
         <input
@@ -1044,6 +1104,7 @@ export const Finder = ({ windowId }: FinderProps) => {
             }
           }}
           onSelectionChange={setSelectedFiles}
+          onMoveFiles={handleMoveFiles}
         />
 
         {/* Status Bar */}

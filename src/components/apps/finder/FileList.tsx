@@ -38,6 +38,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { MOVE_MIME } from '@/lib/dnd';
 
 const FileIcon = ({ file, currentPath }: { file: FileInfo; currentPath?: string }) => {
   const isImage = file.mime_type?.startsWith('image/');
@@ -113,6 +114,7 @@ interface FileListProps {
   onRefresh?: () => void;
   onViewModeChange?: (mode: 'grid' | 'list') => void;
   onSortChange?: (field: 'name' | 'size' | 'modified') => void;
+  onMoveFiles?: (sourceNames: string[], targetFolderName: string) => void;
 }
 
 // VirtuosoGrid custom components — defined outside the component to avoid re-renders
@@ -167,10 +169,45 @@ export const FileList = ({
   onRefresh,
   onViewModeChange,
   onSortChange,
+  onMoveFiles,
   onSelectionChange,
 }: FileListProps & { onSelectionChange?: (selected: Set<string>) => void }) => {
   const renameInputRef = useRef<HTMLInputElement>(null);
   const [contextMenuKey, setContextMenuKey] = React.useState(0);
+  // #2 拖拉移動:目前被拖到的目標資料夾(用來高亮)
+  const [dropTargetFolder, setDropTargetFolder] = React.useState<string | null>(null);
+
+  const handleItemDragStart = (e: React.DragEvent, file: FileInfo) => {
+    // 拖的是已選取的檔案 → 搬整批;否則只搬這一個
+    const names = selectedFiles.has(file.name) && selectedFiles.size > 0
+      ? Array.from(selectedFiles)
+      : [file.name];
+    e.dataTransfer.setData(MOVE_MIME, JSON.stringify(names));
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleFolderDragOver = (e: React.DragEvent, folder: FileInfo) => {
+    if (!folder.is_dir || !e.dataTransfer.types.includes(MOVE_MIME)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    if (dropTargetFolder !== folder.name) setDropTargetFolder(folder.name);
+  };
+
+  const handleFolderDrop = (e: React.DragEvent, folder: FileInfo) => {
+    if (!folder.is_dir || !e.dataTransfer.types.includes(MOVE_MIME)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setDropTargetFolder(null);
+    try {
+      const names = JSON.parse(e.dataTransfer.getData(MOVE_MIME)) as string[];
+      if (names.length > 0 && !names.includes(folder.name)) {
+        onMoveFiles?.(names, folder.name);
+      }
+    } catch {
+      // ignore malformed payload
+    }
+  };
 
   React.useEffect(() => {
     if (renamingFile && renameInputRef.current) {
@@ -381,6 +418,11 @@ export const FileList = ({
                   <ContextMenuTrigger>
                     <div
                       data-file-item
+                      draggable={!isTrashMode && renamingFile !== file.name}
+                      onDragStart={(e) => handleItemDragStart(e, file)}
+                      onDragOver={(e) => handleFolderDragOver(e, file)}
+                      onDragLeave={() => { if (dropTargetFolder === file.name) setDropTargetFolder(null); }}
+                      onDrop={(e) => handleFolderDrop(e, file)}
                       onClick={(e) => { e.stopPropagation(); onFileClick(file, e); }}
                       onDoubleClick={(e) => {
                         e.stopPropagation();
@@ -391,7 +433,8 @@ export const FileList = ({
                         "flex flex-col items-center gap-1 p-2 rounded cursor-pointer group transition-colors duration-200",
                         selectedFiles.has(file.name)
                           ? "bg-blue-500/20 ring-1 ring-blue-500/50"
-                          : "hover:bg-black/5 dark:hover:bg-white/5"
+                          : "hover:bg-black/5 dark:hover:bg-white/5",
+                        dropTargetFolder === file.name && "ring-2 ring-blue-500 bg-blue-500/30"
                       )}
                     >
                       <FileIcon file={file} currentPath={currentPath} />
@@ -524,6 +567,11 @@ export const FileList = ({
                   <ContextMenuTrigger>
                     <div
                       data-file-item
+                      draggable={!isTrashMode && renamingFile !== file.name}
+                      onDragStart={(e) => handleItemDragStart(e, file)}
+                      onDragOver={(e) => handleFolderDragOver(e, file)}
+                      onDragLeave={() => { if (dropTargetFolder === file.name) setDropTargetFolder(null); }}
+                      onDrop={(e) => handleFolderDrop(e, file)}
                       onClick={(e) => { e.stopPropagation(); onFileClick(file, e); }}
                       onDoubleClick={(e) => {
                         e.stopPropagation();
@@ -534,7 +582,8 @@ export const FileList = ({
                         "grid grid-cols-[minmax(200px,1fr)_80px_120px] gap-2 px-4 py-1.5 cursor-pointer transition-colors duration-150",
                         selectedFiles.has(file.name)
                           ? "bg-blue-500 text-white"
-                          : "hover:bg-blue-500/10 even:bg-black/5 dark:even:bg-white/5"
+                          : "hover:bg-blue-500/10 even:bg-black/5 dark:even:bg-white/5",
+                        dropTargetFolder === file.name && "ring-2 ring-blue-500 ring-inset bg-blue-500/30"
                       )}
                     >
                       <div className="flex items-center gap-2 min-w-0 overflow-hidden">

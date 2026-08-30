@@ -66,7 +66,6 @@ export const useFileUpload = () => {
               path: currentPath
             });
             updateTask(taskId, { progress: 100, status: 'completed' });
-            await queryClient.invalidateQueries({ queryKey: ['files'] });
           }
         } catch (error: any) {
           if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
@@ -103,6 +102,9 @@ export const useFileUpload = () => {
 
     // Wait for all queued uploads to complete
     await Promise.allSettled(uploadPromises);
+
+    // 整批結束後只刷新一次檔案列表（先前每檔都 invalidate(['files']) → 數百請求撞 nginx 429）
+    await queryClient.invalidateQueries({ queryKey: ['files'] });
   };
 
   const processChunkedUpload = async (taskId: string, file: File, currentPath: string, resumeUploadId?: string, startOffset: number = 0) => {
@@ -160,7 +162,6 @@ export const useFileUpload = () => {
         updateTask(taskId, { progress });
       }
 
-      await queryClient.invalidateQueries({ queryKey: ['files'] });
       updateTask(taskId, { status: 'completed' });
 
     } catch (error: any) {

@@ -9,6 +9,7 @@ import { DesktopIcons } from './DesktopIcons';
 import { useFileUpload } from '@/features/files/hooks/useFileUpload'; // Updated import
 import { useUploadStore } from '@/store/upload-store';
 import { useWindowStore } from '@/store/window-store';
+import { MOVE_MIME } from '@/lib/dnd';
 
 interface DesktopLayoutProps {
   children?: React.ReactNode;
@@ -169,6 +170,8 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    // 內部拖拉移動(檔案→資料夾/breadcrumb)不是上傳,別把整個桌面染藍
+    if (e.dataTransfer.types.includes(MOVE_MIME)) return;
     setIsDraggingFile(true);
   };
 

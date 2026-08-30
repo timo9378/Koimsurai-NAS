@@ -56,8 +56,6 @@ export const useFileVersions = (path: string) => {
 };
 
 export const useUpload = () => {
-  const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: async ({ file, path }: { file: File; path: string }) => {
       const formData = new FormData();
@@ -86,10 +84,8 @@ export const useUpload = () => {
       });
       return response.data;
     },
-    onSuccess: async (_, variables) => {
-      // Invalidate all files queries to ensure deep/shallow updates are reflected
-      await queryClient.invalidateQueries({ queryKey: ['files'] });
-    },
+    // 不在每檔 onSuccess 廣域 invalidate(['files'])：批次上傳數十檔會放大成數百個 refetch 撞 nginx 429。
+    // 改由呼叫端整批結束刷一次（useFileUpload）或單檔操作後刷一次（GlobalContextMenu）。
   });
 };
 
