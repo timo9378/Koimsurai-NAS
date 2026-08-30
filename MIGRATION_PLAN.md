@@ -550,24 +550,33 @@ Playwright + `@axe-core/playwright`（E2E 與自動化可及性檢查）、
 Stryker（前端變異測試）、`@lhci/cli`（效能預算）、schemathesis（吃 utoipa
 的 OpenAPI 做 API fuzz）。
 
-### 後端覆蓋率的分佈（2026-08-31 導入時實測）
+### 後端覆蓋率的分佈
 
-聚合是 **regions 25.19% / functions 24.61% / lines 26.43%**，但真正該看的是分佈。
-有測試的只有 auth / file / versioning / ffmpeg / cleanup / db / routes 那幾塊；
-以下是 **0%**，而且都屬於「壞了不會有症狀」的那種：
+導入當下（2026-08-31）是 **25.19%**，補完四個「壞了不會有症狀」的區塊之後是
+**32.12%**（functions 29.61 / lines 32.89），CI 門檻 `--fail-under-regions 30`。
+
+| 檔案 | 覆蓋率 | 備註 |
+|---|---|---|
+| `handlers/share.rs` | 0 → **91.9%** | 密碼與過期判定；邏輯反了 = 連結永不過期 |
+| `handlers/upload_link.rs` | 0 → **88.7%** | 唯一免身分就能寫檔案的端點 |
+| `middleware/auth.rs` | 48 → **94.6%** | 補測試時抓到一個 CSRF 繞過，見下 |
+| `utils/jwt.rs` | 52 → **90.0%** | 含金鑰輪替後舊 token 失效 |
+
+**補測試時抓到的 CSRF 繞過**：`middleware/auth.rs` 原本用
+`origin_host.starts_with(host_val)` 比對 Origin 與 Host。Host 是
+`nas.koimsurai.com` 時，攻擊者只要註冊 `nas.koimsurai.com.evil.com`，
+送出的 Origin 就「以 Host 開頭」而通過檢查——那個網域完全由攻擊者控制。
+改成 `eq_ignore_ascii_case`。相等比 `starts_with` 嚴格，但嚴格掉的**只有**
+這種「Host + 後綴」的情形；合法的同源請求兩者本來就一字不差。
+
+還是 **0%** 且值得補的（判準同 `.cargo/mutants.toml`）：
 
 | 檔案 | 壞了會怎樣 |
 |---|---|
-| `handlers/upload_link.rs` | 唯一**免身分**就能寫檔案的公開端點 |
-| `handlers/share.rs` | 密碼與過期判定；邏輯反了 = 分享連結永不過期，功能「正常」 |
 | `handlers/terminal.rs` | 受限 shell 的指令白名單 |
 | `handlers/upload.rs` | 分塊續傳的 offset；算錯只會默默寫壞檔案 |
 | `utils/image.rs` | 縮圖產生 —— 處理的是使用者上傳的檔案 |
 | `handlers/trash.rs` / `tag.rs` / `version.rs` | 一般 CRUD，優先度低 |
-
-另外兩個不到一半的：`middleware/auth.rs` 47.75%（認證守衛，條件反了就是全部放行）、
-`utils/jwt.rs` 51.67%（簽章驗證）。這兩個加上上面前五個，就是 `.cargo/mutants.toml`
-裡列的「值得逐檔跑 mutants」清單——先補測試，再用 mutants 驗那些測試是真的在驗行為。
 
 ### 程式面的已知債
 

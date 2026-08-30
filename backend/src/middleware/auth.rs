@@ -69,7 +69,18 @@ pub async fn require_auth(
                     let origin_host = origin_val
                         .trim_start_matches("http://")
                         .trim_start_matches("https://");
-                    if !origin_host.starts_with(host_val.as_str()) {
+                    // ⚠️ 一定要用**完全相等**，不能用 `starts_with`。
+                    //
+                    // 之前是 `origin_host.starts_with(host_val)`，而那是一個
+                    // 貨真價實的 CSRF 繞過：Host 是 `nas.koimsurai.com` 時，
+                    // 攻擊者只要準備 `nas.koimsurai.com.evil.com` 這個網域，
+                    // 送出的 Origin 就「以 Host 開頭」而通過檢查——那個網域
+                    // 完全由攻擊者控制，註冊得到。
+                    //
+                    // 相等比 starts_with 嚴格，但嚴格掉的**只有**上述那種
+                    // 「Host + 後綴」的情形；合法的同源請求兩者本來就一字不差。
+                    // 主機名依 DNS 規範不分大小寫。
+                    if !origin_host.eq_ignore_ascii_case(host_val.as_str()) {
                         tracing::warn!(
                             "CSRF check failed: Origin '{}' does not match Host '{}'",
                             origin_val,

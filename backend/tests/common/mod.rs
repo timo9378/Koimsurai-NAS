@@ -67,6 +67,61 @@ pub async fn spawn_app() -> TestApp {
     }
 }
 
+/// 註冊一個帳號並登入，回傳帶著 cookie 的 client。
+///
+/// ⚠️ 之後用它發**寫入類**請求（POST/PUT/DELETE/PATCH）時**必須**帶 Origin
+/// header，否則會拿到 403 而不是預期的結果 —— `middleware/auth.rs` 對
+/// cookie 認證的 mutating 請求要求 Origin 或 Referer（CSRF 防護），
+/// 而 reqwest 預設兩個都不送。用 `app.origin_header()` 取得正確的值。
+#[allow(dead_code, reason = "tests/common 被每個測試 binary 各編一次")]
+pub async fn register_and_login(app: &TestApp, username: &str) -> reqwest::Client {
+    let client = reqwest::Client::builder()
+        .cookie_store(true)
+        .build()
+        .expect("build client");
+
+    let res = client
+        .post(format!("{}/api/auth/register", app.address))
+        .json(&serde_json::json!({
+            "username": username,
+            "password": "password123",
+            "invite_code": TEST_INVITE_CODE,
+        }))
+        .send()
+        .await
+        .expect("register");
+    assert!(res.status().is_success(), "註冊失敗：{}", res.status());
+
+    let res = client
+        .post(format!("{}/api/auth/login", app.address))
+        .json(&serde_json::json!({ "username": username, "password": "password123" }))
+        .send()
+        .await
+        .expect("login");
+    assert!(res.status().is_success(), "登入失敗：{}", res.status());
+
+    client
+}
+
+impl TestApp {
+    /// CSRF 檢查會拿 Origin 跟 Host 比對，所以這裡回的是 `http://127.0.0.1:<port>`。
+    #[allow(dead_code, reason = "tests/common 被每個測試 binary 各編一次")]
+    pub fn origin_header(&self) -> &str {
+        &self.address
+    }
+
+    /// 在儲存目錄底下建一個檔案，回傳它相對於儲存根的路徑。
+    #[allow(dead_code, reason = "tests/common 被每個測試 binary 各編一次")]
+    pub fn write_file(&self, relative: &str, contents: &[u8]) -> String {
+        let full = self.storage_dir.path().join(relative);
+        if let Some(parent) = full.parent() {
+            std::fs::create_dir_all(parent).expect("mkdir");
+        }
+        std::fs::write(&full, contents).expect("write file");
+        relative.to_string()
+    }
+}
+
 /// 跟 `spawn_app` 一樣，但額外準備一個最小的靜態檔目錄並設定 `STATIC_DIR`，
 /// 用來驗 production 的 SPA 供應路徑（`attach_spa`）。
 ///

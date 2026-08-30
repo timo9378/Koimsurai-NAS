@@ -63,8 +63,12 @@ ai = ["candle-core", "candle-nn", "candle-transformers", "hf-hub", "tokenizers"]
 cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
 
 [dev-dependencies]
-reqwest = { version = "0.12", features = ["json", "cookies"] }
+# multipart：upload_link_tests 要模擬瀏覽器的檔案上傳（含 relative_path 欄位）
+reqwest = { version = "0.12", features = ["json", "cookies", "multipart"] }
 tempfile = "3.10"
+# auth_guard_tests 要手工鑄一張**已過期**的 token（正式 API 只發 now+15min 的，
+# 造不出過期的那張），才驗得到 exp 檢查真的有在看。版本跟上面的正式相依一致。
+jsonwebtoken = "9.3"
 proptest = "1.9.0"
 
 [lints]
