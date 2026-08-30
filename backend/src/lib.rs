@@ -32,12 +32,15 @@ use crate::services::indexer::Indexer;
 use crate::services::search::SearchService;
 use crate::state::{get_ai_enabled, get_docker_enabled, get_max_concurrent_transcodes, AppState};
 use crate::utils::queue::{worker, JobQueue};
+use axum::response::IntoResponse as _;
 use dav_server::{localfs::LocalFs, DavHandler};
 use sqlx::SqlitePool;
 use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
+use tower::ServiceExt as _;
+use tower_http::services::{ServeDir, ServeFile};
 
 pub async fn create_app(pool: SqlitePool, storage_path: PathBuf) -> axum::Router {
     // Initialize Indexer
@@ -166,5 +169,69 @@ pub async fn create_app(pool: SqlitePool, storage_path: PathBuf) -> axum::Router
         ai_service,
     };
 
-    routes::create_router(state).await
+    let router = routes::create_router(state).await;
+    attach_spa(router)
+}
+
+/// 掛上前端 SPA 的靜態檔服務（production：Rust 同時送 API 與前端，零 Node 進程）。
+///
+/// 目錄不存在就原樣返回 —— dev 由 Vite 供應、測試根本沒有前端產物，
+/// 兩者都不該因為少一個目錄而改變行為。
+fn attach_spa(router: axum::Router) -> axum::Router {
+    let dir = PathBuf::from(env::var("STATIC_DIR").unwrap_or_else(|_| "static".to_string()));
+    if !dir.join("index.html").exists() {
+        tracing::info!("靜態檔目錄 {} 沒有 index.html，略過 SPA fallback", dir.display());
+        return router;
+    }
+    tracing::info!("📦 SPA 靜態檔由 {} 供應", dir.display());
+
+    // 兩個服務，差別只在「找不到檔案時怎麼辦」：
+    //   spa —— 回 index.html，讓 TanStack Router 在前端接手深層路由（/login、/s/:id）
+    //   raw —— 直接 404
+    // ⚠️ `fallback` 不是 `not_found_service`：後者實測不會替 /login 這類
+    //    「路徑不存在」接手，SPA 的深層路由會直接 404。
+    let spa = ServeDir::new(&dir).fallback(ServeFile::new(dir.join("index.html")));
+    let raw = ServeDir::new(&dir);
+
+    router.fallback(move |req: axum::extract::Request| {
+        let spa = spa.clone();
+        let raw = raw.clone();
+        async move {
+            let path = req.uri().path().to_owned();
+
+            // ⚠️ 這幾類路徑未命中時必須回 404，不能落進 SPA fallback：
+            //
+            //   /api/、/webdav —— 否則前端打錯端點會拿到一份 HTML（200），
+            //     然後在 JSON.parse 當場掛掉，比一個乾淨的 404 難查十倍。
+            //
+            //   /assets/ —— 這裡放的是帶 content hash 的產物。部署後若有陳舊的
+            //     index.html 指向舊 hash，回 index.html 等於讓瀏覽器把 HTML 當 JS
+            //     執行、得到 `Unexpected token '<'`；回 404 才看得出是資產不見了。
+            if path.starts_with("/api/") || path.starts_with("/webdav") {
+                return axum::http::StatusCode::NOT_FOUND.into_response();
+            }
+
+            let is_asset = path.starts_with("/assets/");
+            let svc_result = if is_asset {
+                raw.oneshot(req).await
+            } else {
+                spa.oneshot(req).await
+            };
+            let mut res = match svc_result {
+                Ok(res) => res.into_response(),
+                // ServeDir 的 Error 是 Infallible，這條分支永遠走不到
+                Err(e) => match e {},
+            };
+
+            // Vite 的產物檔名帶 content hash，內容一變檔名就變 —— 可以永久快取。
+            // index.html 不能（它是入口，要能立刻指向新的 hash）。
+            if is_asset && res.status().is_success() {
+                res.headers_mut().insert(
+                    axum::http::header::CACHE_CONTROL,
+                    axum::http::HeaderValue::from_static("public, max-age=31536000, immutable"),
+                );
+            }
+            res
+        }
+    })
 }

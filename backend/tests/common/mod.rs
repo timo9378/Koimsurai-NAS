@@ -60,3 +60,26 @@ pub async fn spawn_app() -> TestApp {
         storage_dir,
     }
 }
+
+/// 跟 `spawn_app` 一樣，但額外準備一個最小的靜態檔目錄並設定 `STATIC_DIR`，
+/// 用來驗 production 的 SPA 供應路徑（`attach_spa`）。
+///
+/// ⚠️ 靠 nextest「一個測試一個行程」才安全 —— `set_var` 是 process 全域的。
+/// `cargo test` 下同行程平行跑會互相蓋，那也是本專案不用 cargo test 的理由之一。
+#[allow(dead_code, reason = "只有 spa_serving_tests 這個 binary 會用到")]
+pub async fn spawn_app_with_static() -> TestApp {
+    let static_dir = TempDir::new().expect("Failed to create temp dir for static");
+    std::fs::write(
+        static_dir.path().join("index.html"),
+        "<!doctype html><html><body><div id=\"root\"></div></body></html>",
+    )
+    .expect("write index.html");
+    std::fs::create_dir_all(static_dir.path().join("assets")).expect("mkdir assets");
+    std::fs::write(static_dir.path().join("assets/app-abc123.js"), "console.log(1)").expect("write asset");
+
+    std::env::set_var("STATIC_DIR", static_dir.path());
+    let app = spawn_app().await;
+    // TempDir 要活到測試結束，否則目錄會被刪掉；掛在 TestApp 上一起活著。
+    std::mem::forget(static_dir);
+    app
+}
