@@ -176,3 +176,110 @@ fn generate_thumbnail_fallback(input_path: &Path, output_path: &Path, max_dimens
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    /// 寫一個檔案，回傳它的路徑。
+    fn file_with(dir: &TempDir, name: &str, bytes: &[u8]) -> std::path::PathBuf {
+        let p = dir.path().join(name);
+        let mut f = std::fs::File::create(&p).expect("create");
+        f.write_all(bytes).expect("write");
+        p
+    }
+
+    /// ⚠️ 這支的判斷決定「要不要對這個檔案跑 ffmpeg」。
+    ///
+    /// 判太寬 = 對任意使用者上傳的內容執行 ffmpeg（那是一大片解析器攻擊面，
+    /// 而且是以容器內的權限跑）；判太窄 = 縮圖安靜地不產生，使用者只會看到
+    /// 一個永遠空白的格子，沒有任何錯誤訊息。兩個方向都要釘。
+    #[test]
+    fn recognises_the_formats_it_claims_to() {
+        let dir = TempDir::new().expect("tempdir");
+        let cases: [(&str, &[u8]); 7] = [
+            ("a.png", &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]),
+            ("a.jpg", &[0xFF, 0xD8, 0xFF, 0xE0, 0, 0, 0, 0]),
+            ("a.gif", b"GIF89a__________"),
+            ("a.webp", b"RIFF____WEBPVP8 "),
+            ("a.avi", b"RIFF____AVI LIST"),
+            ("a.mp4", b"\0\0\0\x18ftypmp42________"),
+            ("a.mkv", &[0x1A, 0x45, 0xDF, 0xA3, 0, 0, 0, 0]),
+        ];
+        for (name, bytes) in cases {
+            assert!(
+                is_likely_media(&file_with(&dir, name, bytes)),
+                "{name} 的 magic bytes 應該被認出來"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_things_that_are_not_images_or_video() {
+        let dir = TempDir::new().expect("tempdir");
+        let cases: [(&str, &[u8]); 6] = [
+            ("a.zip", b"PK\x03\x04________"),
+            ("a.txt", b"just some text__"),
+            ("a.pdf", b"%PDF-1.7________"),
+            ("a.gz", &[0x1F, 0x8B, 0x08, 0, 0, 0, 0, 0]),
+            // ⚠️ WAV 也是 RIFF 開頭。只看前四個位元組的話會誤判成 WebP/AVI，
+            //    然後對一個音訊檔跑縮圖。這條釘住「RIFF 之後還要看第 8-12 位元組」。
+            ("a.wav", b"RIFF____WAVEfmt "),
+            ("a.elf", &[0x7F, b'E', b'L', b'F', 0, 0, 0, 0]),
+        ];
+        for (name, bytes) in cases {
+            assert!(
+                !is_likely_media(&file_with(&dir, name, bytes)),
+                "{name} 不該被當成媒體檔"
+            );
+        }
+    }
+
+    #[test]
+    fn magic_bytes_beat_the_file_extension() {
+        let dir = TempDir::new().expect("tempdir");
+        // ⚠️ 判斷依據是 magic bytes 不是副檔名 —— 使用者改個副檔名就能決定
+        //    要不要跑 ffmpeg 的話，那個檢查等於沒有。
+        assert!(is_likely_media(&file_with(
+            &dir,
+            "假裝是文字.txt",
+            b"\x89PNG\r\n\x1a\n____"
+        )));
+        assert!(!is_likely_media(&file_with(
+            &dir,
+            "假裝是圖片.png",
+            b"not an image____"
+        )));
+    }
+
+    #[test]
+    fn short_empty_and_missing_files_do_not_panic() {
+        let dir = TempDir::new().expect("tempdir");
+        assert!(!is_likely_media(&file_with(&dir, "empty", b"")));
+        assert!(!is_likely_media(&file_with(&dir, "two", b"\x89P")));
+        // RIFF 但只有 4 個位元組 —— 第 8-12 的比對必須先檢查長度，否則會 panic
+        assert!(!is_likely_media(&file_with(&dir, "riff-only", b"RIFF")));
+        assert!(!is_likely_media(&dir.path().join("這個檔不存在")));
+        assert!(!is_likely_media(dir.path()), "傳目錄進來也不該 panic");
+    }
+
+    #[test]
+    fn a_file_outside_the_storage_root_is_ignored() {
+        // ⚠️ 縮圖的輸出路徑是用 `file_path.strip_prefix(storage_root)` 算出來的。
+        //    不在 storage 底下的話 strip_prefix 會失敗，函式必須直接返回 ——
+        //    少了這個檢查，thumb_dir 會變成 `<storage>/.thumbnails` 加上一段
+        //    無法預期的路徑。
+        let storage = TempDir::new().expect("storage");
+        let elsewhere = TempDir::new().expect("elsewhere");
+        let outsider = file_with(&elsewhere, "x.png", b"\x89PNG\r\n\x1a\n____");
+
+        generate_thumbnails_sync(&outsider, storage.path());
+
+        assert!(
+            !storage.path().join(".thumbnails").exists(),
+            "不在 storage 底下的檔案不該產生任何東西"
+        );
+    }
+}

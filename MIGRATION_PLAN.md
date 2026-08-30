@@ -562,6 +562,8 @@ Stryker（前端變異測試）、`@lhci/cli`（效能預算）、schemathesis�
 | `middleware/auth.rs` | 48 → **94.6%** | 補測試時抓到一個 CSRF 繞過，見下 |
 | `utils/jwt.rs` | 52 → **90.0%** | 含金鑰輪替後舊 token 失效 |
 | `handlers/terminal.rs` | 0 → **32.4%** | 白名單那半；抓到四個 shell 逃逸，見下 |
+| `handlers/upload.rs` | 0 → **87.4%** | 分塊續傳；抓到一個 IDOR，見下 |
+| `utils/image.rs` | 0 → **63.4%** | magic bytes 判斷那半 |
 
 **補測試時抓到的 CSRF 繞過**：`middleware/auth.rs` 原本用
 `origin_host.starts_with(host_val)` 比對 Origin 與 Host。Host 是
@@ -587,13 +589,18 @@ Stryker（前端變異測試）、`@lhci/cli`（效能預算）、schemathesis�
 要把它們拿回來的話有兩條路：命令解析改成 quote-aware（shlex 之類），
 或改用容器層級的隔離（seccomp／唯讀 rootfs）而不是命令白名單。
 
-還是 **0%** 且值得補的（判準同 `.cargo/mutants.toml`）：
+**補測試時抓到的 IDOR**：`upload_chunk` 與 `get_upload_status` 只用
+`WHERE id = ?` 查工作階段，沒有比對 `user_id`。兩者都在 `require_auth` 後面，
+所以攻擊者必須是**已登入**的使用者 —— 但那正是這個 app 的情境（邀請碼註冊，
+本來就設計成多使用者）。後果是讀得到別人上傳中的檔名與目標路徑，
+以及把內容摻進別人的檔案裡。`upload_id` 是 UUID 猜不到，但「猜不到」不是授權：
+id 會出現在日誌、瀏覽器歷史、使用者自己貼出來的錯誤訊息裡。
+改成 `WHERE id = ? AND user_id = ?`，並回 404 而不是 403 —— 不存在與不屬於你
+對外表現要一樣，否則等於提供一個「這個 id 存在嗎」的探測器。
 
-| 檔案 | 壞了會怎樣 |
-|---|---|
-| `handlers/upload.rs` | 分塊續傳的 offset；算錯只會默默寫壞檔案 |
-| `utils/image.rs` | 縮圖產生 —— 處理的是使用者上傳的檔案 |
-| `handlers/trash.rs` / `tag.rs` / `version.rs` | 一般 CRUD，優先度低 |
+還是 **0%** 的（都是一般 CRUD，優先度低於上面那批）：
+`handlers/trash.rs`、`tag.rs`、`version.rs`、`media.rs`、`audit.rs`、
+`search.rs`、`permission.rs`。
 
 ### 程式面的已知債
 

@@ -101,17 +101,28 @@ pub async fn init_upload(
 )]
 pub async fn upload_chunk(
     State(state): State<AppState>,
+    Extension(user_id): Extension<i64>,
     AxumPath(id): AxumPath<String>,
     headers: HeaderMap,
     body: Body,
 ) -> Result<StatusCode, AppError> {
     // 1. Get session info
-    let session = sqlx::query_as::<_, UploadSession>("SELECT * FROM upload_sessions WHERE id = ?")
-        .bind(&id)
-        .fetch_optional(&state.pool)
-        .await
-        .map_err(AppError::from)?
-        .ok_or(AppError::Status(StatusCode::NOT_FOUND))?;
+    //
+    // ⚠️ 一定要連 user_id 一起查。只用 id 查的話，任何**已登入**的使用者
+    // 都能往別人的上傳工作階段寫資料（內容會被摻進別人的檔案裡）。
+    // upload_id 是 UUID 所以猜不到，但「猜不到」不是授權 —— id 可能出現在
+    // 日誌、瀏覽器歷史、或是使用者自己貼出來的錯誤訊息裡。
+    //
+    // 回 404 而不是 403：不存在與不屬於你，對外表現應該一樣，
+    // 否則等於提供一個「這個 id 存在嗎」的探測器。
+    let session =
+        sqlx::query_as::<_, UploadSession>("SELECT * FROM upload_sessions WHERE id = ? AND user_id = ?")
+            .bind(&id)
+            .bind(user_id)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(AppError::from)?
+            .ok_or(AppError::Status(StatusCode::NOT_FOUND))?;
 
     // 2. Parse Content-Range or X-Upload-Offset
     // For simplicity, we'll assume sequential chunks and append to a temp file
@@ -288,14 +299,18 @@ pub async fn upload_chunk(
 )]
 pub async fn get_upload_status(
     State(state): State<AppState>,
+    Extension(user_id): Extension<i64>,
     AxumPath(id): AxumPath<String>,
 ) -> Result<Json<UploadSession>, AppError> {
-    let session = sqlx::query_as::<_, UploadSession>("SELECT * FROM upload_sessions WHERE id = ?")
-        .bind(&id)
-        .fetch_optional(&state.pool)
-        .await
-        .map_err(AppError::from)?
-        .ok_or(AppError::Status(StatusCode::NOT_FOUND))?;
+    // ⚠️ 同 upload_chunk：只用 id 查會洩漏別人上傳中的檔名與目標路徑。
+    let session =
+        sqlx::query_as::<_, UploadSession>("SELECT * FROM upload_sessions WHERE id = ? AND user_id = ?")
+            .bind(&id)
+            .bind(user_id)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(AppError::from)?
+            .ok_or(AppError::Status(StatusCode::NOT_FOUND))?;
 
     Ok(Json(session))
 }
