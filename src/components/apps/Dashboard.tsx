@@ -66,9 +66,18 @@ export const Dashboard = () => {
   >([]);
   const [activeTab, setActiveTab] = useState<TabType>("overview");
 
+  // ⚠️ 先把用到的欄位解構出來，deps 才對得上 body。
+  // 原本 deps 列的是 `systemStatus?.cpu_usage` 等個別欄位（刻意：整個物件每
+  // 5 秒都是新的參考，寫整個進去等於每次輪詢都重跑），但 body 讀的是整個
+  // `systemStatus`——兩邊不一致的地方就是日後加欄位卻忘記加 dep 的破口。
+  const cpuUsage = systemStatus?.cpu_usage;
+  const usedMemory = systemStatus?.used_memory;
+  const totalMemory = systemStatus?.total_memory;
+  const gpuUtilization = systemStatus?.gpu?.utilization;
+
   // Update history when new data arrives
   useEffect(() => {
-    if (systemStatus) {
+    if (usedMemory !== undefined && totalMemory !== undefined) {
       const now = new Date();
       const timeStr = now.toLocaleTimeString("en-US", {
         hour12: false,
@@ -78,9 +87,9 @@ export const Dashboard = () => {
       });
       const newData = {
         time: timeStr,
-        cpu: systemStatus.cpu_usage ?? 0,
-        ram: (systemStatus.used_memory / systemStatus.total_memory) * 100,
-        gpu: systemStatus.gpu?.utilization ?? undefined,
+        cpu: cpuUsage ?? 0,
+        ram: (usedMemory / totalMemory) * 100,
+        gpu: gpuUtilization ?? undefined,
       };
 
       const timer = setTimeout(() => {
@@ -99,12 +108,7 @@ export const Dashboard = () => {
 
       return () => clearTimeout(timer);
     }
-  }, [
-    systemStatus?.cpu_usage,
-    systemStatus?.used_memory,
-    systemStatus?.total_memory,
-    systemStatus?.gpu?.utilization,
-  ]);
+  }, [cpuUsage, usedMemory, totalMemory, gpuUtilization]);
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return "0 B";

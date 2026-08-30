@@ -172,22 +172,16 @@ const ActionSheet = ({ file, onClose, onAction, isTrash }: ActionSheetProps) => 
 
 // ─── Rename Dialog ───────────────────────────────────────
 const RenameDialog = ({
-  isOpen,
   name,
   onClose,
   onConfirm,
 }: {
-  isOpen: boolean;
   name: string;
   onClose: () => void;
   onConfirm: (newName: string) => void;
 }) => {
   const [value, setValue] = useState(name);
-  React.useEffect(() => {
-    if (isOpen) setValue(name);
-  }, [isOpen, name]);
 
-  if (!isOpen) return null;
   return (
     <>
       <div className="fixed inset-0 bg-black/50 z-[300]" onClick={onClose} />
@@ -946,12 +940,15 @@ export const MobileLayout = () => {
       <AnimatePresence>
         {infoFile && <FileInfoSheet file={infoFile} onClose={() => setInfoFile(null)} />}
       </AnimatePresence>
-      <RenameDialog
-        isOpen={!!renameFile}
-        name={renameFile?.name || ""}
-        onClose={() => setRenameFile(null)}
-        onConfirm={(...args) => void handleRename(...args)}
-      />
+      {/* 只在有目標檔案時掛載：每次開啟都是新的 mount，`useState(name)` 就
+          是正確的初始值，不必再用 effect 補一次。 */}
+      {renameFile && (
+        <RenameDialog
+          name={renameFile.name}
+          onClose={() => setRenameFile(null)}
+          onConfirm={(...args) => void handleRename(...args)}
+        />
+      )}
     </div>
   );
 };

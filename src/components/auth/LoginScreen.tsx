@@ -30,7 +30,7 @@ export function LoginScreen() {
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [currentTime, setCurrentTime] = useState<Date | null>(null);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
 
   // 2FA 階段需要的 state
   const [tempToken, setTempToken] = useState("");
@@ -44,7 +44,6 @@ export function LoginScreen() {
     loginMutation.isPending || registerMutation.isPending || twoFactorLoginMutation.isPending;
 
   useEffect(() => {
-    setCurrentTime(new Date());
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
@@ -166,24 +165,20 @@ export function LoginScreen() {
           animate={{ y: 0, opacity: 1 }}
           className="w-full flex flex-col items-center justify-center space-y-2 text-center"
         >
-          {currentTime && (
-            <>
-              <h1 className="text-5xl sm:text-7xl font-thin tracking-tight drop-shadow-lg leading-none">
-                {currentTime.toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  hour12: false,
-                })}
-              </h1>
-              <p className="text-xl font-medium text-zinc-200 drop-shadow-md">
-                {currentTime.toLocaleDateString([], {
-                  weekday: "long",
-                  month: "long",
-                  day: "numeric",
-                })}
-              </p>
-            </>
-          )}
+          <h1 className="text-5xl sm:text-7xl font-thin tracking-tight drop-shadow-lg leading-none">
+            {currentTime.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+            })}
+          </h1>
+          <p className="text-xl font-medium text-zinc-200 drop-shadow-md">
+            {currentTime.toLocaleDateString([], {
+              weekday: "long",
+              month: "long",
+              day: "numeric",
+            })}
+          </p>
         </motion.div>
       </div>
 

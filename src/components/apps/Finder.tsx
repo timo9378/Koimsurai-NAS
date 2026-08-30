@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   useFiles,
   useDelete,
@@ -120,6 +120,11 @@ const persistTabs = (windowId: string | undefined, tabs: TabState[], activeTabId
   }
 };
 
+// 沒有作用分頁時的 fallback。放模組層級是為了維持同一個參考——見下方用到
+// 它們的地方。兩者都只讀不寫。
+const DEFAULT_HISTORY: string[] = ["/"];
+const EMPTY_SELECTION = new Set<string>();
+
 export const Finder = ({ windowId }: FinderProps) => {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
 
@@ -138,53 +143,84 @@ export const Finder = ({ windowId }: FinderProps) => {
 
   // Derived state from active tab
   const currentPath = activeTab?.path || "/";
-  const history = activeTab?.history ?? ["/"];
+  // ⚠️ fallback 用模組層級的常數，不要寫成 `?? ["/"]`：後者每次 render 都是新
+  // 陣列，把它放進 useEffect 的相依就等於每 render 重跑一次（見下方同步
+  // appState 的那個 effect）。
+  const history = activeTab?.history ?? DEFAULT_HISTORY;
   const historyIndex = activeTab?.historyIndex ?? 0;
   const isTrashMode = activeTab?.isTrashMode ?? false;
   const selectedTag = activeTab?.selectedTag || null;
-  const selectedFiles = activeTab?.selectedFiles ?? new Set<string>();
+  const selectedFiles = activeTab?.selectedFiles ?? EMPTY_SELECTION;
   const searchQuery = activeTab?.searchQuery || "";
 
-  // Update current tab helper
-  const updateActiveTab = (updates: Partial<TabState>) => {
-    setTabs((prev) => prev.map((tab) => (tab.id === activeTabId ? { ...tab, ...updates } : tab)));
-  };
+  // ⚠️ 這些 wrapper 全部包 useCallback，只認 activeTabId。
+  //
+  // 它們被好幾個 useEffect 用到（鍵盤、滑鼠側鍵、外部導航請求）。不包的話每次
+  // render 都是新的函式，寫進 deps 陣列等於「每 render 重掛一次 listener」，
+  // 於是原本乾脆把它們從 deps 裡省略掉 —— 而省略掉就會抓到舊的 activeTabId，
+  // 切分頁之後鍵盤操作會作用在**上一個**分頁上。包起來兩邊都對。
+  const updateActiveTab = useCallback(
+    (updates: Partial<TabState>) => {
+      setTabs((prev) => prev.map((tab) => (tab.id === activeTabId ? { ...tab, ...updates } : tab)));
+    },
+    [activeTabId],
+  );
 
-  // Setter wrappers for backward compatibility
-  const setCurrentPath = (path: string) => updateActiveTab({ path });
-  const setHistory = (h: string[] | ((prev: string[]) => string[])) => {
-    setTabs((prev) =>
-      prev.map((tab) =>
-        tab.id === activeTabId
-          ? { ...tab, history: typeof h === "function" ? h(tab.history) : h }
-          : tab,
-      ),
-    );
-  };
-  const setHistoryIndex = (idx: number | ((prev: number) => number)) => {
-    setTabs((prev) =>
-      prev.map((tab) =>
-        tab.id === activeTabId
-          ? { ...tab, historyIndex: typeof idx === "function" ? idx(tab.historyIndex) : idx }
-          : tab,
-      ),
-    );
-  };
-  const setIsTrashMode = (mode: boolean) => updateActiveTab({ isTrashMode: mode });
-  const setSelectedTag = (tag: string | null) => updateActiveTab({ selectedTag: tag });
-  const setSelectedFiles = (files: Set<string> | ((prev: Set<string>) => Set<string>)) => {
-    setTabs((prev) =>
-      prev.map((tab) =>
-        tab.id === activeTabId
-          ? {
-              ...tab,
-              selectedFiles: typeof files === "function" ? files(tab.selectedFiles) : files,
-            }
-          : tab,
-      ),
-    );
-  };
-  const setSearchQuery = (query: string) => updateActiveTab({ searchQuery: query });
+  const setCurrentPath = useCallback(
+    (path: string) => updateActiveTab({ path }),
+    [updateActiveTab],
+  );
+  const setHistory = useCallback(
+    (h: string[] | ((prev: string[]) => string[])) => {
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === activeTabId
+            ? { ...tab, history: typeof h === "function" ? h(tab.history) : h }
+            : tab,
+        ),
+      );
+    },
+    [activeTabId],
+  );
+  const setHistoryIndex = useCallback(
+    (idx: number | ((prev: number) => number)) => {
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === activeTabId
+            ? { ...tab, historyIndex: typeof idx === "function" ? idx(tab.historyIndex) : idx }
+            : tab,
+        ),
+      );
+    },
+    [activeTabId],
+  );
+  const setIsTrashMode = useCallback(
+    (mode: boolean) => updateActiveTab({ isTrashMode: mode }),
+    [updateActiveTab],
+  );
+  const setSelectedTag = useCallback(
+    (tag: string | null) => updateActiveTab({ selectedTag: tag }),
+    [updateActiveTab],
+  );
+  const setSelectedFiles = useCallback(
+    (files: Set<string> | ((prev: Set<string>) => Set<string>)) => {
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === activeTabId
+            ? {
+                ...tab,
+                selectedFiles: typeof files === "function" ? files(tab.selectedFiles) : files,
+              }
+            : tab,
+        ),
+      );
+    },
+    [activeTabId],
+  );
+  const setSearchQuery = useCallback(
+    (query: string) => updateActiveTab({ searchQuery: query }),
+    [updateActiveTab],
+  );
 
   // Tab management functions
   const addTab = (path: string = "/") => {
@@ -269,16 +305,30 @@ export const Finder = ({ windowId }: FinderProps) => {
       const targetPath = finderWindow.appState.navigateTo;
       // Clear the navigateTo state to prevent re-triggering
       updateWindowAppState(windowId, { navigateTo: undefined });
-      // Navigate to the target path
-      setIsTrashMode(false);
-      const newHistory = history.slice(0, historyIndex + 1);
-      newHistory.push(targetPath);
-      setHistory(newHistory);
-      setHistoryIndex(newHistory.length - 1);
-      setCurrentPath(targetPath);
-      setSelectedFiles(new Set());
+
+      const newHistory = [...history.slice(0, historyIndex + 1), targetPath];
+      // ⚠️ 一次 setTabs 寫完，不要呼叫五個 wrapper——那是五次整個 tabs 陣列的 map。
+      //
+      // 這裡確實是「在 effect 裡 setState」，而那正是這個機制的本質：別的視窗
+      // （例如桌面雙擊資料夾）把導航請求寫進 window store，這個 Finder 只能
+      // 用 effect 去反應。沒有更直接的管道。
+      // oxlint-disable-next-line @eslint-react/set-state-in-effect
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === activeTabId
+            ? {
+                ...tab,
+                isTrashMode: false,
+                history: newHistory,
+                historyIndex: newHistory.length - 1,
+                path: targetPath,
+                selectedFiles: new Set<string>(),
+              }
+            : tab,
+        ),
+      );
     }
-  }, [windows, updateWindowAppState, history, historyIndex, windowId]);
+  }, [windows, updateWindowAppState, history, historyIndex, windowId, activeTabId]);
 
   const {
     data: files,
@@ -387,6 +437,10 @@ export const Finder = ({ windowId }: FinderProps) => {
   };
 
   // Watch for new folder to appear in files list, then enter rename mode
+  //
+  // ⚠️ 這裡必須是 effect：要等 useFiles 重新抓回列表、新資料夾那一列真的出現在
+  //    DOM 裡，才有東西可以聚焦。放在 mutation 的 onSuccess 會太早。
+  /* oxlint-disable @eslint-react/set-state-in-effect */
   useEffect(() => {
     if (pendingRenameFolder && files) {
       const newFolder = files.find((f) => f.name === pendingRenameFolder);
@@ -397,6 +451,7 @@ export const Finder = ({ windowId }: FinderProps) => {
       }
     }
   }, [files, pendingRenameFolder]);
+  /* oxlint-enable @eslint-react/set-state-in-effect */
 
   // Quick Look (Spacebar), Delete keys, and Select All (Cmd+A)
   useEffect(() => {
@@ -517,6 +572,7 @@ export const Finder = ({ windowId }: FinderProps) => {
     isEmptyTrashConfirmOpen,
     isPermanentDeleteConfirmOpen,
     isTagDialogOpen,
+    setSelectedFiles,
   ]);
 
   // Mouse back/forward button navigation
@@ -586,6 +642,8 @@ export const Finder = ({ windowId }: FinderProps) => {
     isEmptyTrashConfirmOpen,
     isPermanentDeleteConfirmOpen,
     isTagDialogOpen,
+    setHistoryIndex,
+    setCurrentPath,
   ]);
 
   const handleTrashMode = () => {

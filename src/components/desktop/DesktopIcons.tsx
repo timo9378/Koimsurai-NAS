@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   useFiles,
   useCreateFolder,
@@ -34,24 +34,20 @@ export const DesktopIcons = () => {
   const [newFolderName] = useState("新資料夾");
 
   // State for icon positions
-  const [iconPositions, setIconPositions] = useState<Map<string, IconPosition>>(new Map());
+  const [iconPositions, setIconPositions] = useState<Map<string, IconPosition>>(() => {
+    const saved = localStorage.getItem("desktop-icon-positions");
+    if (!saved) return new Map();
+    try {
+      // localStorage 的內容不受我們控制，cast 只是宣告「我們期望的形狀」
+      return new Map(Object.entries(JSON.parse(saved) as Record<string, IconPosition>));
+    } catch (e) {
+      console.error("Failed to load icon positions", e);
+      return new Map();
+    }
+  });
 
   const batchDelete = useBatchDelete();
   const deleteFile = useDelete();
-
-  // Load positions from localStorage on mount
-  useEffect(() => {
-    const saved = localStorage.getItem("desktop-icon-positions");
-    if (saved) {
-      try {
-        // localStorage 的內容不受我們控制，cast 只是宣告「我們期望的形狀」
-        const parsed = JSON.parse(saved) as Record<string, IconPosition>;
-        setIconPositions(new Map(Object.entries(parsed)));
-      } catch (e) {
-        console.error("Failed to load icon positions", e);
-      }
-    }
-  }, []);
 
   // Save positions to localStorage when they change
   useEffect(() => {
@@ -89,6 +85,9 @@ export const DesktopIcons = () => {
   const [pendingRenameFolder, setPendingRenameFolder] = useState<string | null>(null);
 
   // Watch for new folder to appear in files list, then enter rename mode
+  //
+  // ⚠️ 必須是 effect：要等列表重新抓回來、新資料夾那一格出現，才有東西可以聚焦。
+  /* oxlint-disable @eslint-react/set-state-in-effect */
   useEffect(() => {
     if (pendingRenameFolder && files) {
       const newFolder = files.find((f) => f.name === pendingRenameFolder);
@@ -99,6 +98,7 @@ export const DesktopIcons = () => {
       }
     }
   }, [files, pendingRenameFolder]);
+  /* oxlint-enable @eslint-react/set-state-in-effect */
 
   // Listen for desktop-create-folder event from GlobalContextMenu
   useEffect(() => {
@@ -232,17 +232,17 @@ export const DesktopIcons = () => {
   // But that might spam 409 Conflict.
   // Let's check root files list?
   const { data: rootFiles } = useFiles({ path: "/" });
-  const [hasCheckedDesktop, setHasCheckedDesktop] = useState(false);
+  const hasCheckedDesktop = useRef(false);
 
   useEffect(() => {
-    if (rootFiles && !hasCheckedDesktop) {
+    if (rootFiles && !hasCheckedDesktop.current) {
+      hasCheckedDesktop.current = true;
       const hasDesktop = rootFiles.some((f) => f.name === "Desktop" && f.is_dir);
       if (!hasDesktop) {
         createFolder.mutate({ path: "/", name: "Desktop" });
       }
-      setHasCheckedDesktop(true);
     }
-  }, [rootFiles, createFolder, hasCheckedDesktop]);
+  }, [rootFiles, createFolder]);
 
   const handleIconClick = (e: React.MouseEvent, file: FileInfo) => {
     e.stopPropagation();

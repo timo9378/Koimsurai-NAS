@@ -83,6 +83,9 @@ function SharePage() {
 
   useEffect(() => {
     void fetchShareInfo();
+    // 只在 shareId 變動時重抓。fetchShareInfo 每次 render 都是新的函式，
+    // 放進相依會變成無限重抓。
+    // oxlint-disable-next-line @eslint-react/exhaustive-deps
   }, [shareId]);
 
   const fetchShareInfo = async () => {

@@ -110,6 +110,12 @@ const evaluateMath = (expr: string): { result: number; valid: boolean } => {
   }
 };
 
+/**
+ * ⚠️ 只在開啟時掛載 dialog 本體。
+ *
+ * 關閉即卸載，`query` 與掛在它上面的 useQuery 一起消失——原本是在 effect 裡
+ * 手動 `setQuery("")`，那會多跑一次 render，而且搜尋結果的 query cache 還留著。
+ */
 export const SpotlightSearch = ({
   open,
   onOpenChange,
@@ -117,15 +123,29 @@ export const SpotlightSearch = ({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) => {
+  // ⚠️ ⌘K 的 listener 一定要掛在**殼**上，不能放進 dialog 本體：本體只有開啟
+  //    時才存在，掛在裡面的話關閉狀態下按 ⌘K 就完全沒有反應（也就打不開）。
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        onOpenChange(!open);
+      }
+      if (e.key === "Escape") {
+        onOpenChange(false);
+      }
+    };
+
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
+  }, [open, onOpenChange]);
+
+  return open ? <SpotlightSearchDialog onOpenChange={onOpenChange} /> : null;
+};
+
+const SpotlightSearchDialog = ({ onOpenChange }: { onOpenChange: (open: boolean) => void }) => {
   const [query, setQuery] = useState("");
   const { openWindow } = useWindowStore();
-
-  // Reset query when dialog closes
-  useEffect(() => {
-    if (!open) {
-      setQuery("");
-    }
-  }, [open]);
 
   // Search Files
   const { data: fileResults, isLoading: isSearching } = useQuery({
@@ -135,7 +155,7 @@ export const SpotlightSearch = ({
       const res = await apiClient.get<FileInfo[]>(`/search?q=${encodeURIComponent(query)}`);
       return res.data;
     },
-    enabled: query.length > 1 && open,
+    enabled: query.length > 1,
     staleTime: 5000,
   });
 
@@ -149,7 +169,7 @@ export const SpotlightSearch = ({
       );
       return res.data;
     },
-    enabled: query.length > 1 && open,
+    enabled: query.length > 1,
     staleTime: 5000,
   });
 
@@ -172,21 +192,6 @@ export const SpotlightSearch = ({
     }
     return null;
   }, [query]);
-
-  useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        onOpenChange(!open);
-      }
-      if (e.key === "Escape") {
-        onOpenChange(false);
-      }
-    };
-
-    document.addEventListener("keydown", down);
-    return () => document.removeEventListener("keydown", down);
-  }, [open, onOpenChange]);
 
   const handleFileSelect = (file: FileInfo) => {
     onOpenChange(false);
@@ -225,7 +230,7 @@ export const SpotlightSearch = ({
 
   return (
     <Command.Dialog
-      open={open}
+      open
       onOpenChange={onOpenChange}
       label="Global Search"
       className="fixed top-[20%] left-1/2 -translate-x-1/2 w-[640px] max-w-[90vw] bg-white/90 dark:bg-black/90 backdrop-blur-xl rounded-2xl border border-white/20 shadow-2xl z-[100] overflow-hidden"

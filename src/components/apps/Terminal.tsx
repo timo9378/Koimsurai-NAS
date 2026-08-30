@@ -28,12 +28,20 @@ interface TerminalTab {
   ws: WebSocket | null;
 }
 
+const makeTab = (n: number): TerminalTab => ({
+  id: crypto.randomUUID(),
+  title: `Terminal ${n}`,
+  terminal: null,
+  fitAddon: null,
+  ws: null,
+});
+
 interface TerminalProps {
   windowId?: string;
 }
 
 export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
-  const [tabs, setTabs] = useState<TerminalTab[]>([]);
+  const [tabs, setTabs] = useState<TerminalTab[]>(() => [makeTab(1)]);
   const [activeTabId, setActiveTabId] = useState<string>("");
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,13 +49,7 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
   const createNewTab = useCallback(() => {
-    const newTab: TerminalTab = {
-      id: crypto.randomUUID(),
-      title: `Terminal ${tabs.length + 1}`,
-      terminal: null,
-      fitAddon: null,
-      ws: null,
-    };
+    const newTab = makeTab(tabs.length + 1);
     setTabs((prev) => [...prev, newTab]);
     setActiveTabId(newTab.id);
     return newTab.id;
@@ -237,13 +239,6 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
     });
   };
 
-  // Initialize first tab on mount
-  useEffect(() => {
-    if (tabs.length === 0) {
-      createNewTab();
-    }
-  }, [createNewTab, tabs.length]);
-
   // Initialize terminal when active tab changes
   useEffect(() => {
     if (activeTabId) {
@@ -283,10 +278,19 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
     };
   }, [activeTabId, tabs]);
 
-  // Cleanup on unmount
+  // ⚠️ 用 ref 而不是把 tabs 寫進 deps。
+  //
+  // 原本 deps 是 `[]`，所以 cleanup 閉包抓到的是**掛載當下**的 tabs——那時候
+  // 每個分頁的 `ws` / `terminal` 都還是 null，於是關掉 Terminal 視窗時
+  // 一條 WebSocket 都沒被關掉，xterm 的實例也沒被 dispose，全都留著。
+  // 寫進 deps 也不行：那會變成每次 tabs 一變就跑一次 cleanup，等於一開新分頁
+  // 就把舊分頁的連線關掉。ref 讓 cleanup 讀得到最新值，又只在卸載時跑一次。
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+
   useEffect(() => {
     return () => {
-      tabs.forEach((tab) => {
+      tabsRef.current.forEach((tab) => {
         tab.ws?.close();
         tab.terminal?.dispose();
       });

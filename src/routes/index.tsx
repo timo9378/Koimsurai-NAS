@@ -24,7 +24,7 @@ function Home() {
     };
     void verifyAuth();
     // 只在掛載時驗一次；checkAuth 是 mutation，放進相依會每次 render 重跑。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
   if (isAuthenticated === null) {

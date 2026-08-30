@@ -256,48 +256,51 @@ export const Dock = () => {
     { id: "trash", label: "Trash", icon: Trash2, type: "trash" as AppType },
   ];
 
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!dockRef.current) return;
+  const handleMouseMove = React.useCallback(
+    (e: MouseEvent) => {
+      if (!dockRef.current) return;
 
-    const dockRect = dockRef.current.getBoundingClientRect();
-    const buffer = 50; // Buffer zone
+      const dockRect = dockRef.current.getBoundingClientRect();
+      const buffer = 50; // Buffer zone
 
-    let isInDockArea = false;
+      let isInDockArea = false;
 
-    switch (dockPosition) {
-      case "bottom":
-        isInDockArea =
-          e.clientY >= dockRect.top - buffer &&
-          e.clientY <= window.innerHeight &&
-          e.clientX >= dockRect.left &&
-          e.clientX <= dockRect.right;
-        break;
-      case "left":
-        isInDockArea =
-          e.clientX >= 0 &&
-          e.clientX <= dockRect.right + buffer &&
-          e.clientY >= dockRect.top &&
-          e.clientY <= dockRect.bottom;
-        break;
-      case "right":
-        isInDockArea =
-          e.clientX >= dockRect.left - buffer &&
-          e.clientX <= window.innerWidth &&
-          e.clientY >= dockRect.top &&
-          e.clientY <= dockRect.bottom;
-        break;
-    }
+      switch (dockPosition) {
+        case "bottom":
+          isInDockArea =
+            e.clientY >= dockRect.top - buffer &&
+            e.clientY <= window.innerHeight &&
+            e.clientX >= dockRect.left &&
+            e.clientX <= dockRect.right;
+          break;
+        case "left":
+          isInDockArea =
+            e.clientX >= 0 &&
+            e.clientX <= dockRect.right + buffer &&
+            e.clientY >= dockRect.top &&
+            e.clientY <= dockRect.bottom;
+          break;
+        case "right":
+          isInDockArea =
+            e.clientX >= dockRect.left - buffer &&
+            e.clientX <= window.innerWidth &&
+            e.clientY >= dockRect.top &&
+            e.clientY <= dockRect.bottom;
+          break;
+      }
 
-    if (!isInDockArea && isDockHovered) {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      timeoutRef.current = setTimeout(() => {
-        setIsDockHovered(false);
-      }, 100);
-    } else if (isInDockArea) {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      setIsDockHovered(true);
-    }
-  };
+      if (!isInDockArea && isDockHovered) {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        timeoutRef.current = setTimeout(() => {
+          setIsDockHovered(false);
+        }, 100);
+      } else if (isInDockArea) {
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        setIsDockHovered(true);
+      }
+    },
+    [dockPosition, isDockHovered],
+  );
 
   React.useEffect(() => {
     if (isAnyMaximized) {
@@ -307,7 +310,7 @@ export const Dock = () => {
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
       };
     }
-  }, [isAnyMaximized, isDockHovered, dockPosition]);
+  }, [isAnyMaximized, handleMouseMove]);
 
   const getPositionClasses = () => {
     const baseClass = "fixed z-50 transition-all duration-300 ease-in-out";

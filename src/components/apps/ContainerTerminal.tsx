@@ -65,7 +65,10 @@ export const ContainerTerminal = ({ containerId }: ContainerTerminalProps) => {
       socket.onclose = () => {
         term.writeln("\r\n\x1b[33mConnection closed.\x1b[0m\r\n");
       };
-    } catch (e) {
+    } catch {
+      // 只有 `new WebSocket()` 丟例外（網址不合法）才會到這裡。要把「連不起來」
+      // 反映到畫面上就只能用 state，沒有別的管道。
+      // oxlint-disable-next-line @eslint-react/set-state-in-effect
       setError("Failed to initialize WebSocket.");
     }
 

@@ -24,7 +24,9 @@ interface SelectionBox {
 
 export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
   const [wallpaper, setWallpaper] = React.useState(
-    "https://images.unsplash.com/photo-1477346611705-65d1883cee1e?q=80&w=2070&auto=format&fit=crop",
+    () =>
+      localStorage.getItem("desktop-wallpaper") ??
+      "https://images.unsplash.com/photo-1477346611705-65d1883cee1e?q=80&w=2070&auto=format&fit=crop",
   );
   const [selection, setSelection] = useState<SelectionBox>({
     startX: 0,
@@ -39,11 +41,6 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { handleUploadFiles } = useFileUpload(); // Use the hook
   const { snapWindow, maximizeWindow } = useWindowStore();
-
-  useEffect(() => {
-    const saved = localStorage.getItem("desktop-wallpaper");
-    if (saved) setWallpaper(saved);
-  }, []);
 
   // Handle window drag for snap preview
   useEffect(() => {
@@ -95,7 +92,7 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
       window.removeEventListener("window-drag-move", handleDragMove);
       window.removeEventListener("window-drag-end", handleDragEnd);
     };
-  }, [snapWindow]);
+  }, [snapWindow, maximizeWindow]);
 
   const handleWallpaperChange = (url: string) => {
     setWallpaper(url);

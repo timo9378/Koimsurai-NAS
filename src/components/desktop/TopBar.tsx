@@ -35,6 +35,9 @@ import { useWindowStore } from "@/store/window-store";
 
 import { useTransferStore, formatSpeed } from "@/store/transfer-store";
 
+const formatClock = () =>
+  new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+
 const ControlCenter = () => {
   const { data: systemStatus } = useSystemStatus();
   const rescanMutation = useRescan();
@@ -364,7 +367,7 @@ const getMenuItemsForApp = (appType: string | null) => {
 };
 
 export const TopBar = () => {
-  const [time, setTime] = useState<string>("");
+  const [time, setTime] = useState(formatClock);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const logoutMutation = useLogout();
   const { data: systemStatus } = useSystemStatus();
@@ -394,19 +397,7 @@ export const TopBar = () => {
   };
 
   useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setTime(
-        now.toLocaleTimeString("en-US", {
-          hour: "numeric",
-          minute: "2-digit",
-          hour12: true,
-        }),
-      );
-    };
-
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
+    const interval = setInterval(() => setTime(formatClock()), 1000);
     return () => clearInterval(interval);
   }, []);
 

@@ -204,6 +204,8 @@ function UploadPage() {
   /* ---- Fetch upload link info ---- */
   useEffect(() => {
     void fetchUploadInfo();
+    // 同上：只在 uploadId 變動時重抓
+    // oxlint-disable-next-line @eslint-react/exhaustive-deps
   }, [uploadId]);
 
   const fetchUploadInfo = async () => {
@@ -250,89 +252,119 @@ function UploadPage() {
     setIsDragging(false);
   }, []);
 
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
+  const addIndividualFiles = useCallback(
+    (newFiles: File[]) => {
+      let filtered = newFiles;
+      if (uploadInfo?.max_file_size) {
+        const oversized = filtered.filter((f) => f.size > uploadInfo.max_file_size!);
+        if (oversized.length > 0) {
+          setError(`部分檔案超過大小限制 (${formatFileSize(uploadInfo.max_file_size)})`);
+          filtered = filtered.filter((f) => f.size <= uploadInfo.max_file_size!);
+        }
+      }
+      const newGroups: UploadGroup[] = filtered.map((file) => ({
+        id: nextGroupId(),
+        name: file.name,
+        isFolder: false,
+        files: [{ file }],
+        totalSize: file.size,
+        fileCount: 1,
+        status: "pending",
+        uploadedCount: 0,
+        failedCount: 0,
+      }));
+      setGroups((prev) => [...prev, ...newGroups]);
+      if (filtered.length > 0) setError(null);
+    },
+    [uploadInfo],
+  );
 
-    const items = e.dataTransfer.items;
-    if (items.length === 0) return;
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
 
-    // Collect entries via webkitGetAsEntry (supports folders)
-    const topEntries: FileSystemEntry[] = [];
-    for (let i = 0; i < items.length; i++) {
-      const entry = items[i]?.webkitGetAsEntry();
-      if (entry) topEntries.push(entry);
-    }
+      const items = e.dataTransfer.items;
+      if (items.length === 0) return;
 
-    if (topEntries.length === 0) {
-      // Fallback: plain files
-      const droppedFiles = Array.from(e.dataTransfer.files);
-      addIndividualFiles(droppedFiles);
-      return;
-    }
+      // Collect entries via webkitGetAsEntry (supports folders)
+      const topEntries: FileSystemEntry[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const entry = items[i]?.webkitGetAsEntry();
+        if (entry) topEntries.push(entry);
+      }
 
-    // Determine if any directory was dropped
-    const hasDir = topEntries.some((entry) => entry.isDirectory);
+      if (topEntries.length === 0) {
+        // Fallback: plain files
+        const droppedFiles = Array.from(e.dataTransfer.files);
+        addIndividualFiles(droppedFiles);
+        return;
+      }
 
-    if (hasDir) {
-      setIsScanning(true);
-      try {
-        const newGroups: UploadGroup[] = [];
+      // Determine if any directory was dropped
+      const hasDir = topEntries.some((entry) => entry.isDirectory);
+
+      if (hasDir) {
+        setIsScanning(true);
+        try {
+          const newGroups: UploadGroup[] = [];
+          for (const entry of topEntries) {
+            if (entry.isDirectory) {
+              const files = await collectFilesFromEntry(entry, "");
+              // files already have relativePaths like "folderName/sub/file.txt"
+              // Group under the top entry name
+              const totalSize = files.reduce((s, f) => s + f.file.size, 0);
+              newGroups.push({
+                id: nextGroupId(),
+                name: entry.name,
+                isFolder: true,
+                files,
+                totalSize,
+                fileCount: files.length,
+                status: "pending",
+                uploadedCount: 0,
+                failedCount: 0,
+              });
+            } else {
+              const fileEntry = entry as FileSystemFileEntry;
+              const file = await new Promise<File>((resolve, reject) => {
+                fileEntry.file(resolve, reject);
+              });
+              newGroups.push({
+                id: nextGroupId(),
+                name: file.name,
+                isFolder: false,
+                files: [{ file, relativePath: file.name }],
+                totalSize: file.size,
+                fileCount: 1,
+                status: "pending",
+                uploadedCount: 0,
+                failedCount: 0,
+              });
+            }
+          }
+          setGroups((prev) => [...prev, ...newGroups]);
+        } finally {
+          setIsScanning(false);
+        }
+      } else {
+        // Only files dropped
+        const droppedFiles: File[] = [];
         for (const entry of topEntries) {
-          if (entry.isDirectory) {
-            const files = await collectFilesFromEntry(entry, "");
-            // files already have relativePaths like "folderName/sub/file.txt"
-            // Group under the top entry name
-            const totalSize = files.reduce((s, f) => s + f.file.size, 0);
-            newGroups.push({
-              id: nextGroupId(),
-              name: entry.name,
-              isFolder: true,
-              files,
-              totalSize,
-              fileCount: files.length,
-              status: "pending",
-              uploadedCount: 0,
-              failedCount: 0,
-            });
-          } else {
+          if (entry.isFile) {
             const fileEntry = entry as FileSystemFileEntry;
             const file = await new Promise<File>((resolve, reject) => {
               fileEntry.file(resolve, reject);
             });
-            newGroups.push({
-              id: nextGroupId(),
-              name: file.name,
-              isFolder: false,
-              files: [{ file, relativePath: file.name }],
-              totalSize: file.size,
-              fileCount: 1,
-              status: "pending",
-              uploadedCount: 0,
-              failedCount: 0,
-            });
+            droppedFiles.push(file);
           }
         }
-        setGroups((prev) => [...prev, ...newGroups]);
-      } finally {
-        setIsScanning(false);
+        addIndividualFiles(droppedFiles);
       }
-    } else {
-      // Only files dropped
-      const droppedFiles: File[] = [];
-      for (const entry of topEntries) {
-        if (entry.isFile) {
-          const fileEntry = entry as FileSystemFileEntry;
-          const file = await new Promise<File>((resolve, reject) => {
-            fileEntry.file(resolve, reject);
-          });
-          droppedFiles.push(file);
-        }
-      }
-      addIndividualFiles(droppedFiles);
-    }
-  }, []);
+    },
+    [addIndividualFiles],
+  );
 
   /* ---- File / Folder selection ---- */
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -354,30 +386,6 @@ function UploadPage() {
       addIndividualFiles(filesArray);
     }
     e.target.value = "";
-  };
-
-  const addIndividualFiles = (newFiles: File[]) => {
-    let filtered = newFiles;
-    if (uploadInfo?.max_file_size) {
-      const oversized = filtered.filter((f) => f.size > uploadInfo.max_file_size!);
-      if (oversized.length > 0) {
-        setError(`部分檔案超過大小限制 (${formatFileSize(uploadInfo.max_file_size)})`);
-        filtered = filtered.filter((f) => f.size <= uploadInfo.max_file_size!);
-      }
-    }
-    const newGroups: UploadGroup[] = filtered.map((file) => ({
-      id: nextGroupId(),
-      name: file.name,
-      isFolder: false,
-      files: [{ file }],
-      totalSize: file.size,
-      fileCount: 1,
-      status: "pending",
-      uploadedCount: 0,
-      failedCount: 0,
-    }));
-    setGroups((prev) => [...prev, ...newGroups]);
-    if (filtered.length > 0) setError(null);
   };
 
   const removeGroup = (id: string) => {
