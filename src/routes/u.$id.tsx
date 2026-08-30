@@ -205,7 +205,7 @@ function UploadPage() {
 
   /* ---- Fetch upload link info ---- */
   useEffect(() => {
-    fetchUploadInfo();
+    void fetchUploadInfo();
   }, [uploadId]);
 
   const fetchUploadInfo = async () => {
@@ -663,7 +663,7 @@ function UploadPage() {
             <div
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
+              onDrop={(...args) => void handleDrop(...args)}
               className={cn(
                 "border-2 border-dashed rounded-xl p-8 text-center transition-all",
                 isDragging
@@ -871,7 +871,10 @@ function UploadPage() {
 
           {/* Upload Button */}
           {!isUploading && pendingFileCount > 0 && (
-            <Button onClick={uploadAll} className="w-full bg-purple-600 hover:bg-purple-700">
+            <Button
+              onClick={() => void uploadAll()}
+              className="w-full bg-purple-600 hover:bg-purple-700"
+            >
               <Upload className="mr-2 h-4 w-4" />
               上傳 {pendingFileCount} 個檔案 ({formatFileSize(totalSize)})
             </Button>

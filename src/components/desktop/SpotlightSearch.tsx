@@ -216,7 +216,7 @@ export const SpotlightSearch = ({
 
   const handleCopyMathResult = () => {
     if (mathResult !== null) {
-      navigator.clipboard.writeText(mathResult.toString());
+      void navigator.clipboard.writeText(mathResult.toString());
       onOpenChange(false);
     }
   };

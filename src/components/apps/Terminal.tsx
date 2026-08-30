@@ -250,7 +250,7 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
       const tab = tabs.find((t) => t.id === activeTabId);
       if (tab && !tab.terminal) {
         // Small delay to ensure DOM is ready
-        setTimeout(() => initializeTerminal(activeTabId), 100);
+        setTimeout(() => void initializeTerminal(activeTabId), 100);
       }
     }
   }, [activeTabId, tabs, initializeTerminal]);
@@ -300,7 +300,7 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
     if (activeTab?.terminal) {
       const selection = activeTab.terminal.getSelection();
       if (selection) {
-        navigator.clipboard.writeText(selection);
+        void navigator.clipboard.writeText(selection);
       }
     }
   }, [activeTab]);
@@ -425,7 +425,9 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
                 <div className="flex flex-col items-center gap-3 text-center px-4">
                   <span className="text-red-400">{error}</span>
                   <button
-                    onClick={() => activeTabId && initializeTerminal(activeTabId)}
+                    onClick={() => {
+                      if (activeTabId) void initializeTerminal(activeTabId);
+                    }}
                     className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
                   >
                     Retry
@@ -441,7 +443,7 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
             複製
             <span className="ml-auto text-xs text-muted-foreground">⌘C</span>
           </ContextMenuItem>
-          <ContextMenuItem onClick={handlePaste}>
+          <ContextMenuItem onClick={() => void handlePaste()}>
             <ClipboardPaste className="w-4 h-4 mr-2" />
             貼上
             <span className="ml-auto text-xs text-muted-foreground">⌘V</span>

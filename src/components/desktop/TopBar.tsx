@@ -220,7 +220,7 @@ const NotificationCenter = () => {
       await apiClient.delete("/audit/logs");
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
+      void queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
     },
   });
 
@@ -229,7 +229,7 @@ const NotificationCenter = () => {
       await apiClient.delete(`/audit/logs/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
+      void queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
     },
   });
 
@@ -442,7 +442,7 @@ export const TopBar = () => {
             <DropdownMenuSeparator className="bg-white/10" />
             <DropdownMenuItem
               className="focus:bg-white/10 focus:text-white cursor-default"
-              onClick={handleLogout}
+              onClick={() => void handleLogout()}
             >
               <LogOut className="mr-2 h-4 w-4" />
               <span>登出...</span>

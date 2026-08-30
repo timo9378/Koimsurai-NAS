@@ -296,7 +296,7 @@ const SecuritySection = () => {
     setSetupData(null);
     setBackupCodes([]);
     setCopiedAllCodes(false);
-    refetch();
+    void refetch();
   };
 
   const startDisable = () => {
@@ -320,7 +320,7 @@ const SecuritySection = () => {
       setStep("idle");
       setDisablePassword("");
       setDisableCode("");
-      refetch();
+      void refetch();
     } catch {
       setError("Wrong password or code");
     }
@@ -400,7 +400,7 @@ const SecuritySection = () => {
         <div className="flex flex-wrap gap-2">
           {!enabled && (
             <button
-              onClick={startSetup}
+              onClick={() => void startSetup()}
               disabled={setupMutation.isPending}
               className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
             >
@@ -442,7 +442,7 @@ const SecuritySection = () => {
               <div className="flex items-center gap-2 p-2 rounded-md bg-gray-100 dark:bg-zinc-800 font-mono text-xs break-all">
                 <span className="flex-1">{setupData.secret}</span>
                 <button
-                  onClick={() => copyToClipboard(setupData.secret, "secret")}
+                  onClick={() => void copyToClipboard(setupData.secret, "secret")}
                   className="p-1 rounded hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors shrink-0"
                   title="複製 secret"
                 >
@@ -480,7 +480,7 @@ const SecuritySection = () => {
 
           <div className="flex gap-2 pt-2">
             <button
-              onClick={verifySetup}
+              onClick={() => void verifySetup()}
               disabled={verifySetupMutation.isPending || code.length !== 6}
               className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white text-sm font-medium transition-colors flex items-center gap-2"
             >
@@ -531,7 +531,7 @@ const SecuritySection = () => {
 
           <div className="flex gap-2 pt-2">
             <button
-              onClick={() => copyToClipboard(backupCodes.join("\n"), "codes")}
+              onClick={() => void copyToClipboard(backupCodes.join("\n"), "codes")}
               className="px-4 py-2 rounded-lg bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 border border-gray-200 dark:border-white/10 text-sm font-medium transition-colors flex items-center gap-2"
             >
               {copiedAllCodes ? (
@@ -589,7 +589,7 @@ const SecuritySection = () => {
 
           <div className="flex gap-2">
             <button
-              onClick={confirmDisable}
+              onClick={() => void confirmDisable()}
               disabled={disableMutation.isPending}
               className="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-medium transition-colors flex items-center gap-2"
             >

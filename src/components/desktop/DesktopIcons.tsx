@@ -162,8 +162,12 @@ export const DesktopIcons = () => {
       }
     };
 
-    window.addEventListener("desktop-create-folder", handleCreateFolder);
-    return () => window.removeEventListener("desktop-create-folder", handleCreateFolder);
+    // ⚠️ 包裝要先綁成變數：addEventListener / removeEventListener 必須拿到
+    // **同一個函式參照**，兩處各寫一個 inline 箭頭函式的話移除會失效，
+    // 監聽器會隨每次 effect 重跑累積。
+    const onCreateFolder = () => void handleCreateFolder();
+    window.addEventListener("desktop-create-folder", onCreateFolder);
+    return () => window.removeEventListener("desktop-create-folder", onCreateFolder);
   }, [createFolder, refetch, newFolderName]);
 
   // Listen for delete event (e.g. from context menu or keyboard)
@@ -193,17 +197,18 @@ export const DesktopIcons = () => {
         selectedFiles.size > 0 &&
         !renamingFile
       ) {
-        handleDelete();
+        void handleDelete();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    // We can also listen to a custom event if needed for context menu delete
-    window.addEventListener("desktop-delete-selected", handleDelete);
+    // 同上：包裝先綁成變數，否則 removeEventListener 拿到的是另一個函式
+    const onDeleteSelected = () => void handleDelete();
+    window.addEventListener("desktop-delete-selected", onDeleteSelected);
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("desktop-delete-selected", handleDelete);
+      window.removeEventListener("desktop-delete-selected", onDeleteSelected);
     };
   }, [selectedFiles, batchDelete, deleteFile, renamingFile]);
 
@@ -386,7 +391,7 @@ export const DesktopIcons = () => {
                 onClick={(e) => handleIconClick(e, file)}
                 onDoubleClick={() => handleDoubleClick(file)}
                 onRenameChange={setRenameValue}
-                onRenameSubmit={handleRenameSubmit}
+                onRenameSubmit={() => void handleRenameSubmit()}
                 onRenameCancel={() => setRenamingFile(null)}
                 onPositionChange={(newPos) => handlePositionChange(file.path, newPos)}
               />

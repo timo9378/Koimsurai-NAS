@@ -80,7 +80,7 @@ export const GlobalContextMenu = ({ onWallpaperChange }: GlobalContextMenuProps)
   };
 
   const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ["files"] });
+    void queryClient.invalidateQueries({ queryKey: ["files"] });
     setMenu((prev) => ({ ...prev, isOpen: false }));
   };
 
@@ -176,7 +176,14 @@ export const GlobalContextMenu = ({ onWallpaperChange }: GlobalContextMenuProps)
   }, []);
 
   if (!menu.isOpen)
-    return <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />;
+    return (
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={(...args) => void handleFileSelect(...args)}
+        className="hidden"
+      />
+    );
 
   const renderMenuItems = () => {
     switch (menu.type) {
@@ -184,7 +191,7 @@ export const GlobalContextMenu = ({ onWallpaperChange }: GlobalContextMenuProps)
         return (
           <>
             <MenuItem icon={RefreshCw} label="重新整理" onClick={handleRefresh} />
-            <MenuItem icon={RefreshCw} label="重新掃描檔案" onClick={handleRescan} />
+            <MenuItem icon={RefreshCw} label="重新掃描檔案" onClick={() => void handleRescan()} />
             <MenuItem icon={FolderPlus} label="新增資料夾" onClick={handleCreateFolder} />
             <MenuItem icon={Upload} label="上傳檔案" onClick={handleUploadFile} />
             <MenuItem icon={Clipboard} label="貼上" onClick={() => console.log("Paste")} disabled />

@@ -70,9 +70,12 @@ export function TagDialog({ open, onOpenChange, file }: TagDialogProps) {
     );
 
     if (existingTag) {
-      handleRemoveTag(existingTag.name);
+      void handleRemoveTag(existingTag.name);
     } else {
-      handleAddTag(colorName.charAt(0).toUpperCase() + colorName.slice(1), TAG_COLORS[colorName]);
+      void handleAddTag(
+        colorName.charAt(0).toUpperCase() + colorName.slice(1),
+        TAG_COLORS[colorName],
+      );
     }
   };
 
@@ -135,7 +138,7 @@ export function TagDialog({ open, onOpenChange, file }: TagDialogProps) {
                     />
                     <span>{tag.name}</span>
                     <button
-                      onClick={() => handleRemoveTag(tag.name)}
+                      onClick={() => void handleRemoveTag(tag.name)}
                       className="p-0.5 hover:bg-black/10 dark:hover:bg-white/10 rounded-full transition-colors"
                     >
                       <X className="w-3 h-3" />
@@ -170,7 +173,7 @@ export function TagDialog({ open, onOpenChange, file }: TagDialogProps) {
                     className="flex-1"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && newTagName.trim()) {
-                        handleAddTag(newTagName.trim(), TAG_COLORS[selectedColor]);
+                        void handleAddTag(newTagName.trim(), TAG_COLORS[selectedColor]);
                       } else if (e.key === "Escape") {
                         setIsCreating(false);
                         setNewTagName("");
@@ -183,7 +186,7 @@ export function TagDialog({ open, onOpenChange, file }: TagDialogProps) {
                   size="sm"
                   onClick={() => {
                     if (newTagName.trim()) {
-                      handleAddTag(newTagName.trim(), TAG_COLORS[selectedColor]);
+                      void handleAddTag(newTagName.trim(), TAG_COLORS[selectedColor]);
                     }
                   }}
                   disabled={!newTagName.trim()}

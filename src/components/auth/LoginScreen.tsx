@@ -240,7 +240,7 @@ export function LoginScreen() {
 
           {/* ─── 2FA 第二階段 ─── */}
           {step === "two_factor" ? (
-            <form onSubmit={handleTwoFactorSubmit} className="w-full space-y-4">
+            <form onSubmit={(e) => void handleTwoFactorSubmit(e)} className="w-full space-y-4">
               <div className="relative">
                 <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                 <Input
@@ -285,7 +285,7 @@ export function LoginScreen() {
               </div>
             </form>
           ) : (
-            <form onSubmit={handleSubmit} className="w-full space-y-4">
+            <form onSubmit={(e) => void handleSubmit(e)} className="w-full space-y-4">
               <div className="space-y-3">
                 <div className="relative group">
                   <Input

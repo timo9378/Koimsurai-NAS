@@ -597,7 +597,7 @@ export const useDockerAction = () => {
       await apiClient.post(`/docker/containers/${id}/${action}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["docker", "containers"] });
+      void queryClient.invalidateQueries({ queryKey: ["docker", "containers"] });
     },
   });
 };

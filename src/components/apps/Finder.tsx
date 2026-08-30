@@ -1007,7 +1007,7 @@ export const Finder = ({ windowId }: FinderProps) => {
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      handleUploadFiles(Array.from(e.target.files), currentPath);
+      void handleUploadFiles(Array.from(e.target.files), currentPath);
     }
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -1113,7 +1113,7 @@ export const Finder = ({ windowId }: FinderProps) => {
           onCreateUploadLink={() => setIsUploadLinkDialogOpen(true)}
           onViewModeChange={setViewMode}
           onSearchChange={setSearchQuery}
-          onMoveToPath={handleMoveToPath}
+          onMoveToPath={(...args) => void handleMoveToPath(...args)}
         />
 
         <input
@@ -1141,23 +1141,23 @@ export const Finder = ({ windowId }: FinderProps) => {
           onSelectionClear={() => setSelectedFiles(new Set())}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
+          onDrop={(...args) => void handleDrop(...args)}
           onRenameChange={setRenameValue}
-          onRenameSubmit={submitRename}
+          onRenameSubmit={() => void submitRename()}
           onRenameCancel={() => setRenamingFile(null)}
           onRestore={(name) => restoreFromTrash.mutate(name)}
           onDelete={handleDelete}
           onDownload={(path) => downloadFile.mutate(path)}
-          onShare={handleShare}
+          onShare={(...args) => void handleShare(...args)}
           onToggleStar={(path) => toggleStar.mutate(path)}
           onRenameStart={handleRenameStart}
           onTag={(file) => {
             setTagTargetFile(file);
             setIsTagDialogOpen(true);
           }}
-          onCreateFolder={() => handleCreateFolder()}
+          onCreateFolder={() => void handleCreateFolder()}
           onUpload={() => fileInputRef.current?.click()}
-          onRefresh={() => (isTrashMode ? refetchTrash() : refetch())}
+          onRefresh={() => void (isTrashMode ? refetchTrash() : refetch())}
           onViewModeChange={setViewMode}
           onSortChange={(field) => {
             if (field === sortBy) {
@@ -1168,7 +1168,7 @@ export const Finder = ({ windowId }: FinderProps) => {
             }
           }}
           onSelectionChange={setSelectedFiles}
-          onMoveFiles={handleMoveFiles}
+          onMoveFiles={(...args) => void handleMoveFiles(...args)}
         />
 
         {/* Status Bar */}
@@ -1210,7 +1210,7 @@ export const Finder = ({ windowId }: FinderProps) => {
                         <span className="text-red-500 text-[10px] truncate">{task.error}</span>
                         {task.uploadId && (
                           <button
-                            onClick={() => resumeUpload(task.id)}
+                            onClick={() => void resumeUpload(task.id)}
                             className="p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded text-blue-600 dark:text-blue-400"
                             title="Resume Upload"
                           >

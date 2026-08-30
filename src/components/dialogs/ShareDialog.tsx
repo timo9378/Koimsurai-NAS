@@ -269,7 +269,7 @@ export function ShareDialog({
                   取消
                 </Button>
                 <Button
-                  onClick={handleCreateShare}
+                  onClick={() => void handleCreateShare()}
                   disabled={isLoading || (enablePassword && !password)}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
                 >
@@ -325,7 +325,7 @@ export function ShareDialog({
                     className="bg-zinc-800/50 border-zinc-700/50 text-zinc-100 font-mono text-sm"
                   />
                   <Button
-                    onClick={handleCopyLink}
+                    onClick={() => void handleCopyLink()}
                     className={cn(
                       "shrink-0 transition-colors",
                       copied ? "bg-green-600 hover:bg-green-700" : "bg-zinc-700 hover:bg-zinc-600",

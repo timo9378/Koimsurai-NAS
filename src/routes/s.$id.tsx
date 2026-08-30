@@ -82,7 +82,7 @@ function SharePage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchShareInfo();
+    void fetchShareInfo();
   }, [shareId]);
 
   const fetchShareInfo = async () => {
@@ -231,7 +231,7 @@ function SharePage() {
                   <Button
                     variant="outline"
                     className="mt-4 bg-white/10 border-white/20 text-white hover:bg-white/20"
-                    onClick={() => navigate({ to: "/" })}
+                    onClick={() => void navigate({ to: "/" })}
                   >
                     返回首頁
                   </Button>
@@ -257,7 +257,7 @@ function SharePage() {
                   <Button
                     variant="outline"
                     className="mt-4 bg-white/10 border-white/20 text-white hover:bg-white/20"
-                    onClick={() => navigate({ to: "/" })}
+                    onClick={() => void navigate({ to: "/" })}
                   >
                     返回首頁
                   </Button>
@@ -283,7 +283,7 @@ function SharePage() {
                   <Button
                     variant="outline"
                     className="mt-4 bg-white/10 border-white/20 text-white hover:bg-white/20"
-                    onClick={fetchShareInfo}
+                    onClick={() => void fetchShareInfo()}
                   >
                     重試
                   </Button>
@@ -437,7 +437,7 @@ function SharePage() {
 
                   {/* Download Button */}
                   <Button
-                    onClick={handleDownload}
+                    onClick={() => void handleDownload()}
                     disabled={isDownloading}
                     className="w-full h-12 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium shadow-lg"
                   >

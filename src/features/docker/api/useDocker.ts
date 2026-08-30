@@ -89,7 +89,7 @@ export const useContainerActions = () => {
       await apiClient.post(`/docker/containers/${id}/start`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["docker", "containers"] });
+      void queryClient.invalidateQueries({ queryKey: ["docker", "containers"] });
     },
   });
 
@@ -98,7 +98,7 @@ export const useContainerActions = () => {
       await apiClient.post(`/docker/containers/${id}/stop`, { timeout: 10 });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["docker", "containers"] });
+      void queryClient.invalidateQueries({ queryKey: ["docker", "containers"] });
     },
   });
 
@@ -107,7 +107,7 @@ export const useContainerActions = () => {
       await apiClient.post(`/docker/containers/${id}/restart`, { timeout: 10 });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["docker", "containers"] });
+      void queryClient.invalidateQueries({ queryKey: ["docker", "containers"] });
     },
   });
 
@@ -116,7 +116,7 @@ export const useContainerActions = () => {
       await apiClient.delete(`/docker/containers/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["docker", "containers"] });
+      void queryClient.invalidateQueries({ queryKey: ["docker", "containers"] });
     },
   });
 
@@ -141,7 +141,7 @@ export const usePullImage = () => {
       await apiClient.post("/docker/images/pull", { image, tag });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["docker", "images"] });
+      void queryClient.invalidateQueries({ queryKey: ["docker", "images"] });
     },
   });
 };
@@ -154,7 +154,7 @@ export const useRemoveImage = () => {
       await apiClient.delete(`/docker/images/${encodeURIComponent(id)}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["docker", "images"] });
+      void queryClient.invalidateQueries({ queryKey: ["docker", "images"] });
     },
   });
 };

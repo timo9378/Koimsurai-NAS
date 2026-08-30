@@ -23,7 +23,7 @@ export const useLogin = () => {
     onSuccess: (data) => {
       // 只有完成登入（無 2FA）時才 invalidate；要 2FA 時 cookie 還沒發
       if (!("requires_2fa" in data)) {
-        queryClient.invalidateQueries({ queryKey: ["auth"] });
+        void queryClient.invalidateQueries({ queryKey: ["auth"] });
       }
     },
   });
@@ -37,7 +37,7 @@ export const useTwoFactorLogin = () => {
       await apiClient.post("/auth/2fa/login", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["auth"] });
+      void queryClient.invalidateQueries({ queryKey: ["auth"] });
     },
   });
 };
@@ -106,7 +106,7 @@ export const useTwoFactorVerifySetup = () => {
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["2fa", "status"] });
+      void queryClient.invalidateQueries({ queryKey: ["2fa", "status"] });
     },
   });
 };
@@ -118,7 +118,7 @@ export const useTwoFactorDisable = () => {
       await apiClient.post("/auth/2fa/disable", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["2fa", "status"] });
+      void queryClient.invalidateQueries({ queryKey: ["2fa", "status"] });
     },
   });
 };

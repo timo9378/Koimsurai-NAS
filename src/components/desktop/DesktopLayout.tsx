@@ -201,7 +201,7 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
       onMouseUp={handleMouseUp}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+      onDrop={(...args) => void handleDrop(...args)}
     >
       {/* Overlay for better contrast */}
       <div

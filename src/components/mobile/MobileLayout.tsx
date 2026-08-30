@@ -548,7 +548,7 @@ export const MobileLayout = () => {
         break;
       case "restore":
         restoreFromTrash.mutate(file.name);
-        refetchTrash();
+        void refetchTrash();
         break;
       case "delete-permanent":
         deleteFile.mutate(fullPath);
@@ -576,7 +576,7 @@ export const MobileLayout = () => {
     }
     try {
       await createFolder.mutateAsync({ path: currentPath, name });
-      refetch();
+      void refetch();
     } catch {
       toast.error("Failed to create folder");
     }
@@ -584,7 +584,7 @@ export const MobileLayout = () => {
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.length) {
-      handleUploadFiles(Array.from(e.target.files), currentPath);
+      void handleUploadFiles(Array.from(e.target.files), currentPath);
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -670,7 +670,7 @@ export const MobileLayout = () => {
                     <Search className="w-5 h-5" />
                   </button>
                   <button
-                    onClick={() => refetch()}
+                    onClick={() => void refetch()}
                     className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-800"
                   >
                     <RefreshCw className={cn("w-5 h-5", isLoading && "animate-spin")} />
@@ -731,7 +731,7 @@ export const MobileLayout = () => {
                   <Trash2 className="w-4 h-4 text-gray-500" /> Trash
                 </button>
                 <button
-                  onClick={handleNewFolder}
+                  onClick={() => void handleNewFolder()}
                   className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-full bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 text-sm"
                 >
                   <FolderPlus className="w-4 h-4 text-gray-500" /> New Folder
@@ -749,7 +749,7 @@ export const MobileLayout = () => {
                   <button
                     onClick={() => {
                       emptyTrash.mutate();
-                      refetchTrash();
+                      void refetchTrash();
                     }}
                     className="text-sm text-red-600 dark:text-red-400 font-medium"
                   >
@@ -865,7 +865,7 @@ export const MobileLayout = () => {
           <div className="py-4">
             <div className="px-4 pb-2 text-xs text-gray-500 uppercase tracking-wider">Account</div>
             <button
-              onClick={handleLogout}
+              onClick={() => void handleLogout()}
               className="w-full flex items-center gap-4 px-4 py-3.5 active:bg-gray-100 dark:active:bg-zinc-800"
             >
               <LogOut className="w-5 h-5 text-red-500" />
@@ -934,7 +934,7 @@ export const MobileLayout = () => {
           <ActionSheet
             file={actionFile}
             onClose={() => setActionFile(null)}
-            onAction={handleAction}
+            onAction={(...args) => void handleAction(...args)}
             isTrash={isTrashMode}
           />
         )}
@@ -946,7 +946,7 @@ export const MobileLayout = () => {
         isOpen={!!renameFile}
         name={renameFile?.name || ""}
         onClose={() => setRenameFile(null)}
-        onConfirm={handleRename}
+        onConfirm={(...args) => void handleRename(...args)}
       />
     </div>
   );

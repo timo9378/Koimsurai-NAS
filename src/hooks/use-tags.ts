@@ -60,8 +60,8 @@ export function useAddTag() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tags"] });
-      queryClient.invalidateQueries({ queryKey: ["files"] });
+      void queryClient.invalidateQueries({ queryKey: ["tags"] });
+      void queryClient.invalidateQueries({ queryKey: ["files"] });
     },
   });
 }
@@ -74,8 +74,8 @@ export function useRemoveTag() {
       await apiClient.delete(`/tags/remove/${encodeURIComponent(tagName)}/${path}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tags"] });
-      queryClient.invalidateQueries({ queryKey: ["files"] });
+      void queryClient.invalidateQueries({ queryKey: ["tags"] });
+      void queryClient.invalidateQueries({ queryKey: ["files"] });
     },
   });
 }
@@ -88,7 +88,7 @@ export function useToggleStar() {
       await apiClient.post(`/star/file/${path}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["files"] });
+      void queryClient.invalidateQueries({ queryKey: ["files"] });
     },
   });
 }

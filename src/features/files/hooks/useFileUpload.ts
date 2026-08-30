@@ -23,7 +23,7 @@ const createUploadQueue = (concurrency: number) => {
       await task();
     } finally {
       running--;
-      run(); // Process next in queue
+      void run(); // Process next in queue
     }
   };
 
@@ -38,7 +38,7 @@ const createUploadQueue = (concurrency: number) => {
             reject(err);
           }
         });
-        run();
+        void run();
       });
     },
     get pending() {
