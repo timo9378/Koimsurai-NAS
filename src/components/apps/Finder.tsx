@@ -41,6 +41,13 @@ import { FileList } from "./finder/FileList";
 import { ShareDialog, UploadLinkDialog, TagDialog } from "@/components/dialogs";
 import { X, Plus } from "lucide-react";
 import { activateOnKey } from "@/lib/a11y";
+import {
+  currentPath as currentHistoryPath,
+  goBack,
+  goForward,
+  pushPath,
+  type NavHistory,
+} from "./finder/history";
 
 type ViewMode = "grid" | "list";
 
@@ -123,6 +130,11 @@ const persistTabs = (windowId: string | undefined, tabs: TabState[], activeTabId
 
 // 沒有作用分頁時的 fallback。放模組層級是為了維持同一個參考——見下方用到
 // 它們的地方。兩者都只讀不寫。
+// 滑鼠側鍵。MouseEvent.button 的規格編號：3 是「上一頁」那顆（實體上的第 4 鍵），
+// 4 是「下一頁」。用具名常數是因為 3/4 這種裸數字在事件處理裡完全看不出意思。
+const MOUSE_BACK = 3;
+const MOUSE_FORWARD = 4;
+
 const DEFAULT_HISTORY: string[] = ["/"];
 const EMPTY_SELECTION = new Set<string>();
 
@@ -149,6 +161,10 @@ export const Finder = ({ windowId }: FinderProps) => {
   // appState 的那個 effect）。
   const history = activeTab?.history ?? DEFAULT_HISTORY;
   const historyIndex = activeTab?.historyIndex ?? 0;
+  // 把兩個分開存的欄位包成 finder/history.ts 認得的形狀。
+  // 沒有改狀態的存放方式（tab 上仍然是 history + historyIndex），只是讓
+  // 邊界判斷有一個唯一的出處。
+  const navHistory: NavHistory = { entries: history, index: historyIndex };
   const isTrashMode = activeTab?.isTrashMode ?? false;
   const selectedTag = activeTab?.selectedTag || null;
   const selectedFiles = activeTab?.selectedFiles ?? EMPTY_SELECTION;
@@ -307,7 +323,7 @@ export const Finder = ({ windowId }: FinderProps) => {
       // Clear the navigateTo state to prevent re-triggering
       updateWindowAppState(windowId, { navigateTo: undefined });
 
-      const newHistory = [...history.slice(0, historyIndex + 1), targetPath];
+      const next = pushPath({ entries: history, index: historyIndex }, targetPath);
       // ⚠️ 一次 setTabs 寫完，不要呼叫五個 wrapper——那是五次整個 tabs 陣列的 map。
       //
       // 這裡確實是「在 effect 裡 setState」，而那正是這個機制的本質：別的視窗
@@ -320,8 +336,8 @@ export const Finder = ({ windowId }: FinderProps) => {
             ? {
                 ...tab,
                 isTrashMode: false,
-                history: newHistory,
-                historyIndex: newHistory.length - 1,
+                history: [...next.entries],
+                historyIndex: next.index,
                 path: targetPath,
                 selectedFiles: new Set<string>(),
               }
@@ -429,10 +445,9 @@ export const Finder = ({ windowId }: FinderProps) => {
     if (path === currentPath && !isTrashMode && !selectedTag) return;
     setIsTrashMode(false);
     setSelectedTag(null); // Clear tag filter when navigating
-    const newHistory = history.slice(0, historyIndex + 1);
-    newHistory.push(path);
-    setHistory(newHistory);
-    setHistoryIndex(newHistory.length - 1);
+    const next = pushPath({ entries: history, index: historyIndex }, path);
+    setHistory([...next.entries]);
+    setHistoryIndex(next.index);
     setCurrentPath(path);
     setSelectedFiles(new Set());
   };
@@ -581,9 +596,7 @@ export const Finder = ({ windowId }: FinderProps) => {
 
   useEffect(() => {
     const handleMouseButton = (e: MouseEvent) => {
-      // Button 3 = Back button (mouse button 4)
-      // Button 4 = Forward button (mouse button 5)
-      if (e.button !== 3 && e.button !== 4) {
+      if (e.button !== MOUSE_BACK && e.button !== MOUSE_FORWARD) {
         return;
       }
 
@@ -608,18 +621,15 @@ export const Finder = ({ windowId }: FinderProps) => {
 
       // Only handle on mousedown for actual navigation
       if (e.type === "mousedown") {
-        if (e.button === 3 && historyIndex > 0) {
-          const target = history[historyIndex - 1];
-          if (target !== undefined) {
-            setHistoryIndex(historyIndex - 1);
-            setCurrentPath(target);
-          }
-        } else if (e.button === 4 && historyIndex < history.length - 1) {
-          const target = history[historyIndex + 1];
-          if (target !== undefined) {
-            setHistoryIndex(historyIndex + 1);
-            setCurrentPath(target);
-          }
+        // 上面的 guard 已經把 button 收窄成「上一頁或下一頁」兩者之一，
+        // 所以這裡不需要再判斷一次 forward。
+        const nav: NavHistory = { entries: history, index: historyIndex };
+        const next = e.button === MOUSE_BACK ? goBack(nav) : goForward(nav);
+
+        const path = currentHistoryPath(next);
+        if (path !== undefined && next.index !== nav.index) {
+          setHistoryIndex(next.index);
+          setCurrentPath(path);
         }
       }
     };
@@ -652,21 +662,16 @@ export const Finder = ({ windowId }: FinderProps) => {
     setSelectedFiles(new Set());
   };
 
-  const handleBack = () => {
-    const target = history[historyIndex - 1];
-    if (historyIndex > 0 && target !== undefined) {
-      setHistoryIndex(historyIndex - 1);
-      setCurrentPath(target);
-    }
+  // 邊界判斷全部交給 finder/history.ts —— 那裡回傳同一個物件就表示沒動。
+  const applyNav = (next: NavHistory) => {
+    const path = currentHistoryPath(next);
+    if (next === navHistory || path === undefined) return;
+    setHistoryIndex(next.index);
+    setCurrentPath(path);
   };
 
-  const handleForward = () => {
-    const target = history[historyIndex + 1];
-    if (historyIndex < history.length - 1 && target !== undefined) {
-      setHistoryIndex(historyIndex + 1);
-      setCurrentPath(target);
-    }
-  };
+  const handleBack = () => applyNav(goBack(navHistory));
+  const handleForward = () => applyNav(goForward(navHistory));
 
   // 記錄最後一次點擊的檔案索引（用於 Shift+Click 範圍選取）
   const lastClickedIndexRef = React.useRef<number>(-1);
