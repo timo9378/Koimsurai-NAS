@@ -109,7 +109,7 @@ export const GlobalContextMenu = ({ onWallpaperChange }: GlobalContextMenuProps)
         "https://images.unsplash.com/photo-1465146344425-f00d5f5c8f07?q=80&w=2070&auto=format&fit=crop",
       ];
       const random = wallpapers[Math.floor(Math.random() * wallpapers.length)];
-      onWallpaperChange(random);
+      if (random) onWallpaperChange(random);
     }
     setMenu((prev) => ({ ...prev, isOpen: false }));
   };

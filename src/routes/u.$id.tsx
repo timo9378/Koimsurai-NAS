@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -198,8 +198,6 @@ function UploadPage() {
   // For folder detail expand
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
 
-  const abortRef = useRef(false);
-
   const totalFileCount = groups.reduce((s, g) => s + g.fileCount, 0);
   const totalSize = groups.reduce((s, g) => s + g.totalSize, 0);
 
@@ -258,12 +256,12 @@ function UploadPage() {
     setIsDragging(false);
 
     const items = e.dataTransfer.items;
-    if (!items || items.length === 0) return;
+    if (items.length === 0) return;
 
     // Collect entries via webkitGetAsEntry (supports folders)
     const topEntries: FileSystemEntry[] = [];
     for (let i = 0; i < items.length; i++) {
-      const entry = items[i].webkitGetAsEntry();
+      const entry = items[i]?.webkitGetAsEntry();
       if (entry) topEntries.push(entry);
     }
 
@@ -389,7 +387,6 @@ function UploadPage() {
   /* ---- Upload ---- */
   const uploadAll = async () => {
     if (groups.length === 0) return;
-    abortRef.current = false;
     setStatus("uploading");
     setUploadProgress({ done: 0, failed: 0, total: totalFileCount });
 
@@ -400,11 +397,8 @@ function UploadPage() {
     let globalDone = 0;
     let globalFailed = 0;
 
-    for (let gi = 0; gi < groups.length; gi++) {
-      const group = groups[gi];
+    for (const group of groups) {
       if (group.status !== "pending") continue;
-      if (abortRef.current) break;
-
       // Mark group as uploading
       setGroups((prev) => prev.map((g) => (g.id === group.id ? { ...g, status: "uploading" } : g)));
 
@@ -413,8 +407,6 @@ function UploadPage() {
       const BATCH_SIZE = 10; // files per request
 
       for (let fi = 0; fi < group.files.length; fi += BATCH_SIZE) {
-        if (abortRef.current) break;
-
         const batch = group.files.slice(fi, fi + BATCH_SIZE);
         const formData = new FormData();
         for (const entry of batch) {

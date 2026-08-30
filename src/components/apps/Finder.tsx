@@ -88,8 +88,14 @@ const loadPersistedTabs = (windowId?: string): { tabs: TabState[]; activeTabId: 
   try {
     const stored = localStorage.getItem(`${TABS_STORAGE_KEY}-${windowId}`);
     if (!stored) return null;
-    const parsed = JSON.parse(stored) as { tabs: SerializedTabState[]; activeTabId: string };
-    if (!parsed.tabs?.length) return null;
+    // localStorage 的內容不受我們控制（使用者改得到，舊版格式也可能還在），
+    // 所以每個欄位都當成「可能沒有」—— 之前宣告成必填，等於把下面那行 guard
+    // 標示成多餘的，但它其實是唯一擋住壞資料的東西。
+    const parsed = JSON.parse(stored) as Partial<{
+      tabs: SerializedTabState[];
+      activeTabId: string;
+    }>;
+    if (!parsed.tabs?.length || typeof parsed.activeTabId !== "string") return null;
     // Restore tabs with empty selectedFiles (Set is not serializable)
     const tabs: TabState[] = parsed.tabs.map((t) => ({
       ...t,
@@ -197,7 +203,7 @@ export const Finder = ({ windowId }: FinderProps) => {
     // If we're closing the active tab, switch to adjacent tab
     if (tabId === activeTabId) {
       const newIndex = Math.min(tabIndex, newTabs.length - 1);
-      setActiveTabId(newTabs[newIndex].id);
+      setActiveTabId(newTabs[newIndex]?.id ?? "");
     }
   };
 
@@ -546,11 +552,17 @@ export const Finder = ({ windowId }: FinderProps) => {
       // Only handle on mousedown for actual navigation
       if (e.type === "mousedown") {
         if (e.button === 3 && historyIndex > 0) {
-          setHistoryIndex(historyIndex - 1);
-          setCurrentPath(history[historyIndex - 1]);
+          const target = history[historyIndex - 1];
+          if (target !== undefined) {
+            setHistoryIndex(historyIndex - 1);
+            setCurrentPath(target);
+          }
         } else if (e.button === 4 && historyIndex < history.length - 1) {
-          setHistoryIndex(historyIndex + 1);
-          setCurrentPath(history[historyIndex + 1]);
+          const target = history[historyIndex + 1];
+          if (target !== undefined) {
+            setHistoryIndex(historyIndex + 1);
+            setCurrentPath(target);
+          }
         }
       }
     };
@@ -582,16 +594,18 @@ export const Finder = ({ windowId }: FinderProps) => {
   };
 
   const handleBack = () => {
-    if (historyIndex > 0) {
+    const target = history[historyIndex - 1];
+    if (historyIndex > 0 && target !== undefined) {
       setHistoryIndex(historyIndex - 1);
-      setCurrentPath(history[historyIndex - 1]);
+      setCurrentPath(target);
     }
   };
 
   const handleForward = () => {
-    if (historyIndex < history.length - 1) {
+    const target = history[historyIndex + 1];
+    if (historyIndex < history.length - 1 && target !== undefined) {
       setHistoryIndex(historyIndex + 1);
-      setCurrentPath(history[historyIndex + 1]);
+      setCurrentPath(target);
     }
   };
 
@@ -607,7 +621,8 @@ export const Finder = ({ windowId }: FinderProps) => {
       const end = Math.max(lastClickedIndexRef.current, fileIndex);
       const newSelected = new Set(selectedFiles); // 保留既有選取（配合 Ctrl+Shift 使用）
       for (let i = start; i <= end; i++) {
-        newSelected.add(currentFiles[i].name);
+        const f = currentFiles[i];
+        if (f) newSelected.add(f.name);
       }
       setSelectedFiles(newSelected);
       // 不更新 lastClickedIndex，允許連續 Shift+Click 延伸範圍
@@ -770,7 +785,7 @@ export const Finder = ({ windowId }: FinderProps) => {
     if (e.dataTransfer.types.includes(MOVE_MIME)) return;
 
     const items = e.dataTransfer.items;
-    if (!items || items.length === 0) return;
+    if (items.length === 0) return;
 
     // Helper to read all files from a directory entry recursively
     const readEntriesRecursively = async (
@@ -819,7 +834,7 @@ export const Finder = ({ windowId }: FinderProps) => {
       // 其餘回傳 null（這就是「拖多檔只上傳第一個、要一張一張傳」的根因）。
       const droppedEntries: FileSystemEntry[] = [];
       for (let i = 0; i < items.length; i++) {
-        const entry = items[i].webkitGetAsEntry?.();
+        const entry = items[i]?.webkitGetAsEntry();
         if (entry) droppedEntries.push(entry);
       }
 
@@ -841,7 +856,7 @@ export const Finder = ({ windowId }: FinderProps) => {
             // Add all parent directories
             let dirPath = "";
             for (let j = 0; j < parts.length - 1; j++) {
-              dirPath = dirPath ? `${dirPath}/${parts[j]}` : parts[j];
+              dirPath = dirPath ? `${dirPath}/${parts[j]}` : (parts[j] ?? "");
               dirsToCreate.add(dirPath);
             }
           }

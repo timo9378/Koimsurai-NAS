@@ -261,24 +261,28 @@ export const Dock = () => {
 
     let isInDockArea = false;
 
-    if (dockPosition === "bottom") {
-      isInDockArea =
-        e.clientY >= dockRect.top - buffer &&
-        e.clientY <= window.innerHeight &&
-        e.clientX >= dockRect.left &&
-        e.clientX <= dockRect.right;
-    } else if (dockPosition === "left") {
-      isInDockArea =
-        e.clientX >= 0 &&
-        e.clientX <= dockRect.right + buffer &&
-        e.clientY >= dockRect.top &&
-        e.clientY <= dockRect.bottom;
-    } else if (dockPosition === "right") {
-      isInDockArea =
-        e.clientX >= dockRect.left - buffer &&
-        e.clientX <= window.innerWidth &&
-        e.clientY >= dockRect.top &&
-        e.clientY <= dockRect.bottom;
+    switch (dockPosition) {
+      case "bottom":
+        isInDockArea =
+          e.clientY >= dockRect.top - buffer &&
+          e.clientY <= window.innerHeight &&
+          e.clientX >= dockRect.left &&
+          e.clientX <= dockRect.right;
+        break;
+      case "left":
+        isInDockArea =
+          e.clientX >= 0 &&
+          e.clientX <= dockRect.right + buffer &&
+          e.clientY >= dockRect.top &&
+          e.clientY <= dockRect.bottom;
+        break;
+      case "right":
+        isInDockArea =
+          e.clientX >= dockRect.left - buffer &&
+          e.clientX <= window.innerWidth &&
+          e.clientY >= dockRect.top &&
+          e.clientY <= dockRect.bottom;
+        break;
     }
 
     if (!isInDockArea && isDockHovered) {
@@ -390,12 +394,16 @@ export const Dock = () => {
           if (!rect) return;
 
           let shouldHide = false;
-          if (dockPosition === "bottom") {
-            shouldHide = e.clientY > rect.bottom;
-          } else if (dockPosition === "left") {
-            shouldHide = e.clientX > rect.right;
-          } else if (dockPosition === "right") {
-            shouldHide = e.clientX < rect.left;
+          switch (dockPosition) {
+            case "bottom":
+              shouldHide = e.clientY > rect.bottom;
+              break;
+            case "left":
+              shouldHide = e.clientX > rect.right;
+              break;
+            case "right":
+              shouldHide = e.clientX < rect.left;
+              break;
           }
 
           if (shouldHide) {

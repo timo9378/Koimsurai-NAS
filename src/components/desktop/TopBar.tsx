@@ -51,11 +51,9 @@ const ControlCenter = () => {
 
   // Calculate total disk usage from disks array
   const totalDiskUsed =
-    systemStatus?.disks?.reduce(
-      (acc, disk) => acc + (disk.total_space - disk.available_space),
-      0,
-    ) || 0;
-  const totalDiskSize = systemStatus?.disks?.reduce((acc, disk) => acc + disk.total_space, 0) || 0;
+    systemStatus?.disks.reduce((acc, disk) => acc + (disk.total_space - disk.available_space), 0) ||
+    0;
+  const totalDiskSize = systemStatus?.disks.reduce((acc, disk) => acc + disk.total_space, 0) || 0;
   const diskUsagePercent =
     totalDiskSize > 0 ? Math.round((totalDiskUsed / totalDiskSize) * 100) : 0;
 

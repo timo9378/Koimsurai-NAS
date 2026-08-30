@@ -45,7 +45,7 @@ export const ContainerTerminal = ({ containerId }: ContainerTerminalProps) => {
     // Assuming the backend supports this endpoint. If not, it will fail gracefully.
     const wsUrl = `${protocol}//${host}/api/docker/containers/${containerId}/exec`;
 
-    let socket: WebSocket;
+    let socket: WebSocket | undefined;
 
     try {
       socket = new WebSocket(wsUrl);

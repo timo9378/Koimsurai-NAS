@@ -279,7 +279,7 @@ const FileInfoSheet = ({ file, onClose }: { file: FileInfo | null; onClose: () =
                 {file.path}
               </span>
             </div>
-            {file.tags?.length > 0 && (
+            {file.tags.length > 0 && (
               <div className="flex justify-between items-start">
                 <span className="text-gray-500">Tags</span>
                 <div className="flex gap-1 flex-wrap justify-end">
@@ -412,7 +412,7 @@ const MobileMonitor = () => {
       </div>
 
       {/* Disks */}
-      {sys.disks?.map((d) => {
+      {sys.disks.map((d) => {
         const usedPct = d.total_space
           ? ((d.total_space - d.available_space) / d.total_space) * 100
           : 0;
@@ -519,6 +519,7 @@ export const MobileLayout = () => {
         try {
           const result = await createShare.mutateAsync({ file_path: fullPath });
           const url = `${window.location.origin}/s/${result.id}`;
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- lib.dom 宣告 navigator.share 必定存在，但桌面 Firefox 與非安全來源沒有它
           if (navigator.share) {
             await navigator.share({ title: file.name, url });
           } else {

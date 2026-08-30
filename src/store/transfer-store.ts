@@ -122,7 +122,7 @@ export const useTransferStore = create<TransferStore>((set) => ({
     set((state) => {
       const newTasks = { ...state.tasks };
       Object.keys(newTasks).forEach((key) => {
-        if (newTasks[key].status === "completed") {
+        if (newTasks[key]?.status === "completed") {
           delete newTasks[key];
         }
       });

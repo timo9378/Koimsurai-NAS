@@ -177,9 +177,9 @@ export const DesktopIcons = () => {
 
       if (confirm(`確定要刪除選取的 ${selectedFiles.size} 個項目嗎？`)) {
         try {
-          if (selectedFiles.size === 1) {
-            const path = Array.from(selectedFiles)[0];
-            await deleteFile.mutateAsync(path);
+          const [only] = Array.from(selectedFiles);
+          if (selectedFiles.size === 1 && only !== undefined) {
+            await deleteFile.mutateAsync(only);
           } else {
             await batchDelete.mutateAsync(Array.from(selectedFiles));
           }

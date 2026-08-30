@@ -162,7 +162,7 @@ const StorageSection = () => {
         <p className="text-sm text-gray-500 dark:text-zinc-400 mt-1">檢視磁碟使用狀況</p>
       </div>
 
-      {systemStatus?.disks?.map((disk: DiskInfo, i: number) => {
+      {systemStatus?.disks.map((disk: DiskInfo, i: number) => {
         const usedPercent =
           disk.total_space > 0
             ? ((disk.total_space - disk.available_space) / disk.total_space) * 100
@@ -388,7 +388,7 @@ const SecuritySection = () => {
             </div>
             {enabled && (
               <div className="text-xs text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">
-                還剩 {status?.backup_codes_remaining ?? 0} 組 backup codes
+                還剩 {status.backup_codes_remaining ?? 0} 組 backup codes
               </div>
             )}
           </div>

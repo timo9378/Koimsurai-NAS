@@ -1,7 +1,10 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+# ⚠️ 不要寫成 `/node_modules` —— 開頭的斜線把它釘在 repo 根，子目錄的
+#    node_modules（例如誤在 backend/ 執行 pnpm add 產生的）就**不會**被忽略，
+#    然後被 commit 進去。這裡實際發生過一次。
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*

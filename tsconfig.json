@@ -24,7 +24,17 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    // arr[i] / obj[key] 的型別加上 `| undefined`。
+    //
+    // 這條不是潔癖：`strict` 並不會擋 `history[i - 1]`、`Object.keys(o).forEach(k => o[k].x)`
+    // 這種存取，而它們正是 production 裡「Cannot read properties of undefined」的來源。
+    // 開之前實測 27 處會紅，其中好幾處是真的會炸（Finder 的上一頁/下一頁、
+    // Calculator 的 `parts[0]`、DockerManager 的 `names[0]`）。
+    //
+    // ⚠️ 這條要在清 `no-unnecessary-condition` **之前**開：開了之後有些 `?.`
+    //    會從「多餘」變成「必要」，順序反過來就是做白工。
+    "noUncheckedIndexedAccess": true
   },
   "include": ["src"]
 }

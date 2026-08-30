@@ -76,7 +76,7 @@ const ContainerCard = ({ container }: { container: ContainerInfo }) => {
           </div>
           <div className="min-w-0 flex-1">
             <h3 className="font-medium text-sm truncate" title={container.names[0]}>
-              {container.names[0].replace(/^\//, "")}
+              {container.names[0]?.replace(/^\//, "")}
             </h3>
             <p
               className="text-xs text-gray-500 dark:text-gray-400 truncate"
@@ -195,7 +195,7 @@ const ContainerListItem = ({ container }: { container: ContainerInfo }) => {
 
         <div className="min-w-0 flex-1">
           <h3 className="font-medium text-sm truncate" title={container.names[0]}>
-            {container.names[0].replace(/^\//, "")}
+            {container.names[0]?.replace(/^\//, "")}
           </h3>
           <p className="text-xs text-gray-500 dark:text-gray-400 truncate" title={container.image}>
             {container.image}

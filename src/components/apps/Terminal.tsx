@@ -65,7 +65,7 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
       setTabs(newTabs);
 
       if (activeTabId === tabId && newTabs.length > 0) {
-        setActiveTabId(newTabs[newTabs.length - 1].id);
+        setActiveTabId(newTabs.at(-1)?.id ?? "");
       }
     },
     [tabs, activeTabId],
@@ -259,7 +259,7 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
   useEffect(() => {
     const handleResize = () => {
       const activeTab = tabs.find((t) => t.id === activeTabId);
-      if (activeTab?.fitAddon && activeTab?.terminal) {
+      if (activeTab?.fitAddon && activeTab.terminal) {
         try {
           activeTab.fitAddon.fit();
           // Send new dimensions to server if connected

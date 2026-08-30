@@ -541,24 +541,25 @@ export const WindowContainer = () => {
         const screenHeight = window.innerHeight;
 
         // 統一使用與預覽一致的邊距
-        if (previewState === "maximize") {
-          const bounds = {
-            position: { x: 24, y: 48 },
-            size: { width: screenWidth - 48, height: screenHeight - 96 },
-          };
-          maximizeWindow(windowId, bounds);
-        } else if (previewState === "left") {
-          const bounds = {
-            position: { x: 12, y: 48 },
-            size: { width: screenWidth / 2 - 24, height: screenHeight - 96 },
-          };
-          snapWindow(windowId, "left", bounds);
-        } else if (previewState === "right") {
-          const bounds = {
-            position: { x: screenWidth / 2 + 12, y: 48 },
-            size: { width: screenWidth / 2 - 24, height: screenHeight - 96 },
-          };
-          snapWindow(windowId, "right", bounds);
+        switch (previewState) {
+          case "maximize":
+            maximizeWindow(windowId, {
+              position: { x: 24, y: 48 },
+              size: { width: screenWidth - 48, height: screenHeight - 96 },
+            });
+            break;
+          case "left":
+            snapWindow(windowId, "left", {
+              position: { x: 12, y: 48 },
+              size: { width: screenWidth / 2 - 24, height: screenHeight - 96 },
+            });
+            break;
+          case "right":
+            snapWindow(windowId, "right", {
+              position: { x: screenWidth / 2 + 12, y: 48 },
+              size: { width: screenWidth / 2 - 24, height: screenHeight - 96 },
+            });
+            break;
         }
       }
       setPreviewState("none");

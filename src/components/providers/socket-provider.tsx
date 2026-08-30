@@ -37,8 +37,8 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     const host = window.location.hostname === "localhost" ? "localhost:3000" : window.location.host;
     const wsUrl = `${protocol}//${host}/api/ws`;
 
-    let ws: WebSocket;
-    let reconnectTimer: NodeJS.Timeout;
+    let ws: WebSocket | undefined;
+    let reconnectTimer: NodeJS.Timeout | undefined;
 
     const connect = () => {
       // Don't connect if we are on the login page
@@ -46,15 +46,19 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         return;
       }
 
-      ws = new WebSocket(wsUrl);
+      // ⚠️ handler 裡一律用這個 `socket`，不要用外層的 `ws`。
+      // 重連後 `ws` 指向**新的**連線，而舊連線的 onerror 仍會執行 —— 那時
+      // `ws.close()` 關掉的是剛建立的那條，症狀是「連上又立刻斷、無限重連」。
+      const socket = new WebSocket(wsUrl);
+      ws = socket;
 
-      ws.onopen = () => {
+      socket.onopen = () => {
         console.log("WebSocket connected");
         setIsConnected(true);
-        setSocket(ws);
+        setSocket(socket);
       };
 
-      ws.onmessage = (event) => {
+      socket.onmessage = (event) => {
         try {
           const message: WsServerMessage = JSON.parse(event.data);
 
@@ -107,7 +111,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         }
       };
 
-      ws.onclose = () => {
+      socket.onclose = () => {
         console.log("WebSocket disconnected");
         setIsConnected(false);
         setSocket(null);
@@ -115,12 +119,12 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         reconnectTimer = setTimeout(connect, 3000);
       };
 
-      ws.onerror = (error) => {
+      socket.onerror = (error) => {
         // Only log error if not on login page (to avoid noise when auth fails)
         if (!window.location.pathname.startsWith("/login")) {
           console.error("WebSocket error:", error);
         }
-        ws.close();
+        socket.close();
       };
     };
 

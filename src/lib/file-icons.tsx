@@ -253,8 +253,9 @@ export function getFileIconConfig(
     }
     // 主類型匹配（如 image/*, video/* 等）
     const mainType = mimeType.split("/")[0];
-    if (mimeTypeIconMap[mainType]) {
-      return mimeTypeIconMap[mainType];
+    const byMainType = mainType ? mimeTypeIconMap[mainType] : undefined;
+    if (byMainType) {
+      return byMainType;
     }
   }
 

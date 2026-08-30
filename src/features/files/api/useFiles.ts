@@ -39,8 +39,8 @@ export const useFiles = ({
       const backendSortBy = sortBy === "modified" ? "date" : sortBy;
 
       const params = new URLSearchParams();
-      if (backendSortBy) params.append("sort_by", backendSortBy);
-      if (order) params.append("order", order);
+      params.append("sort_by", backendSortBy);
+      params.append("order", order);
       if (page) params.append("page", page.toString());
       if (limit) params.append("limit", limit.toString());
       if (search?.trim()) params.append("search", search.trim());

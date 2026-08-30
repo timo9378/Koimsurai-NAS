@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLogin, useRegister, useTwoFactorLogin } from "@/features/auth/api/useAuth";
 import { cn } from "@/lib/utils";
+import { getApiErrorMessage, getApiErrorStatus } from "@/lib/errors";
 
 type Step = "credentials" | "two_factor";
 
@@ -77,7 +78,7 @@ export function LoginScreen() {
         // 要讓它生效需要後端補欄位並據以調整 cookie/JWT 的有效期。
         const res = await loginMutation.mutateAsync({ username, password });
         // 後端回 requires_2fa = true 時需要第二階段
-        if (res && typeof res === "object" && "requires_2fa" in res && res.requires_2fa) {
+        if ("requires_2fa" in res) {
           setTempToken(res.temp_token);
           setStep("two_factor");
           setPassword(""); // 清掉原密碼，避免殘留
@@ -98,12 +99,7 @@ export function LoginScreen() {
       window.location.href = "/";
     } catch (err: unknown) {
       console.error("Auth error:", err);
-      if (err && typeof err === "object" && "response" in err) {
-        const axiosError = err as { response: { data: { message: string } } };
-        setError(axiosError.response?.data?.message || "Authentication failed");
-      } else {
-        setError("Authentication failed");
-      }
+      setError(getApiErrorMessage(err, "Authentication failed"));
     }
   };
 
@@ -120,23 +116,16 @@ export function LoginScreen() {
       window.location.href = "/";
     } catch (err: unknown) {
       console.error("2FA error:", err);
-      if (err && typeof err === "object" && "response" in err) {
-        const axiosError = err as { response: { data: { message: string }; status?: number } };
-        // temp_token 過期會回 401，需要回到第一階段重 login
-        if (
-          axiosError.response?.status === 401 &&
-          /temp token|expired/i.test(axiosError.response?.data?.message || "")
-        ) {
-          setError("Session expired. Please log in again.");
-          setStep("credentials");
-          setTempToken("");
-          setTwoFactorCode("");
-          return;
-        }
-        setError(axiosError.response?.data?.message || "Invalid code");
-      } else {
-        setError("Invalid code");
+      // temp_token 過期會回 401，需要回到第一階段重 login
+      const message = getApiErrorMessage(err, "Invalid code");
+      if (getApiErrorStatus(err) === 401 && /temp token|expired/i.test(message)) {
+        setError("Session expired. Please log in again.");
+        setStep("credentials");
+        setTempToken("");
+        setTwoFactorCode("");
+        return;
       }
+      setError(message);
     }
   };
 

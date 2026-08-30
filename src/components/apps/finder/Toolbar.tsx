@@ -58,7 +58,7 @@ const BreadcrumbItem = ({
     setIsDropTarget(false);
     try {
       const names = JSON.parse(e.dataTransfer.getData(MOVE_MIME)) as string[];
-      if (names.length > 0) onMoveToPath?.(names, path);
+      if (names.length > 0) onMoveToPath(names, path);
     } catch {
       // ignore malformed payload
     }

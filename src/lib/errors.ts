@@ -25,7 +25,9 @@ export function getApiErrorStatus(err: unknown): number | undefined {
 export function getApiErrorMessage(err: unknown, fallback = "操作失敗"): string {
   if (isAxiosError<ApiErrorBody>(err)) {
     const body = err.response?.data;
-    return body?.error ?? body?.message ?? err.message ?? fallback;
+    // `err.message` 是 axios 一定會給的字串（"Request failed with status code 500"
+    // 這種），只有空字串才需要退回 fallback。
+    return body?.error ?? body?.message ?? (err.message === "" ? fallback : err.message);
   }
   if (err instanceof Error) return err.message;
   return fallback;

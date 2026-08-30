@@ -85,7 +85,7 @@ export const Dashboard = () => {
 
       const timer = setTimeout(() => {
         setHistory((prev) => {
-          if (prev.length > 0 && prev[prev.length - 1].time === timeStr) {
+          if (prev.at(-1)?.time === timeStr) {
             return prev;
           }
 
@@ -138,11 +138,9 @@ export const Dashboard = () => {
       ? (systemStatus.used_swap / systemStatus.total_swap) * 100
       : 0;
   const totalDiskUsed =
-    systemStatus?.disks?.reduce(
-      (acc, disk) => acc + (disk.total_space - disk.available_space),
-      0,
-    ) || 0;
-  const totalDiskSize = systemStatus?.disks?.reduce((acc, disk) => acc + disk.total_space, 0) || 0;
+    systemStatus?.disks.reduce((acc, disk) => acc + (disk.total_space - disk.available_space), 0) ||
+    0;
+  const totalDiskSize = systemStatus?.disks.reduce((acc, disk) => acc + disk.total_space, 0) || 0;
   const diskPercent = totalDiskSize > 0 ? (totalDiskUsed / totalDiskSize) * 100 : 0;
 
   const renderOverviewTab = () => {
@@ -402,12 +400,12 @@ export const Dashboard = () => {
                 </span>
               </div>
               <span className="text-xs text-gray-500 dark:text-zinc-400">
-                {systemStatus?.disks?.length || 0} disks
+                {systemStatus?.disks.length || 0} disks
               </span>
             </div>
 
             <div className="flex-1 overflow-auto custom-scrollbar space-y-3">
-              {systemStatus?.disks?.map((disk, i) => {
+              {systemStatus?.disks.map((disk, i) => {
                 const used = disk.total_space - disk.available_space;
                 const percent = (used / disk.total_space) * 100;
                 const display = getDiskDisplayName(disk);
@@ -777,7 +775,7 @@ export const Dashboard = () => {
         <div className="text-lg font-semibold text-gray-900 dark:text-white">Storage Devices</div>
       </div>
       <div className="flex-1 overflow-auto custom-scrollbar space-y-4">
-        {systemStatus?.disks?.map((disk, i) => {
+        {systemStatus?.disks.map((disk, i) => {
           const percentage = ((disk.total_space - disk.available_space) / disk.total_space) * 100;
           const display = getDiskDisplayName(disk);
           return (
