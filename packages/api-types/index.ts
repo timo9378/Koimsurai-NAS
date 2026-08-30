@@ -136,8 +136,8 @@ export type DiskInfo = {
 export type EmptyResponse = Record<string, never>;
 
 /**
- *  我的最愛檔案資訊（包含 starred_at 時間戳）
- *  Favorite file info with starred_at timestamp
+ *  我的最愛檔案資訊（包含 `starred_at` 時間戳）
+ *  Favorite file info with `starred_at` timestamp
  */
 export type FavoriteFileInfo = {
 	name: string,

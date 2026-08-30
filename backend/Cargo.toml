@@ -6,7 +6,6 @@ edition = "2021"
 [dependencies]
 axum = { version = "0.7", features = ["multipart", "ws"] }
 tokio = { version = "1.0", features = ["full"] }
-tokio-stream = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tower-http = { version = "0.5", features = ["fs", "cors", "trace", "limit", "util"] }
@@ -32,7 +31,6 @@ image = "0.25.9"
 sysinfo = "0.33.0"
 uuid = { version = "1.18.1", features = ["v4", "serde"] }
 dav-server = { version = "0.8.0", features = ["localfs"] }
-headers = "0.4.1"
 notify = "8.2.0"
 walkdir = "2.5.0"
 exif = { package = "kamadak-exif", version = "0.6.1" }
@@ -46,7 +44,6 @@ zip = "2"
 
 # 2FA / TOTP（RFC 6238）
 totp-rs = { version = "5.6", features = ["qr", "gen_secret"] }
-base32 = "0.5"
 
 # AI/ML 依賴 (CLIP 模型推理)
 candle-core = { version = "0.8", optional = true }
@@ -66,8 +63,6 @@ cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
 
 [dev-dependencies]
 reqwest = { version = "0.12", features = ["json", "cookies"] }
-http-body-util = "0.1"
-hyper = { version = "1.0", features = ["full"] }
 tempfile = "3.10"
 proptest = "1.9.0"
 

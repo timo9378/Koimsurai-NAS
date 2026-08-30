@@ -1,0 +1,19 @@
+# typos 掃**整個 repo**（含 .md 與 workflow 檔），所以一定要在 repo 根跑 ——
+# 在 backend/ 底下跑會漏掉根目錄的文件與 CI 設定。
+
+[files]
+# 產生檔與二進位資產：SVG 裡的隨機 filter id（ba82bf59d5…）會被判成錯字，
+# 而那是繪圖工具產生的，不是人寫的文字。
+extend-exclude = [
+  "public/**",
+  "dist/**",
+  "packages/*/index.ts",
+  "src/routeTree.gen.ts",
+  "pnpm-lock.yaml",
+  "Cargo.lock",
+]
+
+[default.extend-words]
+# candle 的上游 API 名稱：VarBuilder::from_mmaped_safetensors。
+# 不是我們的錯字，改不了也不該改。
+mmaped = "mmaped"

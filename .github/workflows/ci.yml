@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# 最小權限：所有 job 只需讀 repo（zizmor excessive-permissions）。
+permissions:
+  contents: read
+
+# 同分支/PR 有新 push 就取消進行中的舊 run，省 runner。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# action 一律釘 commit SHA：tag 可被移動，上游 repo 被入侵即等於在 CI 執行任意程式碼
+# （zizmor unpinned-uses）。checkout 一律 persist-credentials: false —— 預設會把
+# git 憑證留在工作區（zizmor artipacked）。
+
+jobs:
+  frontend:
+    name: Frontend · tsc + oxfmt + oxlint + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # tsconfig 開著 noUnusedLocals / noUnusedParameters，死碼在這裡就會擋下。
+      - name: tsc --noEmit
+        run: pnpm exec tsc --noEmit
+
+      # JS/TS 的格式。sora-to-ki 沒有這道（那邊 oxlint 管 lint、biome 只管 CSS，
+      # JS/TS 的格式無人看守），這裡補上。
+      # ⚠️ 必須排在 oxlint **之前或之後都可以，但本機 hook 裡要在 oxlint 之後**：
+      #    oxfmt 會把單行的 `if (x) { a; return; }` 展開成多行，而
+      #    `// eslint-disable-next-line` 只蓋下一行，展開後違規就跑到抑制範圍外。
+      - name: oxfmt --check
+        run: pnpm check:format
+
+      # ⚠️ 這道**目前刻意不擋**（continue-on-error）。導入當下的存量是
+      # 594 個（error 401 / warning 193），其中 177 個是 no-unsafe-* 與
+      # no-explicit-any —— 那批不是「清理」而是替 `catch (e: any)` 與未型別化的
+      # props 補型別，半做完比不做更難接手。
+      #
+      # 用 continue-on-error 而不是把規則關掉，理由跟 sora-to-ki 對 biome 的處置
+      # 一樣：藏起來就沒有人會回來清。數字留在 CI 輸出裡，清到 0 之後把這行拿掉
+      # 並補上 `--max-warnings 0`。
+      - name: oxlint（type-aware；存量 594，暫不擋）
+        continue-on-error: true
+        run: pnpm exec oxlint --type-aware --tsconfig=tsconfig.json src
+
+      # --passWithNoTests：測試基礎設施已就緒但還沒寫第一條。
+      # 有了它，加測試不必再動 CI。
+      - name: vitest
+        run: pnpm test
+
+      - name: build
+        run: pnpm exec vite build
+
+  backend:
+    name: Backend · clippy + nextest + specta drift
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@258712b0b7b1ddf8bddc9fc3b0faca682b2736c3 # v2
+        with:
+          prefix-key: v1-rust
+          shared-key: workspace-lint-test
+      - uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2
+        with:
+          tool: cargo-nextest,cargo-audit,cargo-shear,typos-cli
+
+      # ⚠️ 這三道都要在 **repo 根**跑，不是 backend/：
+      #   typos 掃整個 repo（含 .md 與 workflow 檔），在 backend/ 底下會漏掉根目錄的檔案
+      #   cargo shear / audit 認的是 workspace root 的 Cargo.lock
+      - name: cargo-shear（未使用的 Rust 相依）
+        working-directory: .
+        run: cargo shear
+      - name: typos（錯字；白名單見 .typos.toml）
+        working-directory: .
+        run: typos
+
+      # 設定見 backend/rustfmt.toml（max_width=110，不設 use_small_heuristics）
+      - name: cargo fmt --check
+        run: cargo fmt --check
+
+      # lint 設定在根 Cargo.toml 的 [workspace.lints]，backend 用 [lints] workspace = true
+      # 繼承。`unwrap_used` 另外寫在三個 crate root 的 #![deny(...)]（見 src/lib.rs 說明）。
+      - name: clippy (-D warnings)
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      # ⚠️ 一律 nextest 且帶 --no-fail-fast。`cargo test` 在這個專案是壞的：
+      # 測試會寫 process 全域的 env 與 static，同行程平行跑會互相蓋，症狀是
+      # 「隨機幾條紅、每次紅的還不一樣」，看起來完全像測試本身會抖。
+      - name: nextest
+        run: cargo nextest run --locked --no-fail-fast
+
+      # 契約守門：Rust struct 改了卻沒重跑 export_types → 產生的 TS 與 committed 不一致 → 擋下。
+      # 這是型別橋唯一的自動保障，少了它「漏改」不會有任何症狀。
+      - name: specta 型別是否為最新
+        run: |
+          cargo run --locked --bin export_types
+          cd ..
+          git diff --exit-code packages/api-types/index.ts
+
+      - name: cargo audit
+        working-directory: .
+        run: cargo audit
+
+  workflows:
+    name: Workflows · actionlint + zizmor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
+      - uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2
+        with:
+          tool: zizmor
+      - name: zizmor
+        run: zizmor .github/workflows/

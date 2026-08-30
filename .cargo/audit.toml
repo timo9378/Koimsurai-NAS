@@ -1,0 +1,13 @@
+# cargo-audit 設定（CI 的 Rust 依賴漏洞掃描）。
+# ⚠️ 一定要在 repo 根跑：Cargo.lock 在 workspace root，在 backend/ 底下會得到
+#    「Couldn't load Cargo.lock」。
+[advisories]
+ignore = [
+  # RUSTSEC-2023-0071 — rsa 0.9.x「Marvin Attack」時序側通道（medium 5.9）。
+  # 上游至今無修補版本（Solution: No fixed upgrade is available）。
+  # 本專案走不到該路徑：rsa 是 jsonwebtoken 的 transitive 依賴，而這裡一律用
+  # HS256（utils/jwt.rs 的 `Header::default()` 與 `Validation::default()` 都是
+  # HMAC-SHA256，不觸及 RSA 運算）。
+  # 若日後啟用 RS256／任何 RSA 簽章，必須移除這條 ignore 並重新評估。
+  "RUSTSEC-2023-0071",
+]

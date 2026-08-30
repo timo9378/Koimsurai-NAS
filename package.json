@@ -12,6 +12,10 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "lint": "oxlint --type-aware --tsconfig=tsconfig.json src",
+    "format": "oxfmt src",
+    "check:format": "oxfmt --check src",
+    "test": "vitest run --passWithNoTests",
     "export:types": "cargo run --manifest-path backend/Cargo.toml --bin export_types"
   },
   "dependencies": {

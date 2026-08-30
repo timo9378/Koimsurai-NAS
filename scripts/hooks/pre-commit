@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# 極簡 pre-commit：擋自己手滑 —— 只跑 CI 裡最快、最常爆的那幾項。
+#
+# 分工：**門檻在 GitHub Actions**（.github/workflows/ci.yml），這裡只是提早發現。
+# 兩邊的指令刻意一字不差；用不同規則集會養出兩份各自漂移的認知。
+# 慢的（vite build、cargo nextest、cargo audit、specta drift）留在 CI。
+#
+# 條件觸發：動到 ts/tsx 才跑前端那組，動到 backend/*.rs 才跑 clippy。
+#
+# 啟用（不會自動裝，要自己開一次）：
+#     git config core.hooksPath scripts/hooks
+# 跳過單次（WIP commit）：
+#     git commit --no-verify
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+
+# 只看「這次要 commit」的已暫存檔（ACM=新增/改/複製，不含刪除）
+staged="$(git diff --cached --name-only --diff-filter=ACM)"
+[ -z "$staged" ] && exit 0
+
+fail=0
+
+if echo "$staged" | grep -qE '\.(ts|tsx)$'; then
+  echo "▶ tsc --noEmit"
+  pnpm exec tsc --noEmit || fail=1
+
+  # ⚠️ oxfmt 要排在 oxlint **之後**：oxfmt 會把單行的 `if (x) { a; return; }`
+  # 展開成多行，而 `// eslint-disable-next-line` 只蓋下一行 —— 展開之後違規
+  # 就跑到抑制範圍外了。sora-to-ki 導入 oxfmt 那次一口氣撞到 6 處。
+  #
+  # oxlint 目前**不擋**（存量 594，見 ci.yml 的說明），只印出來讓人看見；
+  # 清到 0 之後這裡與 CI 都要補上 --max-warnings 0。
+  echo "▶ oxlint（type-aware，僅提示不擋）"
+  pnpm exec oxlint --type-aware --tsconfig=tsconfig.json src --quiet || true
+
+  echo "▶ oxfmt --check"
+  pnpm exec oxfmt --check src || fail=1
+fi
+
+if echo "$staged" | grep -qE '^backend/.*\.rs$'; then
+  echo "▶ cargo fmt --check（backend）"
+  (cd backend && cargo fmt --check) || fail=1
+  echo "▶ cargo clippy -D warnings（backend）"
+  # 與 CI 同一條。--locked 確保用的是 committed 的 Cargo.lock。
+  (cd backend && cargo clippy --locked --all-targets -- -D warnings) || fail=1
+fi
+
+# 改到會進 API 的 Rust struct 卻沒重跑 export_types，CI 的 drift gate 會擋。
+# 這裡只提醒，不自動重產 —— 產生檔應該由人明確 commit。
+if echo "$staged" | grep -qE '^backend/src/.*\.rs$'; then
+  echo "  ℹ 動到 backend/src：若改了會進 API 的 struct，記得 pnpm export:types 並一起 commit"
+fi
+
+if [ "$fail" -ne 0 ]; then
+  echo
+  echo "✗ pre-commit 沒過 —— 修掉上面的錯再 commit。"
+  echo "  （確定要先存草稿：git commit --no-verify）"
+  exit 1
+fi
+
+echo "✓ pre-commit checks passed"
