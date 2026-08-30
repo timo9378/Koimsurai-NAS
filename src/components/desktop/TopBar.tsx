@@ -51,9 +51,9 @@ const ControlCenter = () => {
 
   // Calculate total disk usage from disks array
   const totalDiskUsed =
-    systemStatus?.disks.reduce((acc, disk) => acc + (disk.total_space - disk.available_space), 0) ||
+    systemStatus?.disks.reduce((acc, disk) => acc + (disk.total_space - disk.available_space), 0) ??
     0;
-  const totalDiskSize = systemStatus?.disks.reduce((acc, disk) => acc + disk.total_space, 0) || 0;
+  const totalDiskSize = systemStatus?.disks.reduce((acc, disk) => acc + disk.total_space, 0) ?? 0;
   const diskUsagePercent =
     totalDiskSize > 0 ? Math.round((totalDiskUsed / totalDiskSize) * 100) : 0;
 
@@ -194,7 +194,7 @@ const getActionInfo = (action: string) => {
     move_file: { icon: Activity, color: "bg-orange-500/20 text-orange-600", label: "Move" },
   };
   return (
-    actionMap[action] || {
+    actionMap[action] ?? {
       icon: Activity,
       color: "bg-blue-500/20 text-blue-600",
       label: action.replace(/_/g, " "),
@@ -231,7 +231,7 @@ const NotificationCenter = () => {
     },
   });
 
-  const notifications = logs?.slice(0, 20) || [];
+  const notifications = logs?.slice(0, 20) ?? [];
 
   const handleClearAll = () => {
     if (notifications.length > 0) {

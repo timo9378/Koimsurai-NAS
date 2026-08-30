@@ -47,7 +47,7 @@ export const useDockerContainers = () => {
         }>("/docker/containers?all=true");
 
         // Transform backend format to frontend format
-        const containers = response.data.data || [];
+        const containers = response.data.data ?? [];
         return containers.map((c) => ({
           id: c.id,
           name: c.names[0]?.replace(/^\//, "") || "unknown",
@@ -82,7 +82,7 @@ export const useContainerStats = (containerId: string, enabled: boolean = true) 
             network_tx: number;
           };
         }>(`/docker/containers/${containerId}/stats`);
-        return response.data.data || null;
+        return response.data.data ?? null;
       } catch {
         return null;
       }
@@ -113,7 +113,7 @@ export const useAllContainerStats = (containers: DockerContainer[]) => {
               network_tx: number;
             };
           }>(`/docker/containers/${container.id}/stats`);
-          return { containerId: container.id, stats: response.data.data || null };
+          return { containerId: container.id, stats: response.data.data ?? null };
         } catch {
           return { containerId: container.id, stats: null };
         }

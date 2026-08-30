@@ -105,7 +105,7 @@ export const DesktopIcons = () => {
       try {
         // Refetch to get fresh data for accurate duplicate detection
         const { data: latestFiles } = await refetch();
-        const currentFiles = latestFiles || [];
+        const currentFiles = latestFiles ?? [];
 
         // Generate a unique name if "新資料夾" exists
         let name = newFolderName;

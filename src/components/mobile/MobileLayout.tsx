@@ -744,9 +744,9 @@ export const MobileLayout = () => {
             {isTrashMode && (
               <div className="px-4 py-2 flex items-center justify-between bg-red-50 dark:bg-red-950/30 border-b border-red-200 dark:border-red-900/30">
                 <span className="text-sm text-red-600 dark:text-red-400">
-                  {trashFiles?.length || 0} items in trash
+                  {trashFiles?.length ?? 0} items in trash
                 </span>
-                {(trashFiles?.length || 0) > 0 && (
+                {(trashFiles?.length ?? 0) > 0 && (
                   <button
                     onClick={() => {
                       emptyTrash.mutate();

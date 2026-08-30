@@ -141,7 +141,9 @@ export const useWindowStore = create(
         const position = history
           ? history.position
           : { x: 100 + windows.length * 20, y: 100 + windows.length * 20 };
-        const size = history ? history.size : defaultSizes[appType] || { width: 800, height: 600 };
+        const size = history
+          ? history.size
+          : (defaultSizes[appType] ?? { width: 800, height: 600 });
 
         const newWindow: WindowState = {
           id,
@@ -240,7 +242,7 @@ export const useWindowStore = create(
                     isMaximized: true,
                     snapState: "maximize",
                     isMinimized: false,
-                    restoreBounds: w.restoreBounds || restoreBounds,
+                    restoreBounds: w.restoreBounds ?? restoreBounds,
                     position: newPos,
                     size: newSize,
                   }
@@ -261,7 +263,7 @@ export const useWindowStore = create(
           // Save current state only if we are not already snapped or maximized
           // (or if we are moving from one snap to another, we might want to keep the ORIGINAL restore bounds)
 
-          const restoreBounds = window.restoreBounds || {
+          const restoreBounds = window.restoreBounds ?? {
             position: window.position,
             size: window.size,
           };
@@ -293,8 +295,8 @@ export const useWindowStore = create(
             if (w.id !== id) return w;
 
             // Use restoreBounds if available, otherwise default
-            const targetPos = w.restoreBounds?.position || w.position;
-            const targetSize = w.restoreBounds?.size || w.size;
+            const targetPos = w.restoreBounds?.position ?? w.position;
+            const targetSize = w.restoreBounds?.size ?? w.size;
 
             return {
               ...w,

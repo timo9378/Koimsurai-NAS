@@ -340,7 +340,7 @@ export const SpotlightSearch = ({
                 <div className="flex flex-col min-w-0">
                   <span className="text-sm font-medium truncate">{item.name}</span>
                   <span className="text-xs text-muted-foreground">
-                    Matched "{item.tag}" ({Math.round((item.confidence || 0) * 100)}%)
+                    Matched "{item.tag}" ({Math.round((item.confidence ?? 0) * 100)}%)
                   </span>
                 </div>
               </Command.Item>

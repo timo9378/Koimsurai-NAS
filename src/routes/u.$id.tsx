@@ -601,15 +601,15 @@ function UploadPage() {
         </CardHeader>
         <CardContent className="p-6 space-y-6">
           {/* Limits Info */}
-          {(uploadInfo?.max_files || uploadInfo?.max_file_size) && (
+          {(uploadInfo?.max_files != null || uploadInfo?.max_file_size != null) && (
             <div className="flex flex-wrap gap-4 text-sm text-zinc-400">
-              {uploadInfo.max_file_size && (
+              {uploadInfo.max_file_size != null && (
                 <div className="flex items-center gap-1.5">
                   <File className="h-4 w-4" />
                   <span>單檔限制: {formatFileSize(uploadInfo.max_file_size)}</span>
                 </div>
               )}
-              {uploadInfo.max_files && (
+              {uploadInfo.max_files != null && (
                 <div className="flex items-center gap-1.5">
                   <Upload className="h-4 w-4" />
                   <span>

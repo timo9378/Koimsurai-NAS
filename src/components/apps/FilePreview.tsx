@@ -28,12 +28,12 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
   const isImage = file.mime_type?.startsWith("image/");
   const isVideo = file.mime_type?.startsWith("video/");
   const isAudio =
-    file.mime_type?.startsWith("audio/") ||
+    file.mime_type?.startsWith("audio/") === true ||
     !!/\.(mp3|wav|flac|aac|ogg|m4a|wma|opus)$/i.exec(file.name);
   const isPdf = file.mime_type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
   const isOffice = !!/\.(docx?|xlsx?|pptx?)$/i.exec(file.name);
   const isText =
-    file.mime_type?.startsWith("text/") ||
+    file.mime_type?.startsWith("text/") === true ||
     !!/\.(txt|json|md|ts|tsx|js|jsx|css|html|xml|yaml|yml|toml|ini|cfg|conf|sh|bash|zsh|py|rb|rs|go|java|c|cpp|h|hpp|sql|log|env|gitignore|dockerignore|editorconfig|prettierrc|eslintrc)$/i.exec(
       file.name,
     );

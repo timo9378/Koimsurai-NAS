@@ -138,25 +138,25 @@ export const Dashboard = () => {
       ? (systemStatus.used_swap / systemStatus.total_swap) * 100
       : 0;
   const totalDiskUsed =
-    systemStatus?.disks.reduce((acc, disk) => acc + (disk.total_space - disk.available_space), 0) ||
+    systemStatus?.disks.reduce((acc, disk) => acc + (disk.total_space - disk.available_space), 0) ??
     0;
-  const totalDiskSize = systemStatus?.disks.reduce((acc, disk) => acc + disk.total_space, 0) || 0;
+  const totalDiskSize = systemStatus?.disks.reduce((acc, disk) => acc + disk.total_space, 0) ?? 0;
   const diskPercent = totalDiskSize > 0 ? (totalDiskUsed / totalDiskSize) * 100 : 0;
 
   const renderOverviewTab = () => {
-    const topProcesses = systemStatus?.top_processes || [];
+    const topProcesses = systemStatus?.top_processes ?? [];
 
     return (
       <div className="flex flex-col h-full overflow-auto custom-scrollbar">
         {/* Alerts Section */}
-        {(memoryPercent > 90 || (systemStatus?.cpu_usage || 0) > 90) && (
+        {(memoryPercent > 90 || (systemStatus?.cpu_usage ?? 0) > 90) && (
           <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-xl p-4 mb-4">
             <div className="flex items-center gap-2 text-red-600 dark:text-red-400 mb-2">
               <AlertTriangle className="w-5 h-5" />
               <span className="font-semibold">Resource Alerts</span>
             </div>
             <div className="space-y-1 text-sm">
-              {(systemStatus?.cpu_usage || 0) > 90 && (
+              {(systemStatus?.cpu_usage ?? 0) > 90 && (
                 <div className="text-red-500 dark:text-red-300">
                   • System CPU usage is critical ({(systemStatus?.cpu_usage ?? 0).toFixed(1)}%)
                 </div>
@@ -189,7 +189,7 @@ export const Dashboard = () => {
             <div className="h-1.5 bg-gray-200 dark:bg-white/10 rounded-full mt-2 overflow-hidden">
               <div
                 className="h-full bg-blue-500 transition-all"
-                style={{ width: `${systemStatus?.cpu_usage || 0}%` }}
+                style={{ width: `${systemStatus?.cpu_usage ?? 0}%` }}
               />
             </div>
           </div>
@@ -245,8 +245,8 @@ export const Dashboard = () => {
               {memoryPercent.toFixed(1)}%
             </div>
             <div className="text-xs text-gray-500 dark:text-zinc-500 mt-1">
-              {formatBytes(systemStatus?.used_memory || 0)} /{" "}
-              {formatBytes(systemStatus?.total_memory || 0)}
+              {formatBytes(systemStatus?.used_memory ?? 0)} /{" "}
+              {formatBytes(systemStatus?.total_memory ?? 0)}
             </div>
             <div className="h-1.5 bg-gray-200 dark:bg-white/10 rounded-full mt-2 overflow-hidden">
               <div
@@ -266,8 +266,8 @@ export const Dashboard = () => {
               {swapPercent.toFixed(1)}%
             </div>
             <div className="text-xs text-gray-500 dark:text-zinc-500 mt-1">
-              {formatBytes(systemStatus?.used_swap || 0)} /{" "}
-              {formatBytes(systemStatus?.total_swap || 0)}
+              {formatBytes(systemStatus?.used_swap ?? 0)} /{" "}
+              {formatBytes(systemStatus?.total_swap ?? 0)}
             </div>
             <div className="h-1.5 bg-gray-200 dark:bg-white/10 rounded-full mt-2 overflow-hidden">
               <div
@@ -400,7 +400,7 @@ export const Dashboard = () => {
                 </span>
               </div>
               <span className="text-xs text-gray-500 dark:text-zinc-400">
-                {systemStatus?.disks.length || 0} disks
+                {systemStatus?.disks.length ?? 0} disks
               </span>
             </div>
 

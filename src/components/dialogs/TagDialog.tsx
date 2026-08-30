@@ -32,7 +32,7 @@ export function TagDialog({ open, onOpenChange, file }: TagDialogProps) {
   const addTag = useAddTag();
   const removeTag = useRemoveTag();
 
-  const existingTags = file?.tags || [];
+  const existingTags = file?.tags ?? [];
 
   const handleAddTag = async (tagName: string, color: string) => {
     if (!file) return;

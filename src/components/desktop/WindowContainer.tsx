@@ -367,7 +367,7 @@ const Window = ({ window }: { window: WindowState }) => {
                 // Best bet: use the restoreBounds that were present on the window object BEFORE we called restoreWindow.
                 // window.restoreBounds is available here!
 
-                const restoredWidth = window.restoreBounds?.size.width || 800; // Fallback
+                const restoredWidth = window.restoreBounds?.size.width ?? 800; // Fallback
                 const newX = moveEvent.clientX - restoredWidth * ratioX;
                 const newY = moveEvent.clientY - 10;
 

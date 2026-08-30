@@ -126,7 +126,7 @@ export const Finder = ({ windowId }: FinderProps) => {
   // Multi-tab state (restored from localStorage if available)
   const [tabs, setTabs] = useState<TabState[]>(() => {
     const persisted = loadPersistedTabs(windowId);
-    return persisted?.tabs || [createTab("/")];
+    return persisted?.tabs ?? [createTab("/")];
   });
   const [activeTabId, setActiveTabId] = useState<string>(() => {
     const persisted = loadPersistedTabs(windowId);
@@ -134,15 +134,15 @@ export const Finder = ({ windowId }: FinderProps) => {
   });
 
   // Get current tab
-  const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
+  const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0];
 
   // Derived state from active tab
   const currentPath = activeTab?.path || "/";
-  const history = activeTab?.history || ["/"];
-  const historyIndex = activeTab?.historyIndex || 0;
-  const isTrashMode = activeTab?.isTrashMode || false;
+  const history = activeTab?.history ?? ["/"];
+  const historyIndex = activeTab?.historyIndex ?? 0;
+  const isTrashMode = activeTab?.isTrashMode ?? false;
   const selectedTag = activeTab?.selectedTag || null;
-  const selectedFiles = activeTab?.selectedFiles || new Set<string>();
+  const selectedFiles = activeTab?.selectedFiles ?? new Set<string>();
   const searchQuery = activeTab?.searchQuery || "";
 
   // Update current tab helper
@@ -974,7 +974,7 @@ export const Finder = ({ windowId }: FinderProps) => {
     try {
       // Refetch to get the latest files list for accurate duplicate checking
       const { data: latestFiles } = await refetch();
-      const currentFilesList = latestFiles || [];
+      const currentFilesList = latestFiles ?? [];
 
       let name = "新資料夾";
       let counter = 1;
