@@ -23,6 +23,7 @@ import { useWindowStore } from "@/store/window-store";
 import { cn } from "@/lib/utils";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import * as Popover from "@radix-ui/react-popover";
+import { activateOnKey } from "@/lib/a11y";
 
 interface DockItemProps {
   mouseX: MotionValue;
@@ -54,8 +55,14 @@ const DockPreview = ({
       className="absolute bottom-full mb-4 left-1/2 -translate-x-1/2 flex gap-2 p-2 bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl shadow-2xl z-50"
     >
       {windows.map((window) => (
+        // 裡面還有一顆關閉按鈕，所以不能是 <button>
         <div
           key={window.id}
+          // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+          role="button"
+          tabIndex={0}
+          aria-label={`切換到 ${window.title}`}
+          onKeyDown={activateOnKey(() => onFocus(window.id))}
           className="group relative w-32 h-24 bg-black/40 rounded-lg border border-white/10 overflow-hidden cursor-pointer hover:bg-black/60 transition-colors"
           onClick={(e) => {
             e.stopPropagation();

@@ -53,6 +53,7 @@ import { FileTypeIcon } from "@/lib/file-icons";
 import { useThumbnail } from "@/features/files/api/useFiles";
 import { toast } from "sonner";
 import { useSystemStatus } from "@/features/system/api/useSystem";
+import { activateOnKey } from "@/lib/a11y";
 
 // ─── Thumbnail component ────────────────────────────────
 const MobileFileThumb = ({ file, currentPath }: { file: FileInfo; currentPath: string }) => {
@@ -184,7 +185,10 @@ const RenameDialog = ({
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 z-[300]" onClick={onClose} />
+      {/* 遮罩對輔助技術是隱形的：關閉這件事由下面的 Esc 與 Cancel 按鈕負責，
+          點遮罩只是滑鼠使用者的便利途徑。 */}
+      {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+      <div aria-hidden="true" className="fixed inset-0 bg-black/50 z-[300]" onClick={onClose} />
       <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[85vw] max-w-sm bg-white dark:bg-zinc-900 rounded-2xl p-5 z-[301] shadow-2xl">
         <h3 className="font-semibold text-base mb-4 text-gray-900 dark:text-white">Rename</h3>
         <input
@@ -196,6 +200,7 @@ const RenameDialog = ({
               onConfirm(value);
               onClose();
             }
+            if (e.key === "Escape") onClose();
           }}
           className="w-full px-3 py-2.5 border border-gray-300 dark:border-zinc-600 rounded-xl bg-gray-50 dark:bg-zinc-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-white"
         />
@@ -494,6 +499,17 @@ export const MobileLayout = () => {
   const pathParts = currentPath === "/" ? [] : currentPath.split("/").filter(Boolean);
 
   // ─── File tap handler ─────────
+  // 「我的最愛」點一下的行為。抽成具名函式是為了讓 onClick 與 onKeyDown
+  // 共用同一段——分開寫的話兩邊很容易走鐘。
+  const openFavorite = (file: FileInfo) => {
+    if (file.is_dir) {
+      setActiveTab("files");
+      navigateTo(file.path.startsWith("/") ? file.path : `/${file.path}`);
+    } else {
+      setActionFile(file);
+    }
+  };
+
   const handleFileTap = (file: FileInfo) => {
     if (file.is_dir) {
       if (isTrashMode) return; // Don't navigate in trash
@@ -776,10 +792,15 @@ export const MobileLayout = () => {
             ) : (
               <div className="divide-y divide-gray-100 dark:divide-zinc-800">
                 {currentFiles.map((file) => (
+                  // 這一列右邊還有一顆「更多」按鈕，不能是 <button>
                   <div
                     key={file.name}
+                    // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+                    role="button"
+                    tabIndex={0}
                     className="flex items-center gap-3 px-4 py-3 active:bg-gray-100 dark:active:bg-zinc-800 transition-colors"
                     onClick={() => handleFileTap(file)}
+                    onKeyDown={activateOnKey(() => handleFileTap(file))}
                   >
                     <MobileFileThumb file={file} currentPath={currentPath} />
                     <div className="flex-1 min-w-0">
@@ -817,17 +838,15 @@ export const MobileLayout = () => {
             ) : (
               <div className="divide-y divide-gray-100 dark:divide-zinc-800">
                 {favorites.map((file) => (
+                  // 同上：右邊還有一顆「更多」按鈕
                   <div
                     key={file.path}
+                    // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+                    role="button"
+                    tabIndex={0}
                     className="flex items-center gap-3 px-4 py-3 active:bg-gray-100 dark:active:bg-zinc-800 transition-colors"
-                    onClick={() => {
-                      if (file.is_dir) {
-                        setActiveTab("files");
-                        navigateTo(file.path.startsWith("/") ? file.path : `/${file.path}`);
-                      } else {
-                        setActionFile(file);
-                      }
-                    }}
+                    onKeyDown={activateOnKey(() => openFavorite(file))}
+                    onClick={() => openFavorite(file)}
                   >
                     <div className="w-10 h-10 flex items-center justify-center">
                       <FileTypeIcon

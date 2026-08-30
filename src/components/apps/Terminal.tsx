@@ -6,6 +6,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { cn } from "@/lib/utils";
 import { RefreshCw, Plus, X, ChevronDown, Copy, ClipboardPaste } from "lucide-react";
+import { activateOnKey } from "@/lib/a11y";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -338,9 +339,14 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
       <div className="h-9 flex items-center bg-[#13132a] border-b border-white/10 shrink-0 px-1">
         <div className="flex-1 flex items-center gap-0.5 overflow-x-auto scrollbar-none">
           {tabs.map((tab) => (
+            // eslint-disable-next-line jsx-a11y/no-noninteractive-element-to-interactive-role
             <div
               key={tab.id}
+              role="tab"
+              tabIndex={0}
+              aria-selected={tab.id === activeTabId}
               onClick={() => setActiveTabId(tab.id)}
+              onKeyDown={activateOnKey(() => setActiveTabId(tab.id))}
               className={cn(
                 "group flex items-center gap-1.5 h-7 px-3 rounded-t-md cursor-pointer transition-all duration-150 min-w-0 max-w-[160px]",
                 tab.id === activeTabId ? "bg-[#1a1a2e]" : "bg-transparent hover:bg-white/5",

@@ -372,6 +372,8 @@ export const FileList = ({
   return (
     <ContextMenu key={contextMenuKey}>
       <ContextMenuTrigger className="flex-1 flex flex-col min-h-0 h-full w-full">
+        {/* 框選用的畫布，不是控制項（拖曳出矩形來選檔案）。鍵盤沒有等價動作。 */}
+        {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
         <div
           ref={containerRef}
           className="flex-1 overflow-hidden relative h-full w-full select-none"
@@ -435,6 +437,16 @@ export const FileList = ({
               itemContent={(_index, file) => (
                 <ContextMenu key={file.name}>
                   <ContextMenuTrigger>
+                    {/* ⚠️ 這裡刻意**不**加 tabIndex / role="option"。
+                        看起來只要補上就好，但這是 react-virtuoso 的虛擬清單：
+                        給每一列 tabIndex={0} 等於在 1000 個檔案的資料夾裡製造
+                        1000 個 Tab 停留點，比現在更難用。正確做法是 roving
+                        tabindex（只有目前那一列可聚焦，方向鍵移動）加上外層的
+                        role="listbox"——那是一個功能，不是一行修正，而且要處理
+                        虛擬清單捲動時焦點跟著跑的問題。
+                        現況：檔案操作（刪除、重新命名、全選…）已經由 Finder 的
+                        全域 keydown 處理，缺的是「用鍵盤把游標移到某一列」。 */}
+                    {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
                     <div
                       data-file-item
                       draggable={!isTrashMode && renamingFile !== file.name}
@@ -606,6 +618,8 @@ export const FileList = ({
                   itemContent={(_index, file) => (
                     <ContextMenu key={file.name}>
                       <ContextMenuTrigger>
+                        {/* 同上：虛擬清單需要 roving tabindex，不是補一個 tabIndex */}
+                        {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
                         <div
                           data-file-item
                           draggable={!isTrashMode && renamingFile !== file.name}

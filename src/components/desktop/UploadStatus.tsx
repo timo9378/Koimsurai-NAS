@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
+import { activateOnKey } from "@/lib/a11y";
 
 export const UploadStatus = () => {
   const { tasks, isExpanded, toggleExpanded, clearCompleted, removeTask, updateTask } =
@@ -34,9 +35,15 @@ export const UploadStatus = () => {
   return (
     <div className="fixed bottom-4 right-4 w-80 bg-white dark:bg-zinc-900 rounded-t-lg shadow-2xl border border-gray-200 dark:border-zinc-800 overflow-hidden z-50 transition-all duration-300 ease-in-out">
       {/* Header */}
+      {/* 裡面還有收合/清除兩顆按鈕，所以不能是 <button>（HTML 不允許巢狀） */}
       <div
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExpanded}
         className="flex items-center justify-between px-4 py-3 bg-zinc-100 dark:bg-zinc-800 cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
         onClick={toggleExpanded}
+        onKeyDown={activateOnKey(toggleExpanded)}
       >
         <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
           {getStatusText()}

@@ -73,8 +73,8 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
         responseType: "text",
         transformResponse: [(data: string) => data], // Prevent automatic JSON parsing
       });
-      // Ensure we return a string
-      return typeof res.data === "string" ? res.data : String(res.data ?? "");
+      // transformResponse 擋掉了 JSON 解析，拿到的就是原始字串
+      return res.data;
     },
     enabled: isText,
     retry: 1,

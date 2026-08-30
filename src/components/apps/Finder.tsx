@@ -40,6 +40,7 @@ import { Toolbar } from "./finder/Toolbar";
 import { FileList } from "./finder/FileList";
 import { ShareDialog, UploadLinkDialog, TagDialog } from "@/components/dialogs";
 import { X, Plus } from "lucide-react";
+import { activateOnKey } from "@/lib/a11y";
 
 type ViewMode = "grid" | "list";
 
@@ -1128,7 +1129,11 @@ export const Finder = ({ windowId }: FinderProps) => {
               return (
                 <div
                   key={tab.id}
+                  role="tab"
+                  tabIndex={0}
+                  aria-selected={isActive}
                   onClick={() => setActiveTabId(tab.id)}
+                  onKeyDown={activateOnKey(() => setActiveTabId(tab.id))}
                   className={cn(
                     "group flex items-center gap-1.5 h-7 px-3 rounded-md cursor-pointer transition-all duration-150 min-w-0 max-w-[180px]",
                     isActive

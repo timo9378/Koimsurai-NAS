@@ -188,6 +188,10 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
   const height = Math.abs(selection.currentY - selection.startY);
 
   return (
+    // 這一層是框選用的畫布，不是控制項——滑鼠拖曳出一個矩形來選取圖示。
+    // 鍵盤使用者是用 Tab 逐一走訪圖示，沒有「框選」這個對應動作，所以這裡
+    // 沒有等價的鍵盤處理可以補。
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       ref={containerRef}
       className="relative w-screen h-screen overflow-hidden bg-cover bg-center transition-all duration-500 select-none"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useId, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -75,6 +75,7 @@ function SharePage() {
 
   const [status, setStatus] = useState<ShareStatus>("loading");
   const [shareInfo, setShareInfo] = useState<ShareInfo | null>(null);
+  const passwordFieldId = useId();
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -332,12 +333,16 @@ function SharePage() {
                   {/* Password Form */}
                   <form onSubmit={handlePasswordSubmit} className="space-y-4">
                     <div className="space-y-2">
-                      <label className="text-white/70 text-sm flex items-center gap-2">
+                      <label
+                        htmlFor={passwordFieldId}
+                        className="text-white/70 text-sm flex items-center gap-2"
+                      >
                         <Shield className="w-4 h-4" />
                         此檔案需要密碼才能存取
                       </label>
                       <div className="relative">
                         <Input
+                          id={passwordFieldId}
                           type={showPassword ? "text" : "password"}
                           placeholder="輸入密碼"
                           value={password}

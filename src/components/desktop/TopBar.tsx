@@ -101,6 +101,7 @@ const ControlCenter = () => {
 
       {/* Docker Containers - Click to open Docker app */}
       <button
+        aria-label="開啟 Docker"
         onClick={() => openWindow("docker", "Docker")}
         className="w-full bg-black/20 dark:bg-white/10 rounded-xl p-4 hover:bg-black/30 dark:hover:bg-white/15 transition-colors text-left"
       >
@@ -441,6 +442,8 @@ export const TopBar = () => {
 
         {/* Show Desktop Button */}
         <button
+          aria-label="顯示桌面"
+          aria-pressed={showDesktop}
           className={cn(
             "p-1 hover:bg-white/10 rounded-md transition-colors",
             showDesktop && "text-blue-400 bg-white/10",
@@ -513,19 +516,23 @@ export const TopBar = () => {
           </div>
         )}
 
-        <div
+        <button
+          type="button"
+          aria-label={theme === "dark" ? "切換到淺色模式" : "切換到深色模式"}
           className="hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer transition-colors"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         >
           {theme === "dark" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-        </div>
+        </button>
 
-        <div
+        <button
+          type="button"
+          aria-label="搜尋（⌘K）"
           className="hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer transition-colors"
           onClick={() => setIsSearchOpen(true)}
         >
           <Search className="w-4 h-4" />
-        </div>
+        </button>
 
         <ControlCenterPopover />
 

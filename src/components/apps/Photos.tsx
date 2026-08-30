@@ -109,8 +109,10 @@ export const Photos = () => {
                 return (
                   <div className="grid grid-cols-6 gap-1 mb-1">
                     {item.items.map((photo) => (
-                      <div
+                      <button
+                        type="button"
                         key={photo.path}
+                        aria-label={`預覽 ${photo.name}`}
                         className="aspect-square relative group cursor-pointer overflow-hidden rounded-md bg-gray-100 dark:bg-white/5"
                         onClick={() => setPreviewFile(photo)}
                       >
@@ -126,7 +128,7 @@ export const Photos = () => {
                           </div>
                         )}
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
-                      </div>
+                      </button>
                     ))}
                     {/* Fill empty slots if row is not full */}
                     {Array.from({ length: 6 - item.items.length }).map((_, i) => (

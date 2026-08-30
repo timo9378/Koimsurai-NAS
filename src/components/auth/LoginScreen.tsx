@@ -353,10 +353,13 @@ export function LoginScreen() {
 
               {isLogin && (
                 <div className="flex items-center justify-between px-1">
-                  <div
-                    className="flex items-center gap-2 group cursor-pointer"
-                    onClick={() => setRemember(!remember)}
-                  >
+                  <label className="flex items-center gap-2 group cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={remember}
+                      onChange={(e) => setRemember(e.target.checked)}
+                      className="sr-only"
+                    />
                     <div
                       className={cn(
                         "w-4 h-4 rounded border border-zinc-600 flex items-center justify-center transition-colors",
@@ -372,7 +375,7 @@ export function LoginScreen() {
                     <span className="text-sm text-zinc-400 group-hover:text-zinc-300 transition-colors select-none">
                       Keep me logged in
                     </span>
-                  </div>
+                  </label>
                   <button
                     type="button"
                     className="text-sm text-zinc-400 hover:text-zinc-200 transition-colors"

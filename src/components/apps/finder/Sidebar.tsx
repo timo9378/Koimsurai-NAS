@@ -16,10 +16,12 @@ interface SidebarItemProps {
 }
 
 const SidebarItem = ({ icon: Icon, label, active = false, onClick, badge }: SidebarItemProps) => (
-  <div
+  <button
+    type="button"
     onClick={onClick}
+    aria-current={active ? "true" : undefined}
     className={cn(
-      "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer text-sm transition-all duration-200",
+      "w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer text-sm transition-all duration-200",
       active
         ? "bg-blue-500 text-white shadow-sm font-medium"
         : "text-gray-600 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10",
@@ -39,7 +41,7 @@ const SidebarItem = ({ icon: Icon, label, active = false, onClick, badge }: Side
         {badge}
       </span>
     )}
-  </div>
+  </button>
 );
 
 interface TagItemProps {
@@ -61,10 +63,12 @@ const TagItem = ({ tag, active, onClick }: TagItemProps) => {
   };
 
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
+      aria-current={active ? "true" : undefined}
       className={cn(
-        "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer text-sm transition-all duration-200",
+        "w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer text-sm transition-all duration-200",
         active
           ? "bg-blue-500 text-white shadow-sm font-medium"
           : "text-gray-600 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10",
@@ -85,7 +89,7 @@ const TagItem = ({ tag, active, onClick }: TagItemProps) => {
       >
         {tag.count}
       </span>
-    </div>
+    </button>
   );
 };
 

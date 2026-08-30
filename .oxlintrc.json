@@ -26,6 +26,15 @@
     "src/components/ui/**"
   ],
   "rules": {
+    // ⚠️ 這條刻意關掉。它擋的是「頁面一載入就把焦點搶走」——那確實會讓螢幕
+    // 閱讀器使用者失去頁面脈絡。但這包所有的 autoFocus 都在**對話框或步驟切換**
+    // 裡（Spotlight、重新命名、標籤、2FA 驗證碼、Settings 的密碼欄），
+    // 而 WAI-ARIA APG 對 modal dialog 的要求正好相反：開啟時**必須**把焦點
+    // 移進去。逐處寫 disable 只會得到六個一模一樣的註解。
+    //
+    // 如果哪天有人在非對話框的地方加 autoFocus，這裡就攔不到——那時再改成
+    // 逐處 disable。
+    "jsx-a11y/no-autofocus": "off",
     "for-direction": "error",
     "no-async-promise-executor": "error",
     "no-case-declarations": "error",

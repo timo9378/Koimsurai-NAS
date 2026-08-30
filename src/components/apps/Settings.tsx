@@ -79,28 +79,30 @@ const AppearanceSection = () => {
       </div>
 
       <div className="space-y-4">
-        <label className="text-sm font-medium text-gray-700 dark:text-zinc-300">主題模式</label>
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { id: "light", label: "淺色", icon: Sun },
-            { id: "dark", label: "深色", icon: Moon },
-            { id: "system", label: "跟隨系統", icon: Monitor },
-          ].map((opt) => (
-            <button
-              key={opt.id}
-              onClick={() => setTheme(opt.id)}
-              className={cn(
-                "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
-                theme === opt.id
-                  ? "border-blue-500 bg-blue-500/10"
-                  : "border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5",
-              )}
-            >
-              <opt.icon className="w-6 h-6" />
-              <span className="text-xs font-medium">{opt.label}</span>
-            </button>
-          ))}
-        </div>
+        <fieldset className="contents">
+          <legend className="text-sm font-medium text-gray-700 dark:text-zinc-300">主題模式</legend>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { id: "light", label: "淺色", icon: Sun },
+              { id: "dark", label: "深色", icon: Moon },
+              { id: "system", label: "跟隨系統", icon: Monitor },
+            ].map((opt) => (
+              <button
+                key={opt.id}
+                onClick={() => setTheme(opt.id)}
+                className={cn(
+                  "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
+                  theme === opt.id
+                    ? "border-blue-500 bg-blue-500/10"
+                    : "border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5",
+                )}
+              >
+                <opt.icon className="w-6 h-6" />
+                <span className="text-xs font-medium">{opt.label}</span>
+              </button>
+            ))}
+          </div>
+        </fieldset>
       </div>
     </div>
   );
@@ -117,28 +119,32 @@ const DockSection = () => {
       </div>
 
       <div className="space-y-4">
-        <label className="text-sm font-medium text-gray-700 dark:text-zinc-300">Dock 位置</label>
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { id: "left" as DockPosition, label: "左側", icon: ArrowLeft },
-            { id: "bottom" as DockPosition, label: "底部", icon: ArrowDown },
-            { id: "right" as DockPosition, label: "右側", icon: ArrowRight },
-          ].map((opt) => (
-            <button
-              key={opt.id}
-              onClick={() => setDockPosition(opt.id)}
-              className={cn(
-                "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
-                dockPosition === opt.id
-                  ? "border-blue-500 bg-blue-500/10"
-                  : "border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5",
-              )}
-            >
-              <opt.icon className="w-6 h-6" />
-              <span className="text-xs font-medium">{opt.label}</span>
-            </button>
-          ))}
-        </div>
+        <fieldset className="contents">
+          <legend className="text-sm font-medium text-gray-700 dark:text-zinc-300">
+            Dock 位置
+          </legend>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { id: "left" as DockPosition, label: "左側", icon: ArrowLeft },
+              { id: "bottom" as DockPosition, label: "底部", icon: ArrowDown },
+              { id: "right" as DockPosition, label: "右側", icon: ArrowRight },
+            ].map((opt) => (
+              <button
+                key={opt.id}
+                onClick={() => setDockPosition(opt.id)}
+                className={cn(
+                  "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
+                  dockPosition === opt.id
+                    ? "border-blue-500 bg-blue-500/10"
+                    : "border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5",
+                )}
+              >
+                <opt.icon className="w-6 h-6" />
+                <span className="text-xs font-medium">{opt.label}</span>
+              </button>
+            ))}
+          </div>
+        </fieldset>
       </div>
     </div>
   );
@@ -388,7 +394,7 @@ const SecuritySection = () => {
             </div>
             {enabled && (
               <div className="text-xs text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">
-                還剩 {status.backup_codes_remaining ?? 0} 組 backup codes
+                還剩 {status.backup_codes_remaining} 組 backup codes
               </div>
             )}
           </div>

@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { FileInfo } from "@/types/api";
 import { FileTypeIcon } from "@/lib/file-icons";
+import { activateOnKey } from "@/lib/a11y";
 
 interface DraggableDesktopIconProps {
   file: FileInfo;
@@ -150,6 +151,16 @@ export const DraggableDesktopIcon = ({
         top: isDragging ? `${dragPosition.y}px` : `${gridY}px`,
         transition: isDragging ? "none" : "all 0.3s ease-out",
       }}
+      // 重新命名時裡面會出現一個 <input>，而 input 不能放在 button 裡
+      // （無效的 HTML，瀏覽器會把 DOM 重組成跟你寫的不一樣）。
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
+      role="button"
+      tabIndex={0}
+      aria-label={file.name}
+      aria-pressed={isSelected}
+      onKeyDown={activateOnKey(() => {
+        if (!isRenaming) onDoubleClick();
+      })}
       onMouseDown={handleMouseDown}
       onClick={(e) => {
         // Only handle click if we didn't drag

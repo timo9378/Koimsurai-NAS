@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   Play,
   Square,
@@ -446,6 +446,7 @@ const PullImageDialog = ({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) => {
+  const pullFormId = useId();
   const [imageName, setImageName] = useState("");
   const [tag, setTag] = useState("latest");
   const pullImage = usePullImage();
@@ -470,10 +471,14 @@ const PullImageDialog = ({
         </DialogHeader>
         <div className="space-y-4 pt-4">
           <div>
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label
+              htmlFor={`${pullFormId}-image`}
+              className="text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
               Image Name
             </label>
             <input
+              id={`${pullFormId}-image`}
               type="text"
               placeholder="e.g. nginx, ubuntu, mysql"
               value={imageName}
@@ -482,8 +487,14 @@ const PullImageDialog = ({
             />
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Tag</label>
+            <label
+              htmlFor={`${pullFormId}-tag`}
+              className="text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              Tag
+            </label>
             <input
+              id={`${pullFormId}-tag`}
               type="text"
               placeholder="latest"
               value={tag}
