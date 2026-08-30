@@ -11,7 +11,7 @@ Next.js 16 → Vite + TanStack Router（純 SPA），收攏後端成 monorepo，
 | 1 · Next → Vite SPA | ✅ `0f638a6` |
 | 2 · 型別橋（specta）| ✅ `5b76798` + `2334724`（發現並修掉 5 處前後端不一致，見 §10）|
 | 3 · 工具鏈落地 | ✅ 後端 clippy/-D warnings + rustfmt 全綠；前端 oxlint/oxfmt/vitest 就位；CI 三個 job 上線 |
-| 4 · 部署（ServeDir + GlitchTip）| ⬜ |
+| 4 · 部署 | 🔶 ServeDir + Dockerfile + compose 已上線；nginx 待切換（需 sudo）；GlitchTip 只做了刪 .map |
 
 **Phase 3 未竟**：oxlint 存量 594（CI 中 `continue-on-error` 不擋），其中 177 個是
 `no-unsafe-*` / `no-explicit-any` —— 那批是替 `catch (e: any)` 與未型別化 props
@@ -474,3 +474,52 @@ nginx `nas-koimsurai` 的 `location /` 由 `13001` 改指 `127.0.0.1:3000`；
 測試釘在 `backend/tests/ws_protocol_tests.rs`：型別由 specta 擔保，但
 `rename_all` / `content` 鍵被改掉時型別檢查抓不到（兩邊產物會同時變，
 看起來依然一致卻與舊客戶端不相容）。實測拿掉 `rename_all` 會讓 3/4 條紅。
+
+---
+
+## 11. Phase 4 部署：已完成與待辦
+
+### 已上線
+
+- `backend/src/lib.rs` 的 `attach_spa`：Rust 同時供應 `/api` 與前端靜態檔
+- `Dockerfile`：三階段（node 建前端 → rust 建後端 → runtime 只留 binary + static/），
+  取代原本前後端各一份
+- `/home/timo9378/Server/docker-compose.yml`：`frontend` 服務移除，只剩 `backend`；
+  build context 改 `./Koimsurai-NAS`、`env_file` 改 `./Koimsurai-NAS/backend/.env`
+- 容器已重建 —— **輪替後的金鑰於此生效**（舊的外洩 `JWT_SECRET` 自此失效）
+
+### ⚠️ 部署時發現並修掉的問題
+
+`create_app` 原本 `await` 完 `initial_scan()` 才綁 port。遷移前這只是「掃描期間
+API 不通」，UI 由獨立的前端容器供應還看得到；SPA 改由後端送之後，變成
+**掃描期間整個站是掛的**。實測這台的 storage 有 320,380 個檔案，重新部署後
+超過 90 秒仍未監聽。改成 `tokio::spawn` 之後是 **4 秒**。
+
+### 待辦：nginx 切換（需要 sudo，助手無法執行）
+
+```bash
+# 1. 備份
+sudo cp -a /etc/nginx/sites-available/nas-koimsurai \
+  /etc/nginx/sites-available/nas-koimsurai.bak-pre-monorepo-$(date +%Y%m%d-%H%M%S)
+
+# 2. location / 從舊的前端容器改指後端（整份設定只有第 96 行一處 13001）
+sudo sed -i 's|proxy_pass http://127.0.0.1:13001;|proxy_pass http://127.0.0.1:3000;|' \
+  /etc/nginx/sites-available/nas-koimsurai
+sudo sed -i 's|# Frontend - proxy to Next.js|# Frontend + API — 單一 Rust binary（SPA 由 ServeDir 送）|' \
+  /etc/nginx/sites-available/nas-koimsurai
+
+# 3. 驗證後套用
+sudo nginx -t && sudo systemctl reload nginx
+
+# 4. 確認 https://nas.koimsurai.com 正常後，移除舊的前端容器
+docker rm -f koimsurai-nas-frontend
+```
+
+`location /api/`（含登入端點的 rate limit）不必動 —— 它本來就指向
+`127.0.0.1:3000`，切換後兩個 location 指的是同一個容器。
+
+### 待辦：GlitchTip
+
+目前只做了「從映像刪掉 `.map`」那半（`Dockerfile` 的 `find dist -name '*.map' -delete`）。
+還沒接：`@sentry/browser` SDK、build 時烙 debug id、sourcemap 上傳、
+`VITE_RELEASE` 帶版本標記。上傳步驟要插在刪 `.map` 之前。
