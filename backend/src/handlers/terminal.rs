@@ -211,10 +211,12 @@ fn get_completions(partial: &str, current_dir: &str, storage_base: &str) -> Vec<
         // 補全檔案/目錄路徑
         let path_part = if partial.ends_with(' ') { "" } else { parts.last().unwrap_or(&"") };
         
-        let (dir_to_search, file_prefix) = if path_part.contains('/') {
-            let last_slash = path_part.rfind('/').unwrap();
-            let dir = &path_part[..=last_slash];
-            let prefix = &path_part[last_slash + 1..];
+        // rsplit_once 一次做完「有沒有 /」與「切在哪」，取代原本
+        // `contains('/')` 之後再 `rfind('/').unwrap()` 的兩段式寫法 ——
+        // 那種寫法的 guard 與 unwrap 分處兩行，日後改動 guard 就會變成 panic。
+        let (dir_to_search, file_prefix) = if let Some((head, prefix)) = path_part.rsplit_once('/') {
+            // 下游需要保留結尾的 '/'（rsplit_once 會把分隔符吃掉）
+            let dir = &path_part[..=head.len()];
             
             // 構建完整路徑
             let full_dir = if dir.starts_with('/') || dir.starts_with("~/") {

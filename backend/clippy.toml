@@ -1,0 +1,8 @@
+# `#![deny(clippy::unwrap_used)]` 寫在 crate root（見 src/lib.rs 上方說明），
+# 但那會連 `src/` 底下的 `#[cfg(test)]` 模組一起管到 —— 而測試裡的 unwrap 是
+# assert 語意，不是「沒想過會不會失敗」。這個旗標讓 clippy 認得那個區別。
+#
+# ⚠️ 它認的是 `#[cfg(test)]` 與 `#[test]`。`tests/` 底下**非 #[test] 的 setup
+# helper** 兩者都不是，所以那邊仍需各自處理。
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

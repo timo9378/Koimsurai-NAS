@@ -1,4 +1,19 @@
 #![allow(non_snake_case)]
+// ⚠️ 這條刻意寫在 crate root 而不是 Cargo.toml 的 `[workspace.lints]`。
+//
+// `[lints]` 是 **package** 層級的，會連 `tests/` 底下的整合測試一起管，而那不是這條
+// 規則的意圖 —— 測試裡 `.unwrap()` 是 assert 語意，壞了就是測試紅，沒有線上影響。
+// 寫在 crate root 就精確地只涵蓋正式碼。
+//
+// 為什麼只擋 unwrap 不擋 expect：
+//   `.unwrap()`   = 「我沒想過這裡會不會失敗」
+//   `.expect(m)`  = 「我斷言它不會失敗，理由是 m」
+// 後者留著當**有文件的**逃生口。導入時正式碼的 25 個 unwrap 這樣分：
+//   · search.rs 的 6 個 `get_field("path").unwrap()` —— 改成建構時就存下 Field，
+//     不是換成 expect，而是讓它編譯期就不可能失敗
+//   · terminal.rs 的 guarded unwrap —— 改用 rsplit_once，guard 與取值合一
+//   · media.rs 的 17 個與 routes 的 1 個 —— 換成帶訊息的 expect
+#![deny(clippy::unwrap_used)]
 
 pub mod db;
 pub mod handlers;

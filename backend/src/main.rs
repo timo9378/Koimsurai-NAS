@@ -1,3 +1,6 @@
+// 見 lib.rs 上方對這條的完整說明（只擋 unwrap、不擋 expect）。
+#![deny(clippy::unwrap_used)]
+
 use std::{env, path::PathBuf};
 use tokio::fs;
 use dotenvy::dotenv;
@@ -33,7 +36,9 @@ async fn main() {
 
     let app = create_app(pool, storage_path).await;
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
+        .await
+        .expect("無法綁定 0.0.0.0:3000（連接埠被佔用或權限不足）");
     tracing::info!("RustNAS Server running on http://0.0.0.0:3000");
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app).await.expect("HTTP server 異常結束");
 }

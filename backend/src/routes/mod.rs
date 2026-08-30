@@ -99,7 +99,12 @@ struct ApiDoc;
 pub async fn create_router(state: AppState) -> Router {
     // Session store (SqliteStore for persistence)
     let session_store = SqliteStore::new(state.pool.clone());
-    session_store.migrate().await.unwrap();
+    // 啟動期的 fail-fast：session 表建不起來就沒有登入可言，讓行程直接退出
+    // 比帶著壞掉的 session store 服務請求好。（同 main.rs 的 expect ×2）
+    session_store
+        .migrate()
+        .await
+        .expect("session store migration failed");
 
     let session_layer = SessionManagerLayer::new(session_store)
         .with_secure(false) // Set to true in production with HTTPS

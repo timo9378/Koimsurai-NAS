@@ -1,6 +1,6 @@
 use tantivy::collector::TopDocs;
 use tantivy::query::QueryParser;
-use tantivy::schema::{Schema, STRING, STORED, TEXT, Term};
+use tantivy::schema::{Field, Schema, STRING, STORED, TEXT, Term};
 use tantivy::{Index, IndexWriter, ReloadPolicy, doc};
 use tantivy::schema::{TantivyDocument, Value};
 use std::path::Path;
@@ -31,7 +31,11 @@ fn get_commit_interval_secs() -> u64 {
 pub struct SearchService {
     index: Index,
     writer: Arc<Mutex<IndexWriter>>,
-    schema: Schema,
+    /// schema 的欄位 handle。⚠️ 建構時抓好，不要在使用處 `get_field("path").unwrap()`
+    /// —— 那是把「欄位必然存在」這件建構時就決定好的事，變成每次呼叫的 panic 風險。
+    path_field: Field,
+    name_field: Field,
+    content_field: Field,
     /// 追蹤待 commit 的文件數量
     pending_count: AtomicUsize,
     /// 上次 commit 的時間
@@ -50,12 +54,13 @@ impl SearchService {
         }
 
         let mut schema_builder = Schema::builder();
-        schema_builder.add_text_field("path", STRING | STORED);
-        schema_builder.add_text_field("content", TEXT);
-        schema_builder.add_text_field("name", TEXT | STORED);
+        // add_text_field 會回傳 Field，直接留住就不必事後用字串查回來。
+        let path_field = schema_builder.add_text_field("path", STRING | STORED);
+        let content_field = schema_builder.add_text_field("content", TEXT);
+        let name_field = schema_builder.add_text_field("name", TEXT | STORED);
         let schema = schema_builder.build();
 
-        let index = Index::open_or_create(tantivy::directory::MmapDirectory::open(&index_path).map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?, schema.clone())
+        let index = Index::open_or_create(tantivy::directory::MmapDirectory::open(&index_path).map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?, schema)
             .map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
 
         // 從環境變數讀取搜尋索引緩衝區大小 (MB)
@@ -79,7 +84,9 @@ impl SearchService {
         Ok(Self {
             index,
             writer: Arc::new(Mutex::new(writer)),
-            schema,
+            path_field,
+            name_field,
+            content_field,
             pending_count: AtomicUsize::new(0),
             last_commit: Arc::new(Mutex::new(Instant::now())),
             batch_size,
@@ -92,9 +99,8 @@ impl SearchService {
     pub fn index_file(&self, path: &str, name: &str, content: &str) -> Result<(), AppError> {
         let mut writer = self.writer.lock().map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
         
-        let path_field = self.schema.get_field("path").unwrap();
-        let name_field = self.schema.get_field("name").unwrap();
-        let content_field = self.schema.get_field("content").unwrap();
+        let (path_field, name_field, content_field) =
+            (self.path_field, self.name_field, self.content_field);
 
         // Remove existing document with same path to avoid duplicates (simple update strategy)
         let term = Term::from_field_text(path_field, path);
@@ -159,9 +165,8 @@ impl SearchService {
 
         let searcher = reader.searcher();
 
-        let path_field = self.schema.get_field("path").unwrap();
-        let name_field = self.schema.get_field("name").unwrap();
-        let content_field = self.schema.get_field("content").unwrap();
+        let (path_field, name_field, content_field) =
+            (self.path_field, self.name_field, self.content_field);
 
         let query_parser = QueryParser::for_index(&self.index, vec![name_field, content_field]);
         let query = query_parser.parse_query(query_str).map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;

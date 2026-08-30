@@ -45,7 +45,7 @@ pub async fn stream_media(
         return Response::builder()
             .status(404)
             .body(Body::from("File not found"))
-            .unwrap();
+            .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數");
     }
 
     if let Some(resolution) = params.resolution {
@@ -62,7 +62,7 @@ pub async fn stream_media(
                 .body(Body::from(format!(
                     "Server is busy with {max_transcodes} concurrent transcodes. Please try again later."
                 )))
-                .unwrap();
+                .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數");
         };
 
         info!("Starting transcode for {} at resolution {}", params.path, resolution);
@@ -88,14 +88,14 @@ pub async fn stream_media(
                 Response::builder()
                     .header("Content-Type", "video/x-matroska")
                     .body(Body::from_stream(stream))
-                    .unwrap()
+                    .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數")
             }
             Err(e) => {
                 // permit 會在這裡被 drop，自動釋放
                 Response::builder()
                     .status(500)
                     .body(Body::from(format!("Failed to start transcoding: {e}")))
-                    .unwrap()
+                    .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數")
             }
         }
     } else {
@@ -106,7 +106,7 @@ pub async fn stream_media(
          Response::builder()
             .status(400)
             .body(Body::from("Resolution required for transcoding. For direct play, use /api/download/{path}"))
-            .unwrap()
+            .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數")
     }
 }
 
@@ -331,7 +331,7 @@ pub async fn hls_status(
             .status(404)
             .header("Content-Type", "application/json")
             .body(Body::from(r#"{"error": "Video file not found"}"#))
-            .unwrap();
+            .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數");
     }
     
     let quality = params.quality.unwrap_or_else(|| "720p".to_string());
@@ -355,8 +355,8 @@ pub async fn hls_status(
         Response::builder()
             .status(200)
             .header("Content-Type", "application/json")
-            .body(Body::from(serde_json::to_string(&response).unwrap()))
-            .unwrap()
+            .body(Body::from(serde_json::to_string(&response).expect("欄位皆為 String/數字，序列化不會失敗")))
+            .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數")
     } else {
         // 觸發 HLS 生成任務
         let job_type = JobType::GenerateHls {
@@ -374,7 +374,7 @@ pub async fn hls_status(
                     .status(500)
                     .header("Content-Type", "application/json")
                     .body(Body::from(r#"{"error": "Failed to queue job"}"#))
-                    .unwrap();
+                    .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數");
             }
         };
         
@@ -390,8 +390,8 @@ pub async fn hls_status(
         Response::builder()
             .status(202)
             .header("Content-Type", "application/json")
-            .body(Body::from(serde_json::to_string(&response).unwrap()))
-            .unwrap()
+            .body(Body::from(serde_json::to_string(&response).expect("欄位皆為 String/數字，序列化不會失敗")))
+            .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數")
     }
 }
 
@@ -427,14 +427,14 @@ pub async fn hls_serve(
         return Response::builder()
             .status(403)
             .body(Body::from("Access denied"))
-            .unwrap();
+            .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數");
     }
     
     if !file_path.exists() {
         return Response::builder()
             .status(404)
             .body(Body::from("HLS file not found"))
-            .unwrap();
+            .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數");
     }
     
     // 讀取檔案
@@ -466,14 +466,14 @@ pub async fn hls_serve(
                 .header(header::CONTENT_TYPE, content_type)
                 .header(header::CACHE_CONTROL, "max-age=31536000") // .ts segments 可以長期快取
                 .body(body)
-                .unwrap()
+                .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數")
         }
         Err(e) => {
             error!("Failed to read HLS file {:?}: {}", file_path, e);
             Response::builder()
                 .status(500)
                 .body(Body::from("Failed to read file"))
-                .unwrap()
+                .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數")
         }
     }
 }
@@ -531,6 +531,6 @@ pub async fn hls_qualities() -> impl IntoResponse {
     Response::builder()
         .status(200)
         .header("Content-Type", "application/json")
-        .body(Body::from(serde_json::to_string(&qualities).unwrap()))
-        .unwrap()
+        .body(Body::from(serde_json::to_string(&qualities).expect("欄位皆為 String/數字，序列化不會失敗")))
+        .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數")
 }
