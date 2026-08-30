@@ -11,12 +11,14 @@ Next.js 16 → Vite + TanStack Router（純 SPA），收攏後端成 monorepo，
 | 1 · Next → Vite SPA | ✅ `0f638a6` |
 | 2 · 型別橋（specta）| ✅ `5b76798` + `2334724`（發現並修掉 5 處前後端不一致，見 §10）|
 | 3 · 工具鏈落地 | ✅ 後端 clippy/-D warnings + rustfmt 全綠；前端 oxlint/oxfmt/vitest 就位；CI 三個 job 上線 |
-| 4 · 部署 | 🔶 ServeDir + Dockerfile + compose 已上線；nginx 待切換（需 sudo）；GlitchTip 只做了刪 .map |
+| 4 · 部署 | ✅ ServeDir + Dockerfile + compose + nginx 切換 + GlitchTip（含 source map 上傳）全數上線 |
+| 5 · 品質基準線 | 🔶 oxlint 存量歸零並改成真的擋；前端測試 76 條；cargo-mutants 接 Actions。覆蓋率門檻／E2E／knip 未接，見 §12 |
 
-**Phase 3 未竟**：oxlint 存量 594（CI 中 `continue-on-error` 不擋），其中 177 個是
-`no-unsafe-*` / `no-explicit-any` —— 那批是替 `catch (e: any)` 與未型別化 props
-補型別的**型別化工程**，不是清理。清到 0 之後把 ci.yml 的 `continue-on-error`
-拿掉並補 `--max-warnings 0`。
+**Phase 3 已補完**：oxlint 存量從 594 清到 0（其中 177 個是 `no-unsafe-*` /
+`no-explicit-any`，那批不是清理而是替 `catch (e: any)` 與未型別化 props 補型別的
+型別化工程）。ci.yml 的 `continue-on-error` 已拿掉並補上 `--max-warnings 0` ——
+後者不能省，因為最會抓到真 bug 的幾條規則（`no-unnecessary-condition`、
+`exhaustive-deps`、`set-state-in-effect`）預設是 warning。
 
 ---
 
@@ -495,31 +497,64 @@ API 不通」，UI 由獨立的前端容器供應還看得到；SPA 改由後端
 **掃描期間整個站是掛的**。實測這台的 storage 有 320,380 個檔案，重新部署後
 超過 90 秒仍未監聽。改成 `tokio::spawn` 之後是 **4 秒**。
 
-### 待辦：nginx 切換（需要 sudo，助手無法執行）
+### nginx 切換（已完成）
+
+`location /` 已從舊的前端容器（127.0.0.1:13001）改指後端 127.0.0.1:3000，
+整份設定裡不再有 13001。舊的 `koimsurai-nas-frontend` 容器已移除。
+
+### GlitchTip（已完成）
+
+`@sentry/browser`（具名解構載入，26 KB gzip）、`tunnel: "/api/_report"`、
+build 時 `sentry-cli sourcemaps inject` + `upload`、`VITE_RELEASE` 版本標記、
+上傳後刪 `.map` —— 整條都接上了，`sentry-token` 也已就位並生效。
+
+---
+
+## 12. 還沒接的（依重要性）
+
+### ⚠️ 線上跑的不是最新版
+
+目前部署的映像建於 `26dbb64`。之後的品質整頓（oxlint 594→0、前端測試 0→76）
+裡修掉了好幾個**真的會影響使用的 bug**，那些都還沒上線：
+
+| 修掉的 | 症狀 |
+|---|---|
+| Terminal 卸載不關 WebSocket | 每開關一次視窗就留一條連線與一個 xterm 實例 |
+| Terminal 初始分頁 | （本輪自己弄壞又修好的）terminal 從來沒連上過 |
+| 拖放上傳不檢查大小 | `handleDrop` 抓到初次 render 的閉包，`max_file_size` 整段跳過 |
+| 切分頁後鍵盤／滑鼠側鍵作用在舊分頁 | setter wrapper 沒進 deps，抓到舊的 `activeTabId` |
+| Dock 的視窗預覽縮圖 | 讀 `props.url`，但沒有人設過那個欄位——分支從沒渲染過 |
+| 上傳連結頁的 `max_files: 0` | JSX 把 0 印在畫面上，且外層判斷把 0 當成「沒有限制」 |
+| 分享／上傳連結的「永不過期」 | 手抄的型別寫成 `string \| undefined`，後端送的是 `null` |
+
+重新部署：
 
 ```bash
-# 1. 備份
-sudo cp -a /etc/nginx/sites-available/nas-koimsurai \
-  /etc/nginx/sites-available/nas-koimsurai.bak-pre-monorepo-$(date +%Y%m%d-%H%M%S)
-
-# 2. location / 從舊的前端容器改指後端（整份設定只有第 96 行一處 13001）
-sudo sed -i 's|proxy_pass http://127.0.0.1:13001;|proxy_pass http://127.0.0.1:3000;|' \
-  /etc/nginx/sites-available/nas-koimsurai
-sudo sed -i 's|# Frontend - proxy to Next.js|# Frontend + API — 單一 Rust binary（SPA 由 ServeDir 送）|' \
-  /etc/nginx/sites-available/nas-koimsurai
-
-# 3. 驗證後套用
-sudo nginx -t && sudo systemctl reload nginx
-
-# 4. 確認 https://nas.koimsurai.com 正常後，移除舊的前端容器
-docker rm -f koimsurai-nas-frontend
+cd /home/timo9378/Server
+VITE_RELEASE=$(git -C Koimsurai-NAS rev-parse --short HEAD) \
+  docker compose up -d --build backend
 ```
 
-`location /api/`（含登入端點的 rate limit）不必動 —— 它本來就指向
-`127.0.0.1:3000`，切換後兩個 location 指的是同一個容器。
+### 已安裝但完全沒接的工具
 
-### 待辦：GlitchTip
+| 工具 | 現況 | 接上要做什麼 |
+|---|---|---|
+| `fast-check` | 已安裝，**0 條** property test | 前端目前只有定樁測試；路徑正規化、file-icons 的解析順序適合 property |
+| `knip` | 已安裝，沒有 script 也沒進 CI | 加 `knip.json` + `pnpm knip` script |
+| `@vitest/coverage-v8` | 有 `test:coverage`，但**沒有門檻也沒進 CI** | `--coverage.thresholds.*` + CI 一道 |
+| `cargo llvm-cov` | 後端完全沒有覆蓋率 | `cargo llvm-cov nextest --fail-under-regions N` |
 
-目前只做了「從映像刪掉 `.map`」那半（`Dockerfile` 的 `find dist -name '*.map' -delete`）。
-還沒接：`@sentry/browser` SDK、build 時烙 debug id、sourcemap 上傳、
-`VITE_RELEASE` 帶版本標記。上傳步驟要插在刪 `.map` 之前。
+### 未安裝（工具鏈盤點列了但還沒引入）
+
+Playwright + `@axe-core/playwright`（E2E 與自動化可及性檢查）、
+Stryker（前端變異測試）、`@lhci/cli`（效能預算）、schemathesis（吃 utoipa
+的 OpenAPI 做 API fuzz）。
+
+### 程式面的已知債
+
+- `Finder.tsx` 約 1400 行。上一頁/下一頁已抽成 `finder/history.ts`，
+  其餘（選取、拖放、重新命名）仍在同一支裡。
+- `window-store` 的 `newWindow as WindowState`：判別式聯集的關聯 TS 證不出來，
+  呼叫端有泛型簽章擋著，理由寫在該行旁。
+- 前端測試涵蓋 10 個檔案；`Finder` / `FileList` / `DesktopIcons` / `MobileLayout`
+  這幾支大元件仍然沒有測試。
