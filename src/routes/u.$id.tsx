@@ -184,7 +184,10 @@ function groupByTopFolder(entries: { file: File; relativePath: string }[]): Uplo
 /*  Component                                                          */
 /* ================================================================== */
 
-function UploadPage() {
+// export 是為了讓測試可以直接 render 它。從 Route.component 取會撞到型別：
+// vi.mock 只影響執行期，tsc 仍然用真的 @tanstack/react-router 型別，
+// 而那上面沒有 `component` 這個欄位。
+export function UploadPage() {
   const { id: uploadId } = Route.useParams();
 
   const [status, setStatus] = useState<PageStatus>("loading");
