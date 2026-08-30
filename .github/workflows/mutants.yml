@@ -19,7 +19,7 @@ on:
       paths:
         # ⚠️ 含斜線的 glob 比對的是**完整路徑**（從 workspace root 起算），
         #    所以要寫 backend/src/... 而不是 src/...
-        description: '只跑這些檔案的 glob，從 repo 根起算（空白 = 全跑）。例：backend/src/utils/jwt.rs'
+        description: '只跑這些檔案，空白分隔的 glob，從 repo 根起算（留空 = 全跑）。例：backend/src/utils/jwt.rs backend/src/middleware/auth.rs'
         required: false
         default: ''
   schedule:
@@ -76,12 +76,21 @@ jobs:
           SHARD: ${{ matrix.shard }}
         run: |
           set -euo pipefail
-          if [ -n "$MUTANT_PATHS" ]; then
-            echo "::notice::只跑 $MUTANT_PATHS"
-            cargo mutants --no-shuffle --timeout-multiplier 5 --file "$MUTANT_PATHS"
-          else
-            cargo mutants --no-shuffle --timeout-multiplier 5 --shard "$SHARD/4"
+          # 空白分隔的多個 glob → 重複的 --file 旗標。
+          # ⚠️ 這裡要 word splitting，所以刻意不加引號（shellcheck SC2086 的例外）。
+          # shellcheck disable=SC2086
+          files=""
+          for f in $MUTANT_PATHS; do
+            files="$files --file $f"
+          done
+          if [ -n "$files" ]; then
+            echo "::notice::只跑$files"
           fi
+          # ⚠️ 指定檔案時**照樣分片**：四個 job 各跑四分之一，而不是四個
+          # 都把同一批變異重跑一次。--shard 的切分是確定性的，合起來
+          # 剛好等於完整跑一次。
+          # shellcheck disable=SC2086
+          cargo mutants --no-shuffle --timeout-multiplier 5 --shard "$SHARD/4" $files
 
       # ⚠️ 有漏網的變異時 cargo mutants 會回非 0，而那正是最需要看報告的時候。
       #    只在成功時上傳等於「壞掉時看不到資料」。
