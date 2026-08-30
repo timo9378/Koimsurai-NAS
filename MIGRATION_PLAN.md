@@ -561,6 +561,7 @@ Stryker（前端變異測試）、`@lhci/cli`（效能預算）、schemathesis�
 | `handlers/upload_link.rs` | 0 → **88.7%** | 唯一免身分就能寫檔案的端點 |
 | `middleware/auth.rs` | 48 → **94.6%** | 補測試時抓到一個 CSRF 繞過，見下 |
 | `utils/jwt.rs` | 52 → **90.0%** | 含金鑰輪替後舊 token 失效 |
+| `handlers/terminal.rs` | 0 → **32.4%** | 白名單那半；抓到四個 shell 逃逸，見下 |
 
 **補測試時抓到的 CSRF 繞過**：`middleware/auth.rs` 原本用
 `origin_host.starts_with(host_val)` 比對 Origin 與 Host。Host 是
@@ -569,11 +570,27 @@ Stryker（前端變異測試）、`@lhci/cli`（效能預算）、schemathesis�
 改成 `eq_ignore_ascii_case`。相等比 `starts_with` 嚴格，但嚴格掉的**只有**
 這種「Host + 後綴」的情形；合法的同源請求兩者本來就一字不差。
 
+**補測試時抓到的受限 shell 逃逸**：白名單只檢查 `parts[0]`，但名單上有幾個
+命令的**工作就是執行別的程式** —— `env bash`、`ls | xargs sh`、
+`find . -exec bash -c id {} +`、`awk 'BEGIN{system("id")}'` 四個都實測可用。
+這台容器掛著 `/var/run/docker.sock` 且 `pid: host`，逃出受限 shell 拿到的是
+**宿主機的 root**。
+
+處置分兩種，差別在「檢查得可靠嗎」：
+
+- `env` / `xargs` / `find -exec` 的危險部分是**未加引號的獨立 token**
+  （程式名、旗標），`split_whitespace` 切得開 → 加 `check_process_spawning` 擋掉。
+- `awk` / `sed` 的危險部分藏在**引號裡的腳本本體**，而 `is_command_safe` 拿到的
+  是未經 shell 拆解的字串，切不開也就擋不住（`system ("id")` 多一個空格就繞過
+  字串比對）→ **整個從白名單移除**。做一個擋不住的檢查比沒有檢查更糟。
+
+要把它們拿回來的話有兩條路：命令解析改成 quote-aware（shlex 之類），
+或改用容器層級的隔離（seccomp／唯讀 rootfs）而不是命令白名單。
+
 還是 **0%** 且值得補的（判準同 `.cargo/mutants.toml`）：
 
 | 檔案 | 壞了會怎樣 |
 |---|---|
-| `handlers/terminal.rs` | 受限 shell 的指令白名單 |
 | `handlers/upload.rs` | 分塊續傳的 offset；算錯只會默默寫壞檔案 |
 | `utils/image.rs` | 縮圖產生 —— 處理的是使用者上傳的檔案 |
 | `handlers/trash.rs` / `tag.rs` / `version.rs` | 一般 CRUD，優先度低 |

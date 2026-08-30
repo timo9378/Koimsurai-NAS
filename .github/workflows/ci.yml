@@ -121,8 +121,8 @@ jobs:
       # 用 llvm-cov 包起來跑，一次拿到「測試有沒有過」與「涵蓋了多少」兩個訊號
       # ——分成兩道會把整個測試套件跑兩次。
       #
-      # ⚠️ --fail-under-regions 30 是**棘輪**不是目標。實測 32.12%
-      #    （functions 29.61 / lines 32.89），留約 2pp 餘裕：加一段還沒測到的
+      # ⚠️ --fail-under-regions 33 是**棘輪**不是目標。實測 35.23%
+      #    （functions 32.22 / lines 36.21），留約 2pp 餘裕：加一段還沒測到的
       #    新功能不該當場擋下，但「刪掉一批測試」會被抓到。補了測試就把數字往上調。
       #
       #    數字本身不必太在意——真正該看的是分佈，見下面那步印出來的逐檔表。
@@ -131,15 +131,15 @@ jobs:
       #      handlers/upload_link.rs  0 → 88.7%（唯一免身分就能寫檔案的端點）
       #      middleware/auth.rs      48 → 94.6%（補測試時抓到一個 CSRF 繞過）
       #      utils/jwt.rs            52 → 90.0%
+      #      handlers/terminal.rs     0 → 32.4%（白名單那半；抓到四個 shell 逃逸）
       #
       #    還是 0% 且值得補的：
-      #      handlers/terminal.rs     受限 shell 的指令白名單
       #      handlers/upload.rs       分塊續傳的 offset
       #      utils/image.rs           縮圖產生（會處理使用者上傳的檔案）
       - name: nextest + 覆蓋率
         run: |
           cargo llvm-cov nextest --locked --no-fail-fast \
-            --fail-under-regions 30 --summary-only 2>&1 | tee coverage.txt
+            --fail-under-regions 33 --summary-only 2>&1 | tee coverage.txt
 
       # 逐檔表寫進 job summary：聚合數字看不出「哪裡是空的」，而那才是要看的。
       # !cancelled()：沒過門檻時上一步會紅，那時候最需要看這張表。

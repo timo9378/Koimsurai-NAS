@@ -39,7 +39,17 @@ fn get_allowed_commands() -> HashSet<&'static str> {
         "ls", "ll", "la", "pwd", "cd", "cat", "head", "tail", "echo", "mkdir", "touch", "cp", "mv", "rm",
         "ln", "chmod", "chgrp", "stat", "file", "basename", "dirname", "realpath", "readlink",
         // 文字處理
-        "grep", "find", "wc", "sort", "uniq", "cut", "awk", "sed", "tr", "tee", "xargs", "diff",
+        //
+        // ⚠️ awk 與 sed **刻意不在名單上**（xargs 同理，見 check_process_spawning）。
+        // 兩者都能執行外部命令（awk 的 system()、GNU sed 的 e 命令）或寫入任意
+        // 路徑（sed 的 w），而這一層擋不住：is_command_safe 拿到的是**未經 shell
+        // 拆解**的字串，用 split_whitespace 切，引號裡的腳本本體根本切不開。
+        // 想擋就只能字串比對，而 `system ("id")` 多一個空格就繞過去了——
+        // 那種檢查看起來像防護，其實不是，比沒有更糟。
+        //
+        // 需要它們的話有兩條路：把命令解析改成 quote-aware（shlex 之類），
+        // 或改用容器層級的隔離（seccomp／唯讀 rootfs）而不是命令白名單。
+        "grep", "find", "wc", "sort", "uniq", "cut", "tr", "tee", "diff",
         // 系統資訊 (procps - 已安裝)
         "ps", "top", "free", "uptime", "w", "kill", "pgrep", "pkill", // 磁碟工具
         "df", "du",
@@ -59,9 +69,8 @@ pub fn get_available_commands() -> Vec<&'static str> {
     vec![
         "help", "clear", "exit", "logout", "history", "ls", "ll", "la", "pwd", "cd", "cat", "head", "tail",
         "echo", "mkdir", "touch", "cp", "mv", "rm", "ln", "chmod", "stat", "file", "basename", "dirname",
-        "grep", "find", "wc", "sort", "uniq", "cut", "awk", "sed", "tr", "tee", "xargs", "diff", "ps", "top",
-        "free", "uptime", "w", "kill", "df", "du", "date", "whoami", "hostname", "uname", "env", "which",
-        "ffmpeg", "ffprobe",
+        "grep", "find", "wc", "sort", "uniq", "cut", "tr", "tee", "diff", "ps", "top", "free", "uptime", "w",
+        "kill", "df", "du", "date", "whoami", "hostname", "uname", "env", "which", "ffmpeg", "ffprobe",
     ]
 }
 
@@ -153,6 +162,56 @@ fn get_dangerous_commands() -> HashSet<&'static str> {
     .collect()
 }
 
+/// 白名單上有幾個命令的**工作就是執行別的程式**——只看 `parts[0]` 擋不住它們。
+///
+/// ⚠️ 這是白名單模型最容易漏掉的一類。`env`、`xargs`、`find -exec`、`awk` 的
+/// `system()` 全都在白名單上（它們本身是正當的工具），但每一個都能拿來執行
+/// 任意命令，等於整個受限 shell 形同虛設。
+///
+/// 這件事在這台特別嚴重：容器掛著 `/var/run/docker.sock` 且 `pid: host`，
+/// 逃出受限 shell 之後拿到的是**宿主機的 root**。
+///
+/// 做法是保留每個命令的正當用法、只擋掉它們的「執行別的程式」能力。
+fn check_process_spawning(command_name: &str, args: &[&str]) -> Result<(), String> {
+    match command_name {
+        // `env PROG` 會直接 exec 掉 PROG。只留下「查看／設定環境變數」的用法：
+        // 無參數，或參數全是 `VAR=value` 形式。
+        "env" => {
+            for a in args {
+                if !a.contains('=') {
+                    return Err(format!(
+                        "禁止用 env 執行其他程式（'{a}'）。單獨的 env 可以用來查看環境變數。"
+                    ));
+                }
+            }
+        }
+        // xargs 的全部用途就是拿輸入去執行一個程式，沒有安全的子集。
+        "xargs" => {
+            return Err("禁止使用 xargs：它的用途就是執行其他程式。".to_string());
+        }
+        // ⚠️ 這裡只放**檢查得可靠**的：這三個的危險部分都是未加引號的獨立 token
+        // （程式名、`-exec` 這種旗標），split_whitespace 切得開。awk / sed 那種
+        // 「危險的東西藏在引號裡的腳本本體」是切不開的，所以它們的處置是
+        // 直接不放進白名單（見 get_allowed_commands 的說明），而不是在這裡做
+        // 一個擋不住的字串比對。
+        //
+        // find 的動作類參數會執行外部命令或直接刪檔。
+        // `\;` 那種形式已被反斜線規則擋掉，但 `+` 結尾不需要反斜線。
+        "find" => {
+            for a in args {
+                if matches!(
+                    *a,
+                    "-exec" | "-execdir" | "-ok" | "-okdir" | "-delete" | "-fprintf" | "-fls"
+                ) {
+                    return Err(format!("禁止 find 的 '{a}'：它會執行外部命令或直接刪檔。"));
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 /// 解析命令字串為管道分隔的子命令，並驗證每一個子命令是否安全
 /// Parses a command string into pipe-separated sub-commands and validates each one
 fn is_command_safe(cmd: &str) -> Result<(), String> {
@@ -229,6 +288,9 @@ fn is_command_safe(cmd: &str) -> Result<(), String> {
                 return Err("禁止使用 rm -rf 命令".to_string());
             }
         }
+
+        // 3c-2. 白名單上的命令有幾個能拿來執行**別的**程式，那類要另外擋
+        check_process_spawning(command_name, &parts[1..])?;
 
         // 3d. 檢查參數中是否有嘗試存取敏感路徑
         for part in &parts[1..] {
@@ -317,7 +379,7 @@ fn handle_builtin_command(cmd: &str, current_dir: &str) -> Option<String> {
              \x1b[32m╠══════════════════════════════════════════════════════════════╣\x1b[0m\r\n\
              \x1b[32m║\x1b[0m  \x1b[33m檔案操作:\x1b[0m ls, cat, head, tail, mkdir, touch, cp, mv, rm     \x1b[32m║\x1b[0m\r\n\
              \x1b[32m║\x1b[0m  \x1b[33m目錄導航:\x1b[0m cd, pwd, find, stat, file                         \x1b[32m║\x1b[0m\r\n\
-             \x1b[32m║\x1b[0m  \x1b[33m文字處理:\x1b[0m grep, wc, sort, uniq, cut, awk, sed, diff         \x1b[32m║\x1b[0m\r\n\
+             \x1b[32m║\x1b[0m  \x1b[33m文字處理:\x1b[0m grep, wc, sort, uniq, cut, tr, tee, diff         \x1b[32m║\x1b[0m\r\n\
              \x1b[32m║\x1b[0m  \x1b[33m系統資訊:\x1b[0m df, du, free, uptime, ps, top                     \x1b[32m║\x1b[0m\r\n\
              \x1b[32m║\x1b[0m  \x1b[33m媒體工具:\x1b[0m ffmpeg, ffprobe                                   \x1b[32m║\x1b[0m\r\n\
              \x1b[32m║\x1b[0m  \x1b[33m其他:\x1b[0m     date, echo, clear, history, exit                  \x1b[32m║\x1b[0m\r\n\
@@ -897,5 +959,200 @@ async fn execute_pipeline(cmd: &str, current_dir: &str, storage_base: &str) -> S
             }
             format!("\x1b[31m執行錯誤: {e}\x1b[0m")
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 白名單通過與否。
+    fn ok(cmd: &str) -> bool {
+        is_command_safe(cmd).is_ok()
+    }
+
+    // ─────────────────────── 該放行的 ───────────────────────
+
+    /// help 訊息與白名單不同步的話，使用者會照著 help 打然後被擋，
+    /// 而錯誤訊息說的是「不在允許列表中」——兩邊互相打臉，很難查。
+    #[test]
+    fn help_text_only_advertises_whitelisted_commands() {
+        let allowed = get_allowed_commands();
+        for name in get_available_commands() {
+            assert!(allowed.contains(name), "補全清單有 {name:?} 但白名單沒有");
+        }
+    }
+
+    #[test]
+    fn plain_whitelisted_commands_pass() {
+        for cmd in ["ls", "ls -la", "pwd", "cat notes.txt", "echo hi", "df -h"] {
+            assert!(ok(cmd), "{cmd:?} 應該放行");
+        }
+    }
+
+    #[test]
+    fn empty_input_is_fine() {
+        assert!(ok(""));
+        assert!(ok("   "));
+    }
+
+    #[test]
+    fn pipelines_of_whitelisted_commands_pass() {
+        assert!(ok("ls -la | grep txt | wc -l"));
+    }
+
+    #[test]
+    fn simple_output_redirect_passes() {
+        assert!(ok("ls > out.txt"));
+    }
+
+    // ─────────────────── 該擋下的：不在白名單 ───────────────────
+
+    #[test]
+    fn unknown_commands_are_rejected() {
+        for cmd in ["definitely-not-a-command", "vim", "git"] {
+            assert!(!ok(cmd), "{cmd:?} 不在白名單，應該擋下");
+        }
+    }
+
+    #[test]
+    fn absolute_paths_do_not_bypass_the_whitelist() {
+        // ⚠️ 白名單比對的是 parts[0] 的字面值，所以 "/bin/sh" 不等於 "sh"——
+        //    它會落在「不在白名單」而被擋。這條釘住那個結果。
+        for cmd in ["/bin/sh", "/usr/bin/env", "./ls"] {
+            assert!(!ok(cmd), "{cmd:?} 應該擋下");
+        }
+    }
+
+    #[test]
+    fn explicitly_dangerous_commands_are_rejected() {
+        for cmd in [
+            "sudo ls",
+            "bash",
+            "sh -c id",
+            "curl http://x",
+            "python3 -c 1",
+            "systemctl restart x",
+        ] {
+            assert!(!ok(cmd), "{cmd:?} 應該擋下");
+        }
+    }
+
+    // ─────────────────── 該擋下的：shell 元字符 ───────────────────
+
+    #[test]
+    fn command_substitution_is_rejected() {
+        for cmd in ["echo `id`", "echo $(id)", "echo ${PATH}", "echo $((1+1))"] {
+            assert!(!ok(cmd), "{cmd:?} 是命令替換，應該擋下");
+        }
+    }
+
+    #[test]
+    fn chaining_operators_are_rejected() {
+        for cmd in ["ls; id", "ls && id", "ls || id"] {
+            assert!(!ok(cmd), "{cmd:?} 是命令串接，應該擋下");
+        }
+    }
+
+    #[test]
+    fn newline_and_backslash_are_rejected() {
+        // ⚠️ newline 會被當成命令分隔；反斜線是 find -exec ... \; 的必要零件。
+        assert!(!ok("ls\nid"));
+        assert!(!ok("ls\rid"));
+        assert!(!ok(r"find . -exec id {} \;"));
+    }
+
+    #[test]
+    fn process_substitution_and_heredoc_are_rejected() {
+        for cmd in ["diff <(ls) <(ls)", "cat << EOF", "ls >> out.txt"] {
+            assert!(!ok(cmd), "{cmd:?} 應該擋下");
+        }
+    }
+
+    // ─────────────────── 該擋下的：管道裡的每一段 ───────────────────
+
+    #[test]
+    fn every_stage_of_a_pipeline_is_checked() {
+        // ⚠️ 只檢查第一段的話，`ls | bash` 就過了。這條釘住「每一段都要查」。
+        assert!(!ok("ls | bash"));
+        assert!(!ok("ls | sudo tee /etc/passwd"));
+        assert!(!ok("cat x | python3"));
+    }
+
+    // ─────────────────── 該擋下的：特定的額外規則 ───────────────────
+
+    #[test]
+    fn rm_rf_is_rejected_but_plain_rm_is_allowed() {
+        assert!(ok("rm file.txt"));
+        for cmd in ["rm -rf /", "rm -fr /", "rm --no-preserve-root -rf /", "RM -RF /"] {
+            assert!(!ok(cmd), "{cmd:?} 應該擋下");
+        }
+    }
+
+    #[test]
+    fn sensitive_paths_are_rejected_in_arguments() {
+        for cmd in [
+            "cat /etc/passwd",
+            "head /etc/shadow",
+            "cat /dev/sda1",
+            "cat /ETC/PASSWD",
+        ] {
+            assert!(!ok(cmd), "{cmd:?} 應該擋下");
+        }
+    }
+
+    // ─────────────── 該擋下的：可以再生一個行程的白名單命令 ───────────────
+    //
+    // ⚠️ 這一組是白名單最容易漏掉的地方：命令本身在白名單上，但它的**工作
+    //    就是執行別的命令**。只看 parts[0] 的話這些全部放行，而它們每一個
+    //    都等於任意命令執行。
+    //
+    //    這台容器掛著 /var/run/docker.sock 且 pid: host，逃出受限 shell
+    //    之後拿到的是宿主機的 root。
+
+    #[test]
+    fn env_cannot_be_used_to_launch_another_program() {
+        assert!(!ok("env bash"), "env 會直接 exec 後面那個程式");
+        assert!(!ok("env sh -c id"));
+        assert!(!ok("env FOO=1 python3"));
+        // 單純看環境變數是它原本的用途，要留著
+        assert!(ok("env"));
+    }
+
+    #[test]
+    fn awk_and_sed_are_not_on_the_whitelist_at_all() {
+        // ⚠️ 不是「擋掉危險用法」而是**整個命令不放行**。理由見
+        //    get_allowed_commands：危險的東西藏在引號裡的腳本本體，而這一層
+        //    看到的是未經 shell 拆解的字串，切不開也就擋不住。
+        //    `awk 'BEGIN{system("id")}'` 與 `sed '1e id'` 都是實際可用的逃逸。
+        for cmd in [
+            "awk '{print $1}'",
+            "awk 'BEGIN{system(\"id\")}'",
+            "awk 'BEGIN{ system (\"id\") }'",
+            "sed 's/a/b/'",
+            "sed '1e id' x",
+            "ls | awk '{print}'",
+        ] {
+            assert!(!ok(cmd), "{cmd:?} 應該擋下");
+        }
+    }
+
+    #[test]
+    fn xargs_cannot_be_used_to_launch_another_program() {
+        assert!(!ok("echo id | xargs bash -c"));
+        assert!(!ok("ls | xargs sh"));
+    }
+
+    #[test]
+    fn env_with_only_assignments_is_still_allowed() {
+        // 設環境變數本身沒問題，問題在後面接一個程式名
+        assert!(ok("env FOO=1"));
+    }
+
+    #[test]
+    fn find_exec_cannot_launch_another_program() {
+        // `\;` 那種形式已被反斜線規則擋掉，但 `+` 結尾不需要反斜線
+        assert!(!ok("find . -exec bash -c id {} +"));
+        assert!(ok("find . -name '*.txt'"), "一般的 find 用法要留著");
     }
 }
