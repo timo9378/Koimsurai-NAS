@@ -85,12 +85,20 @@ function formatDate(dateStr: string) {
   });
 }
 
-/** Read ALL entries from a directory reader (readEntries returns batches of ~100) */
-async function readAllDirectoryEntries(reader: any): Promise<any[]> {
-  const all: any[] = [];
-  let batch: any[];
+/**
+ * 讀完一個目錄的**所有**項目。
+ * ⚠️ `readEntries` 一次只回一批（約 100 個），要一直讀到回空陣列為止 ——
+ * 只呼叫一次的話，超過 100 個檔案的資料夾會被靜靜截斷。
+ */
+async function readAllDirectoryEntries(
+  reader: FileSystemDirectoryReader,
+): Promise<FileSystemEntry[]> {
+  const all: FileSystemEntry[] = [];
+  let batch: FileSystemEntry[];
   do {
-    batch = await new Promise<any[]>((resolve, reject) => reader.readEntries(resolve, reject));
+    batch = await new Promise<FileSystemEntry[]>((resolve, reject) => {
+      reader.readEntries(resolve, reject);
+    });
     all.push(...batch);
   } while (batch.length > 0);
   return all;
@@ -98,16 +106,21 @@ async function readAllDirectoryEntries(reader: any): Promise<any[]> {
 
 /** Recursively collect files from a FileSystemEntry tree */
 async function collectFilesFromEntry(
-  entry: any,
+  entry: FileSystemEntry,
   basePath: string,
 ): Promise<{ file: File; relativePath: string }[]> {
   if (entry.isFile) {
-    const file = await new Promise<File>((resolve, reject) => entry.file(resolve, reject));
+    const fileEntry = entry as FileSystemFileEntry;
+    const file = await new Promise<File>((resolve, reject) => {
+      fileEntry.file(resolve, reject);
+    });
     const relativePath = basePath ? `${basePath}/${entry.name}` : entry.name;
     return [{ file, relativePath }];
   }
   if (entry.isDirectory) {
-    const reader = entry.createDirectoryReader();
+    // ⚠️ 標準 API 是 `createReader()`。這裡原本寫成 `createDirectoryReader()`（不存在的
+    // 方法），而參數型別是 any 所以編譯期完全沒有人擋 —— 拖資料夾上傳會在執行時炸。
+    const reader = (entry as FileSystemDirectoryEntry).createReader();
     const children = await readAllDirectoryEntries(reader);
     const dirPath = basePath ? `${basePath}/${entry.name}` : entry.name;
     const results: { file: File; relativePath: string }[] = [];
@@ -248,9 +261,9 @@ function UploadPage() {
     if (!items || items.length === 0) return;
 
     // Collect entries via webkitGetAsEntry (supports folders)
-    const topEntries: any[] = [];
+    const topEntries: FileSystemEntry[] = [];
     for (let i = 0; i < items.length; i++) {
-      const entry = (items[i] as any).webkitGetAsEntry?.();
+      const entry = items[i].webkitGetAsEntry();
       if (entry) topEntries.push(entry);
     }
 
@@ -262,7 +275,7 @@ function UploadPage() {
     }
 
     // Determine if any directory was dropped
-    const hasDir = topEntries.some((e: any) => e.isDirectory);
+    const hasDir = topEntries.some((entry) => entry.isDirectory);
 
     if (hasDir) {
       setIsScanning(true);
@@ -286,7 +299,10 @@ function UploadPage() {
               failedCount: 0,
             });
           } else {
-            const file = await new Promise<File>((resolve, reject) => entry.file(resolve, reject));
+            const fileEntry = entry as FileSystemFileEntry;
+            const file = await new Promise<File>((resolve, reject) => {
+              fileEntry.file(resolve, reject);
+            });
             newGroups.push({
               id: nextGroupId(),
               name: file.name,
@@ -309,7 +325,10 @@ function UploadPage() {
       const droppedFiles: File[] = [];
       for (const entry of topEntries) {
         if (entry.isFile) {
-          const file = await new Promise<File>((resolve, reject) => entry.file(resolve, reject));
+          const fileEntry = entry as FileSystemFileEntry;
+          const file = await new Promise<File>((resolve, reject) => {
+            fileEntry.file(resolve, reject);
+          });
           droppedFiles.push(file);
         }
       }
@@ -323,13 +342,13 @@ function UploadPage() {
     if (!selectedFiles || selectedFiles.length === 0) return;
 
     const filesArray = Array.from(selectedFiles);
-    const hasRelativePaths = filesArray.some((f) => (f as any).webkitRelativePath);
+    const hasRelativePaths = filesArray.some((f) => f.webkitRelativePath !== "");
 
     if (hasRelativePaths) {
       // Folder selection via <input webkitdirectory>
       const entries = filesArray.map((f) => ({
         file: f,
-        relativePath: ((f as any).webkitRelativePath || f.name) as string,
+        relativePath: f.webkitRelativePath || f.name,
       }));
       const folderGroups = groupByTopFolder(entries);
       setGroups((prev) => [...prev, ...folderGroups]);

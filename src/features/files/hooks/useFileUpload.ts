@@ -3,6 +3,12 @@ import { useUpload, useInitUpload, useUploadChunk } from "../api/useFiles";
 import { useUploadStore } from "@/store/upload-store";
 import { apiClient } from "@/lib/api-client";
 import type { FileInfo, UploadSession } from "@/types/api";
+import {
+  getApiErrorBody,
+  getApiErrorMessage,
+  getApiErrorStatus,
+  isNetworkError,
+} from "@/lib/errors";
 
 // Concurrency-limited upload queue utility
 const createUploadQueue = (concurrency: number) => {
@@ -71,8 +77,8 @@ export const useFileUpload = () => {
             });
             updateTask(taskId, { progress: 100, status: "completed" });
           }
-        } catch (error: any) {
-          if (error.code === "ERR_NETWORK" || error.message === "Network Error") {
+        } catch (error: unknown) {
+          if (isNetworkError(error)) {
             console.warn(`Network Error for ${file.name}, verifying if upload succeeded...`);
 
             await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -99,7 +105,10 @@ export const useFileUpload = () => {
           }
 
           console.error(`Failed to upload ${file.name}:`, error);
-          updateTask(taskId, { status: "error", error: error.message || "Upload failed" });
+          updateTask(taskId, {
+            status: "error",
+            error: getApiErrorMessage(error, "Upload failed"),
+          });
         }
       });
     });
@@ -146,12 +155,15 @@ export const useFileUpload = () => {
           }
 
           updateTask(taskId, { uploadId: upload_id });
-        } catch (error: any) {
+        } catch (error: unknown) {
           // We might want to handle conflict here or let UI handle it.
           // For now throwing to be caught by caller if we want UI dialog.
           // But since we abstracted it, we need a way to bubble conflict up?
           // For simplicity, let's treat conflict as error string 'File exists' so UI can react if it observes task state.
-          if (error.response?.status === 409 && !error.response?.data?.upload_id) {
+          if (
+            getApiErrorStatus(error) === 409 &&
+            !getApiErrorBody<{ upload_id?: string }>(error)?.upload_id
+          ) {
             updateTask(taskId, { status: "error", error: "File exists" }); // UI can check this error string
             return;
           }
@@ -177,11 +189,11 @@ export const useFileUpload = () => {
       }
 
       updateTask(taskId, { status: "completed" });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`Chunk upload failed for ${file.name}:`, error);
       updateTask(taskId, {
         status: "error",
-        error: error.message || "Upload interrupted",
+        error: getApiErrorMessage(error, "Upload interrupted"),
         uploadId: upload_id,
       });
     }
@@ -198,7 +210,7 @@ export const useFileUpload = () => {
       const uploadedSize = response.data.uploaded_size;
 
       await processChunkedUpload(taskId, task.file, task.path, task.uploadId, uploadedSize);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to resume upload:", error);
       updateTask(taskId, { status: "error", error: "Failed to resume upload" });
     }

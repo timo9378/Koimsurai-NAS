@@ -8,6 +8,7 @@ import {
   useBatchDelete,
   useDelete,
 } from "@/features/files/api/useFiles";
+import { getApiErrorStatus } from "@/lib/errors";
 import { useWindowStore } from "@/store/window-store";
 import { useQueryClient } from "@tanstack/react-query";
 import type { FileInfo } from "@/types/api";
@@ -124,8 +125,8 @@ export const DesktopIcons = () => {
           try {
             await createFolder.mutateAsync({ path: "Desktop", name });
             created = true;
-          } catch (error: any) {
-            if (error?.response?.status === 409) {
+          } catch (error: unknown) {
+            if (getApiErrorStatus(error) === 409) {
               // Folder already exists, try next name
               name = `${newFolderName}${counter}`;
               counter++;

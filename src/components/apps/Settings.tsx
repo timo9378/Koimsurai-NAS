@@ -24,6 +24,7 @@ import {
 import { QRCodeSVG } from "qrcode.react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
+import type { DiskInfo } from "@/types/api";
 import type { DockPosition } from "@/store/window-store";
 import { useWindowStore } from "@/store/window-store";
 import { useSystemStatus } from "@/features/system/api/useSystem";
@@ -161,7 +162,7 @@ const StorageSection = () => {
         <p className="text-sm text-gray-500 dark:text-zinc-400 mt-1">檢視磁碟使用狀況</p>
       </div>
 
-      {systemStatus?.disks?.map((disk: any, i: number) => {
+      {systemStatus?.disks?.map((disk: DiskInfo, i: number) => {
         const usedPercent =
           disk.total_space > 0
             ? ((disk.total_space - disk.available_space) / disk.total_space) * 100

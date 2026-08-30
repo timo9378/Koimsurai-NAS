@@ -15,6 +15,7 @@ import { FilePreview } from "@/components/apps/FilePreview";
 import { Calculator } from "@/components/apps/Calculator";
 import { Settings } from "@/components/apps/Settings";
 import { lazyComponent } from "@/lib/lazy-component";
+import type { Transition } from "framer-motion";
 
 const ContainerTerminal = lazyComponent(
   () => import("@/components/apps/ContainerTerminal").then((mod) => mod.ContainerTerminal),
@@ -127,7 +128,7 @@ const Window = ({ window }: { window: WindowState }) => {
 
     if (window.isMinimized) {
       const dockPos = getDockPosition(window.appType);
-      const transition: any = { duration: 0.5, ease: [0.2, 0, 0, 1] };
+      const transition: Transition = { duration: 0.5, ease: [0.2, 0, 0, 1] };
       animate(x, dockPos.x - window.size.width / 2, transition);
       animate(y, dockPos.y - window.size.height / 2, transition);
     } else if (window.isMaximized || window.snapState) {

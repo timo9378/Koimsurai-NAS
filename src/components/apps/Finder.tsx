@@ -15,6 +15,7 @@ import {
   useCreateFolder,
   useBatchMove,
 } from "@/features/files/api/useFiles";
+import { getApiErrorStatus } from "@/lib/errors";
 import { MOVE_MIME } from "@/lib/dnd";
 import type { FileInfo } from "@/types/api";
 import { useUploadStore } from "@/store/upload-store";
@@ -865,9 +866,9 @@ export const Finder = ({ windowId }: FinderProps) => {
           : parentDir;
         try {
           await createFolder.mutateAsync({ path: fullParentPath, name: folderName });
-        } catch (err: any) {
+        } catch (err: unknown) {
           // Ignore if directory already exists (409 Conflict)
-          if (err?.response?.status !== 409) {
+          if (getApiErrorStatus(err) !== 409) {
             console.warn(`Failed to create directory ${dir}:`, err);
           }
         }
@@ -977,8 +978,8 @@ export const Finder = ({ windowId }: FinderProps) => {
         try {
           await createFolder.mutateAsync({ path: currentPath, name });
           created = true;
-        } catch (error: any) {
-          if (error?.response?.status === 409) {
+        } catch (error: unknown) {
+          if (getApiErrorStatus(error) === 409) {
             // Folder already exists, try next name
             name = `新資料夾${counter}`;
             counter++;

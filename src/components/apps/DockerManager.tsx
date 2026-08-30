@@ -114,7 +114,9 @@ const ContainerCard = ({ container }: { container: ContainerInfo }) => {
       <div className="grid grid-cols-2 gap-2 text-xs text-gray-500 dark:text-gray-400">
         <div className="flex items-center gap-1.5">
           <Cpu className="w-3.5 h-3.5 shrink-0" />
-          <span className="truncate">{stats ? `${stats.cpu_percent.toFixed(1)}%` : "--"}</span>
+          <span className="truncate">
+            {stats ? `${(stats.cpu_percent ?? 0).toFixed(1)}%` : "--"}
+          </span>
         </div>
         <div className="flex items-center gap-1.5">
           <HardDrive className="w-3.5 h-3.5 shrink-0" />
@@ -203,7 +205,7 @@ const ContainerListItem = ({ container }: { container: ContainerInfo }) => {
         <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400 shrink-0">
           <div className="flex items-center gap-1">
             <Cpu className="w-3.5 h-3.5" />
-            <span>{stats ? `${stats.cpu_percent.toFixed(1)}%` : "--"}</span>
+            <span>{stats ? `${(stats.cpu_percent ?? 0).toFixed(1)}%` : "--"}</span>
           </div>
           <div className="flex items-center gap-1">
             <HardDrive className="w-3.5 h-3.5" />
@@ -297,7 +299,9 @@ const ImageCard = ({ image, viewMode }: { image: ImageInfo; viewMode: ViewMode }
     return new Date(timestamp * 1000).toLocaleDateString();
   };
 
-  const displayName = image.tags?.[0] || image.id.slice(0, 12);
+  // ⚠️ 後端送的欄位是 repo_tags；先前寫成 image.tags（手寫型別憑空多的欄位），
+  // 永遠是 undefined —— 列表顯示的一直是 id 前 12 碼而不是映像名稱。
+  const displayName = image.repo_tags[0] || image.id.slice(0, 12);
 
   if (viewMode === "list") {
     return (
@@ -523,7 +527,7 @@ export const DockerManager = () => {
 
   const filteredImages = imageList.filter(
     (img) =>
-      img.tags?.some((t) => t.toLowerCase().includes(filter.toLowerCase())) ||
+      img.repo_tags.some((t) => t.toLowerCase().includes(filter.toLowerCase())) ||
       img.id.toLowerCase().includes(filter.toLowerCase()),
   );
 

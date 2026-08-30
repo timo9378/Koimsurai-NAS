@@ -1,38 +1,31 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
+import type {
+  ContainerDetails,
+  ContainerStats,
+  ContainerSummary,
+  ImageSummary,
+  LogEntry,
+  NetworkSummary,
+} from "@/types/api";
 
-export interface ContainerInfo {
-  id: string;
-  names: string[];
-  image: string;
-  image_id: string;
-  state: string;
-  status: string;
-  created: number;
-  ports: {
-    private_port: number;
-    public_port?: number;
-    type: string;
-  }[];
+/**
+ * Docker 端點的回應信封：`{ "data": … }`。
+ * ⚠️ 只有 docker 那組是這個形狀，其餘端點是直接回 body。
+ */
+interface DockerEnvelope<T> {
+  data: T;
 }
 
-export interface ContainerStats {
-  cpu_percent: number;
-  memory_usage: number;
-  memory_limit: number;
-  memory_percent: number;
-  network_rx: number;
-  network_tx: number;
-  block_read: number;
-  block_write: number;
-}
-
-export interface ImageInfo {
-  id: string;
-  tags: string[];
-  size: number;
-  created: number;
-}
+// ⚠️ 這幾個別名原本是**手寫的** interface，欄位與產生版逐字相同 —— 也就是一份
+// 遲早會漂掉的複本（ContainerStats 已經漂了：產生版的 cpu_percent 是
+// `number | null`，因為 serde_json 把 NaN 序列化成 null）。改成 re-export，
+// 呼叫端不必改，但來源只剩一個。
+export type ContainerInfo = ContainerSummary;
+export type ImageInfo = ImageSummary;
+export type NetworkInfo = NetworkSummary;
+export type { LogEntry };
+export type { ContainerDetails, ContainerStats };
 
 export const useDockerStatus = () => {
   return useQuery({
@@ -49,7 +42,9 @@ export const useContainers = () => {
   return useQuery<ContainerInfo[]>({
     queryKey: ["docker", "containers"],
     queryFn: async () => {
-      const response = await apiClient.get("/docker/containers?all=true");
+      const response = await apiClient.get<DockerEnvelope<ContainerSummary[]>>(
+        "/docker/containers?all=true",
+      );
       return response.data.data;
     },
     refetchInterval: 3000,
@@ -60,7 +55,9 @@ export const useContainerStats = (id: string, enabled: boolean = false) => {
   return useQuery<ContainerStats>({
     queryKey: ["docker", "container", id, "stats"],
     queryFn: async () => {
-      const response = await apiClient.get(`/docker/containers/${id}/stats`);
+      const response = await apiClient.get<DockerEnvelope<ContainerStats>>(
+        `/docker/containers/${id}/stats`,
+      );
       return response.data.data;
     },
     enabled,
@@ -68,17 +65,14 @@ export const useContainerStats = (id: string, enabled: boolean = false) => {
   });
 };
 
-export interface LogEntry {
-  stream: string;
-  message: string;
-}
-
 export const useContainerLogs = (id: string, enabled: boolean = false) => {
   return useQuery<string>({
     queryKey: ["docker", "container", id, "logs"],
     queryFn: async () => {
-      const response = await apiClient.get(`/docker/containers/${id}/logs?tail=100`);
-      const logEntries: LogEntry[] = response.data.data || [];
+      const response = await apiClient.get<DockerEnvelope<LogEntry[]>>(
+        `/docker/containers/${id}/logs?tail=100`,
+      );
+      const logEntries = response.data.data;
       // Convert LogEntry array to single string for TerminalView
       return logEntries.map((entry) => entry.message).join("");
     },
@@ -133,7 +127,7 @@ export const useImages = () => {
   return useQuery<ImageInfo[]>({
     queryKey: ["docker", "images"],
     queryFn: async () => {
-      const response = await apiClient.get("/docker/images");
+      const response = await apiClient.get<DockerEnvelope<ImageSummary[]>>("/docker/images");
       return response.data.data;
     },
   });
@@ -165,23 +159,11 @@ export const useRemoveImage = () => {
   });
 };
 
-export interface NetworkInfo {
-  id: string;
-  name: string;
-  driver: string;
-  scope: string;
-  internal: boolean;
-  attachable: boolean;
-  ingress: boolean;
-  ipam_driver: string | null;
-  containers: number;
-}
-
 export const useNetworks = () => {
   return useQuery<NetworkInfo[]>({
     queryKey: ["docker", "networks"],
     queryFn: async () => {
-      const response = await apiClient.get("/docker/networks");
+      const response = await apiClient.get<DockerEnvelope<NetworkSummary[]>>("/docker/networks");
       return response.data.data;
     },
     refetchInterval: 5000,

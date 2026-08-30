@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
+import { getApiErrorBody, getApiErrorStatus } from "@/lib/errors";
 import type {
   FileInfo,
   FileVersion,
@@ -112,12 +113,12 @@ export const useInitUpload = () => {
       try {
         const response = await apiClient.post<InitUploadResponse>("/upload/init", data);
         return response.data;
-      } catch (error: any) {
-        // If 409 Conflict, check if we can resume an existing session
-        // The backend should return upload_id AND uploaded_size in the 409 response body for resumption
-        if (error.response?.status === 409 && error.response?.data?.upload_id) {
-          console.warn("Upload session exists, resuming...", error.response.data);
-          return error.response.data as InitUploadResponse;
+      } catch (error: unknown) {
+        // 409 Conflict：後端會在 body 帶 upload_id 與 uploaded_size 供續傳
+        const body = getApiErrorBody<InitUploadResponse>(error);
+        if (getApiErrorStatus(error) === 409 && body?.upload_id) {
+          console.warn("Upload session exists, resuming...", body);
+          return body;
         }
         // If 409 but no upload_id, it means file exists (Priority 2) -> Throw to let UI handle conflict
         throw error;
