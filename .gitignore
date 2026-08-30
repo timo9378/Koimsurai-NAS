@@ -41,3 +41,7 @@ yarn-error.log*
 # Vite
 /dist
 .tanstack
+
+# GlitchTip source map 上傳用的 API token（compose 的 build secret 來源）。
+# ⚠️ 檔案本身必須存在，compose 才不會報錯；空檔會走「跳過上傳」分支。
+/sentry-token

@@ -24,6 +24,10 @@ COPY public ./public
 # `pnpm build` = tsc --noEmit && vite build，型別錯誤在這裡就會擋下建置。
 # ⚠️ VITE_RELEASE 沒帶的話 SDK 不會帶版本標記 —— 功能仍正常，只是 GlitchTip 上的
 #    issue 歸不到某次部署。要帶就 `VITE_RELEASE=$(git rev-parse --short HEAD)`。
+# 錯誤上報的 DSN。⚠️ 這裡放的 key 是**假的** —— 真 key 在後端的
+# SENTRY_FRONTEND_DSN，轉發時才換上（見 src/lib/errorReporting.ts 的說明）。
+# 空值 = SDK 整個不啟用。
+ARG VITE_SENTRY_DSN
 ARG VITE_RELEASE
 RUN pnpm build
 
