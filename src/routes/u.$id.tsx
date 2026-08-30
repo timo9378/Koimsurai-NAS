@@ -224,7 +224,7 @@ function UploadPage() {
         setStatus("error");
         return;
       }
-      const data: UploadLinkInfo = await response.json();
+      const data = (await response.json()) as UploadLinkInfo;
       setUploadInfo(data);
       setStatus(data.is_password_protected ? "password_required" : "ready");
     } catch {
@@ -675,7 +675,10 @@ function UploadPage() {
                 id="folder-input"
                 onChange={handleFileSelect}
                 className="hidden"
-                {...({ webkitdirectory: "", directory: "" } as any)}
+                {...({
+                  webkitdirectory: "",
+                  directory: "",
+                } as React.InputHTMLAttributes<HTMLInputElement>)}
               />
               <label
                 htmlFor={folderMode ? "folder-input" : "file-input"}

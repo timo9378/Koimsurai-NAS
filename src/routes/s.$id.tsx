@@ -106,7 +106,7 @@ function SharePage() {
         return;
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as ShareInfo;
       setShareInfo(data);
 
       if (data.is_password_protected) {

@@ -4,6 +4,7 @@ import type {
   ContainerDetails,
   ContainerStats,
   ContainerSummary,
+  DockerStatus,
   ImageSummary,
   LogEntry,
   NetworkSummary,
@@ -31,7 +32,7 @@ export const useDockerStatus = () => {
   return useQuery({
     queryKey: ["docker", "status"],
     queryFn: async () => {
-      const response = await apiClient.get("/docker/status");
+      const response = await apiClient.get<DockerStatus>("/docker/status");
       return response.data;
     },
     refetchInterval: 10000,

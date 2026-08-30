@@ -76,16 +76,17 @@ pub struct RemoveImageQuery {
 }
 
 /// Docker 操作結果
-#[derive(Debug, Serialize)]
-pub struct DockerResult<T> {
+#[derive(Debug, Serialize, utoipa::ToSchema, specta::Type)]
+pub struct DockerResult<T: specta::Type> {
     pub success: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    // ⚠️ 這裡刻意**不用** `skip_serializing_if`：specta-serde 的 unified 模式
+    // 沒辦法表達「有條件地省略欄位」，掛上去會讓型別匯出直接失敗。送 `null`
+    // 而不是省略，前端的 `?? []` / `?? null` 兩種寫法都吃得下。
     pub data: Option<T>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
 }
 
-impl<T> DockerResult<T> {
+impl<T: specta::Type> DockerResult<T> {
     pub const fn success(data: T) -> Self {
         Self {
             success: true,
@@ -104,7 +105,7 @@ impl<T> DockerResult<T> {
 }
 
 /// Docker 狀態響應
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema, specta::Type)]
 pub struct DockerStatus {
     pub connected: bool,
     pub version: Option<String>,

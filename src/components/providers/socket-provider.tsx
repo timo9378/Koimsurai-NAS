@@ -60,7 +60,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
       socket.onmessage = (event) => {
         try {
-          const message: WsServerMessage = JSON.parse(event.data);
+          const message = JSON.parse(event.data as string) as WsServerMessage;
 
           switch (message.type) {
             case "job_update": {

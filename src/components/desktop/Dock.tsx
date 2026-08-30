@@ -72,11 +72,14 @@ const DockPreview = ({
 
           {/* Content Preview Placeholder */}
           <div className="p-2 flex items-center justify-center h-[calc(100%-16px)] overflow-hidden">
-            {window.appType === "preview" && window.props?.url ? (
-              // eslint-disable-next-line @next/next/no-img-element
+            {window.appType === "preview" &&
+            window.props?.file.mime_type?.startsWith("image/") === true ? (
+              // ⚠️ 這裡原本讀的是 `window.props.url`，但從來沒有人設過那個欄位
+              // （開 preview 一律是 `{ file }`）—— 縮圖分支形同不存在，永遠掉到
+              // 最下面那個 app 名稱。把 props 接上型別之後才浮出來。
               <img
-                src={window.props.url}
-                alt="preview"
+                src={`/api/thumbnail/small${window.props.file.path}`}
+                alt=""
                 className="w-full h-full object-contain opacity-80"
               />
             ) : window.appType === "finder" && window.appState?.currentPath ? (

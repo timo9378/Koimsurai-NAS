@@ -29,6 +29,7 @@ import {
   Zap,
   BatteryCharging,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FileInfo } from "@/types/api";
 import {
@@ -89,7 +90,9 @@ interface ActionSheetProps {
 }
 const ActionSheet = ({ file, onClose, onAction, isTrash }: ActionSheetProps) => {
   if (!file) return null;
-  const actions = isTrash
+  // 明確宣告：只有部分項目帶 danger，交給 TS 推論會得到不含該欄位的聯集，
+  // 原本就是因此才寫成 `(action as any).danger`。
+  const actions: { id: string; label: string; icon: LucideIcon; danger?: boolean }[] = isTrash
     ? [
         { id: "restore", label: "Restore", icon: RefreshCw },
         { id: "delete-permanent", label: "Delete Permanently", icon: Trash2, danger: true },
@@ -154,7 +157,7 @@ const ActionSheet = ({ file, onClose, onAction, isTrash }: ActionSheetProps) => 
               }}
               className={cn(
                 "w-full flex items-center gap-4 px-5 py-3.5 text-left active:bg-gray-100 dark:active:bg-zinc-800 transition-colors",
-                (action as any).danger && "text-red-500",
+                action.danger === true && "text-red-500",
               )}
             >
               <action.icon className="w-5 h-5" />

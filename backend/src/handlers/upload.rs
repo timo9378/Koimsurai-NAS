@@ -89,7 +89,7 @@ pub async fn init_upload(
 
 #[utoipa::path(
     patch,
-    path = "/api/upload/{id}",
+    path = "/api/upload/session/{id}",
     params(
         ("id" = String, Path, description = "Upload session ID")
     ),
@@ -278,7 +278,7 @@ pub async fn upload_chunk(
 
 #[utoipa::path(
     get,
-    path = "/api/upload/{id}",
+    path = "/api/upload/session/{id}",
     params(
         ("id" = String, Path, description = "Upload session ID")
     ),

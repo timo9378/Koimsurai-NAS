@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import type { ShareLinkResponse } from "@/types/api";
 import { FileTypeIcon } from "@/lib/file-icons";
 
 interface ShareDialogProps {
@@ -34,11 +35,14 @@ interface ShareDialogProps {
   fileName: string;
   filePath: string;
   isDirectory?: boolean;
+  // ⚠️ 回傳型別用產生版的 `ShareLinkResponse`，不要在這裡手抄一份。手抄的那份
+  // 把 `expires_at` 寫成 `string | undefined`，但後端送的是 `string | null`
+  // ——「永不過期」走的正是 null 那條路。
   onCreateShare: (options: {
     file_path: string;
     password?: string;
     expires_in_seconds?: number;
-  }) => Promise<{ id: string; url: string; expires_at?: string }>;
+  }) => Promise<ShareLinkResponse>;
 }
 
 const EXPIRY_OPTIONS = [

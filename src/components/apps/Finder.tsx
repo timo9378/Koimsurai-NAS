@@ -17,7 +17,7 @@ import {
 } from "@/features/files/api/useFiles";
 import { getApiErrorStatus } from "@/lib/errors";
 import { MOVE_MIME } from "@/lib/dnd";
-import type { FileInfo } from "@/types/api";
+import type { FileInfo, UploadLinkResponse } from "@/types/api";
 import { useUploadStore } from "@/store/upload-store";
 import { useWindowStore } from "@/store/window-store";
 import { useFileUpload } from "@/features/files/hooks/useFileUpload"; // Updated import
@@ -742,7 +742,7 @@ export const Finder = ({ windowId }: FinderProps) => {
       }),
     });
     if (!response.ok) throw new Error("Failed to create upload link");
-    return response.json();
+    return (await response.json()) as UploadLinkResponse;
   };
 
   const handleFavoriteClick = (fav: FileInfo) => {

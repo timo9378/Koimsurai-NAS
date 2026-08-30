@@ -1,23 +1,79 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { FileInfo } from "@/types/api";
 
-export type AppType =
-  | "finder"
-  | "launchpad"
-  | "photos"
-  | "docker"
-  | "settings"
-  | "trash"
-  | "calculator"
-  | "terminal"
-  | "dashboard"
-  | "preview";
+/**
+ * ⚠️ `AppType` 由這個陣列推導，不要反過來手寫聯集再另外維護一份清單 ——
+ * 兩者一定會走鐘，而走鐘的症狀是「執行期檢查漏掉某個 app」這種安靜的錯。
+ */
+export const APP_TYPES = [
+  "finder",
+  "launchpad",
+  "photos",
+  "docker",
+  "settings",
+  "trash",
+  "calculator",
+  "terminal",
+  "dashboard",
+  "preview",
+] as const;
+
+export type AppType = (typeof APP_TYPES)[number];
+
+/** 從 DOM 屬性、網址之類的地方拿到的字串要先過這裡才能當 `AppType` 用。 */
+export function isAppType(value: string): value is AppType {
+  return (APP_TYPES as readonly string[]).includes(value);
+}
 export type DockPosition = "bottom" | "left" | "right";
 export type SnapState = "left" | "right" | "maximize" | null;
 
-export interface WindowState {
+/**
+ * 每個 app 開窗時可以帶的參數。
+ *
+ * 原本 `props?: any` 一路傳到 `WindowContent` 再展開給元件，等於整條路徑上
+ * 沒有任何一步會告訴你「開 Finder 卻傳了 preview 的參數」。這裡跟 `AppType`
+ * 綁在一起之後，`openWindow("finder", "x", { file })` 在編譯期就會紅。
+ *
+ * ⚠️ 新增 AppType 時這裡**必須**跟著加一筆，否則 `AppProps[K]` 索引不到。
+ *    不吃參數的 app 寫 `EmptyProps`。
+ */
+type EmptyProps = Record<string, never>;
+
+export interface AppProps {
+  finder: { initialPath?: string; navigateTo?: string };
+  preview: { file: FileInfo };
+  /** 有 containerId 就接那個容器的 shell，沒有就是一般 terminal */
+  terminal: { containerId?: string };
+  launchpad: EmptyProps;
+  photos: EmptyProps;
+  docker: EmptyProps;
+  settings: EmptyProps;
+  trash: EmptyProps;
+  calculator: EmptyProps;
+  dashboard: EmptyProps;
+}
+
+/**
+ * 視窗自己回寫、給別人讀的狀態（跟 `AppProps` 的差別是方向：props 是開窗時
+ * 傳進去，appState 是開著的視窗往外報告）。目前只有 Finder 用得到 ——
+ * Dock 的縮圖與 DesktopIcons 的「跳到這個路徑」都靠它。
+ */
+export interface AppStates {
+  finder: { currentPath?: string[]; navigateTo?: string };
+  preview: EmptyProps;
+  terminal: EmptyProps;
+  launchpad: EmptyProps;
+  photos: EmptyProps;
+  docker: EmptyProps;
+  settings: EmptyProps;
+  trash: EmptyProps;
+  calculator: EmptyProps;
+  dashboard: EmptyProps;
+}
+
+interface WindowBase {
   id: string;
-  appType: AppType;
   title: string;
   isOpen: boolean;
   isMinimized: boolean;
@@ -30,10 +86,16 @@ export interface WindowState {
   zIndex: number;
   position: { x: number; y: number };
   size: { width: number; height: number };
-  props?: any;
-  appState?: any;
   wasMinimizedByShowDesktop?: boolean;
 }
+
+/**
+ * 以 `appType` 為判別式的聯集：narrow 到 `appType === "preview"` 之後，
+ * `props` 就是 `{ file: FileInfo }`，不是 `any`。
+ */
+export type WindowState = {
+  [K in AppType]: WindowBase & { appType: K; props?: AppProps[K]; appState?: AppStates[K] };
+}[AppType];
 
 interface WindowStore {
   windows: WindowState[];
@@ -45,7 +107,7 @@ interface WindowStore {
   >;
   dockPosition: DockPosition;
 
-  openWindow: (appType: AppType, title?: string, props?: any) => void;
+  openWindow: <K extends AppType>(appType: K, title?: string, props?: AppProps[K]) => void;
   closeWindow: (id: string) => void;
   minimizeWindow: (id: string) => void;
   maximizeWindow: (
@@ -61,7 +123,7 @@ interface WindowStore {
   focusWindow: (id: string) => void;
   updateWindowPosition: (id: string, position: { x: number; y: number }) => void;
   updateWindowSize: (id: string, size: { width: number; height: number }) => void;
-  updateWindowAppState: (id: string, state: any) => void;
+  updateWindowAppState: (id: string, state: AppStates[AppType]) => void;
   setDockPosition: (position: DockPosition) => void;
 
   // Show Desktop Feature
@@ -98,7 +160,7 @@ export const useWindowStore = create(
           set((state) => ({
             showDesktop: false,
             windows: state.windows.map((w) =>
-              (w as any).wasMinimizedByShowDesktop
+              w.wasMinimizedByShowDesktop
                 ? { ...w, isMinimized: false, wasMinimizedByShowDesktop: undefined }
                 : w,
             ),
@@ -145,7 +207,10 @@ export const useWindowStore = create(
           ? history.size
           : (defaultSizes[appType] ?? { width: 800, height: 600 });
 
-        const newWindow: WindowState = {
+        // ⚠️ 這個 cast 是必要的：`WindowState` 是以 appType 判別的聯集，而 TS
+        // 無法證明「`appType: K` 這一筆的 props 型別就是 `AppProps[K]`」——
+        // 兩者的關聯只有我們知道。呼叫端仍然被泛型簽章擋著，安全網在那裡。
+        const newWindow = {
           id,
           appType,
           title: defaultTitle,
@@ -158,7 +223,7 @@ export const useWindowStore = create(
           position,
           size,
           props,
-        };
+        } as WindowState;
 
         set({
           windows: [...windows, newWindow],

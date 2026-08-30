@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+// ⚠️ 回傳型別用產生版，不要手抄：手抄那份把 expires_at 寫成 `string | undefined`，
+// 但後端送的是 `string | null`——「永不過期」走的正是 null 那條路。
+import type { UploadLinkResponse } from "@/types/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload,
@@ -39,7 +42,7 @@ interface UploadLinkDialogProps {
     expires_in_seconds?: number;
     max_files?: number;
     max_file_size?: number;
-  }) => Promise<{ id: string; url: string; expires_at?: string }>;
+  }) => Promise<UploadLinkResponse>;
 }
 
 const EXPIRY_OPTIONS = [

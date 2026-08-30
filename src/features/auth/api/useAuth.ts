@@ -3,13 +3,14 @@ import { apiClient } from "@/lib/api-client";
 import type {
   AuthResponse,
   LoginRequest,
-  RegisterRequest,
   LoginResult,
+  RegisterRequest,
+  SystemStatus,
+  TwoFactorDisableRequest,
   TwoFactorLoginRequest,
   TwoFactorSetupResponse,
-  TwoFactorVerifySetupResponse,
-  TwoFactorDisableRequest,
   TwoFactorStatusResponse,
+  TwoFactorVerifySetupResponse,
 } from "@/types/api";
 
 export const useLogin = () => {
@@ -67,7 +68,7 @@ export const useRegister = () => {
 export const useCheckAuth = () => {
   return useMutation({
     mutationFn: async () => {
-      const response = await apiClient.get("/system/status");
+      const response = await apiClient.get<SystemStatus>("/system/status");
       return response.data;
     },
     retry: false,

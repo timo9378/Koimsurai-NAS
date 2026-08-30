@@ -142,7 +142,7 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
           // Manual data handling for our custom restricted shell
           // (Not using AttachAddon since our backend sends plain text, not PTY binary)
           ws.onmessage = (event) => {
-            term.write(event.data);
+            term.write(event.data as string);
           };
 
           term.onData((data) => {

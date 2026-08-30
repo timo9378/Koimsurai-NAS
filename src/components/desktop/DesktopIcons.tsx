@@ -44,7 +44,8 @@ export const DesktopIcons = () => {
     const saved = localStorage.getItem("desktop-icon-positions");
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
+        // localStorage 的內容不受我們控制，cast 只是宣告「我們期望的形狀」
+        const parsed = JSON.parse(saved) as Record<string, IconPosition>;
         setIconPositions(new Map(Object.entries(parsed)));
       } catch (e) {
         console.error("Failed to load icon positions", e);

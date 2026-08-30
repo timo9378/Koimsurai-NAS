@@ -572,7 +572,7 @@ export const Dashboard = () => {
               tick={{ fontSize: 12 }}
               tickLine={false}
               axisLine={false}
-              tickFormatter={(value) => `${Math.round(value)}%`}
+              tickFormatter={(value: number) => `${Math.round(value)}%`}
             />
             <Tooltip
               contentStyle={{
@@ -641,7 +641,7 @@ export const Dashboard = () => {
               tick={{ fontSize: 12 }}
               tickLine={false}
               axisLine={false}
-              tickFormatter={(value) => `${Math.round(value)}%`}
+              tickFormatter={(value: number) => `${Math.round(value)}%`}
             />
             <Tooltip
               contentStyle={{
@@ -725,7 +725,7 @@ export const Dashboard = () => {
                 tick={{ fontSize: 12 }}
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(value) => `${Math.round(value)}%`}
+                tickFormatter={(value: number) => `${Math.round(value)}%`}
               />
               <Tooltip
                 contentStyle={{

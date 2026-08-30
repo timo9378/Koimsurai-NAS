@@ -3,8 +3,10 @@ import { apiClient } from "@/lib/api-client";
 import { getApiErrorBody, getApiErrorStatus } from "@/lib/errors";
 import type {
   FileInfo,
+  Job,
+  ShareLinkResponse,
+  TimelineGroup,
   FileVersion,
-  TagRequest,
   BatchOperationRequest,
   InitUploadRequest,
   InitUploadResponse,
@@ -95,12 +97,12 @@ export const useUpload = () => {
         : `/upload`;
 
       // Explicitly set Content-Type to undefined so the browser sets it with the boundary
-      const response = await apiClient.post(endpoint, formData, {
-        headers: {
-          "Content-Type": undefined, // This is crucial for multipart/form-data
-        } as any,
+      // ⚠️ 一定要把 Content-Type 設回 undefined：apiClient 的 instance 預設是
+      // application/json，留著的話瀏覽器不會補上 multipart 的 boundary，後端
+      // 直接解析失敗。axios 的型別不接受 undefined，所以用 deleteHeader 的等價寫法。
+      await apiClient.post<void>(endpoint, formData, {
+        headers: { "Content-Type": null },
       });
-      return response.data;
     },
     // 不在每檔 onSuccess 廣域 invalidate(['files'])：批次上傳數十檔會放大成數百個 refetch 撞 nginx 429。
     // 改由呼叫端整批結束刷一次（useFileUpload）或單檔操作後刷一次（GlobalContextMenu）。
@@ -130,10 +132,9 @@ export const useInitUpload = () => {
 export const useUploadChunk = () => {
   return useMutation({
     mutationFn: async ({ sessionId, chunk }: { sessionId: string; chunk: Blob }) => {
-      const response = await apiClient.patch(`/upload/session/${sessionId}`, chunk, {
+      await apiClient.patch<void>(`/upload/session/${sessionId}`, chunk, {
         headers: { "Content-Type": "application/octet-stream" },
       });
-      return response.data;
     },
   });
 };
@@ -279,36 +280,6 @@ export const useBatchCopy = () => {
   });
 };
 
-export const useAddTag = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ path, tag }: { path: string; tag: TagRequest }) => {
-      const cleanPath = path.startsWith("/") ? path.slice(1) : path;
-      // Use path directly for backend wildcard routes
-      await apiClient.post(`/tags/add/${cleanPath}`, tag);
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["files"] });
-    },
-  });
-};
-
-export const useRemoveTag = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ path, tagName }: { path: string; tagName: string }) => {
-      const cleanPath = path.startsWith("/") ? path.slice(1) : path;
-      // Tag name may need encoding but path should be direct for wildcard routes
-      await apiClient.delete(`/tags/remove/${tagName}/${cleanPath}`);
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["files"] });
-    },
-  });
-};
-
 export const useToggleStar = () => {
   const queryClient = useQueryClient();
 
@@ -439,7 +410,7 @@ export const useThumbnail = (path: string, size: "small" | "medium" | "large" = 
       if (!path) return null;
       const cleanPath = path.startsWith("/") ? path.slice(1) : path;
       // Backend expects: GET /api/thumbnail/:size/*path
-      const response = await apiClient.get(`/thumbnail/${size}/${cleanPath}`, {
+      const response = await apiClient.get<Blob>(`/thumbnail/${size}/${cleanPath}`, {
         responseType: "blob",
       });
       return URL.createObjectURL(response.data);
@@ -469,7 +440,7 @@ export const useCreateShare = () => {
   return useMutation({
     mutationFn: async (data: { file_path: string; password?: string; expires?: number }) => {
       const cleanPath = data.file_path.startsWith("/") ? data.file_path.slice(1) : data.file_path;
-      const response = await apiClient.post("/share", {
+      const response = await apiClient.post<ShareLinkResponse>("/share", {
         file_path: cleanPath,
         password: data.password,
         expires_in_seconds: data.expires,
@@ -484,64 +455,11 @@ export const useMediaTimeline = (groupBy: "day" | "month" | "year" = "day") => {
   return useQuery({
     queryKey: ["media", "timeline", groupBy],
     queryFn: async () => {
-      const response = await apiClient.get(`/media/timeline?group_by=${groupBy}&_t=${Date.now()}`);
+      const response = await apiClient.get<TimelineGroup[]>(
+        `/media/timeline?group_by=${groupBy}&_t=${Date.now()}`,
+      );
       return response.data;
     },
-  });
-};
-
-// AI Hooks
-export const useSearchAiTags = (query: string, minConfidence?: number, limit?: number) => {
-  return useQuery({
-    queryKey: ["search", "ai-tags", query, minConfidence, limit],
-    queryFn: async () => {
-      if (!query) return [];
-      const params = new URLSearchParams();
-      params.append("q", query);
-      if (minConfidence) params.append("min_confidence", minConfidence.toString());
-      if (limit) params.append("limit", limit.toString());
-      params.append("_t", Date.now().toString());
-
-      const response = await apiClient.get(`/search/ai-tags?${params.toString()}`);
-      return response.data;
-    },
-    enabled: !!query,
-  });
-};
-
-export const useAiTagsList = () => {
-  return useQuery({
-    queryKey: ["ai-tags", "list"],
-    queryFn: async () => {
-      const response = await apiClient.get(`/search/ai-tags/list?_t=${Date.now()}`);
-      return response.data;
-    },
-  });
-};
-
-export const useAiAnalyze = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (path: string) => {
-      const cleanPath = path.startsWith("/") ? path.slice(1) : path;
-      const response = await apiClient.post("/ai/analyze", { path: cleanPath });
-      return response.data;
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["files"] });
-    },
-  });
-};
-
-// System Hooks
-export const useSystemStatus = () => {
-  return useQuery({
-    queryKey: ["system", "status"],
-    queryFn: async () => {
-      const response = await apiClient.get("/system/status");
-      return response.data;
-    },
-    refetchInterval: 5000, // Refresh every 5 seconds
   });
 };
 
@@ -549,55 +467,9 @@ export const useTasks = () => {
   return useQuery({
     queryKey: ["tasks"],
     queryFn: async () => {
-      const response = await apiClient.get("/tasks");
+      const response = await apiClient.get<Job[]>("/tasks");
       return response.data;
     },
     refetchInterval: 3000,
-  });
-};
-
-// Docker Hooks
-export const useDockerStatus = () => {
-  return useQuery({
-    queryKey: ["docker", "status"],
-    queryFn: async () => {
-      const response = await apiClient.get("/docker/status");
-      return response.data;
-    },
-  });
-};
-
-export const useDockerContainers = (all: boolean = false) => {
-  return useQuery({
-    queryKey: ["docker", "containers", all],
-    queryFn: async () => {
-      const response = await apiClient.get(`/docker/containers?all=${all}`);
-      return response.data;
-    },
-  });
-};
-
-export const useDockerContainerStats = (id: string) => {
-  return useQuery({
-    queryKey: ["docker", "containers", id, "stats"],
-    queryFn: async () => {
-      if (!id) return null;
-      const response = await apiClient.get(`/docker/containers/${id}/stats`);
-      return response.data;
-    },
-    enabled: !!id,
-    refetchInterval: 2000,
-  });
-};
-
-export const useDockerAction = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, action }: { id: string; action: "start" | "stop" | "restart" }) => {
-      await apiClient.post(`/docker/containers/${id}/${action}`);
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["docker", "containers"] });
-    },
   });
 };

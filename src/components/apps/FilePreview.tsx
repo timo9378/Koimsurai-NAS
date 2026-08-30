@@ -69,9 +69,9 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
       // For text, we need to fetch the raw content
       // Use responseType: 'text' to get the raw text and transformResponse to prevent JSON parsing
       // Use apiPath (without /api prefix) since apiClient already has baseURL: '/api'
-      const res = await apiClient.get(apiPath, {
+      const res = await apiClient.get<string>(apiPath, {
         responseType: "text",
-        transformResponse: [(data) => data], // Prevent automatic JSON parsing
+        transformResponse: [(data: string) => data], // Prevent automatic JSON parsing
       });
       // Ensure we return a string
       return typeof res.data === "string" ? res.data : String(res.data ?? "");

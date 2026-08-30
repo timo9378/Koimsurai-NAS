@@ -133,6 +133,22 @@ export type DiskInfo = {
 	disk_type: string,
 };
 
+/**  Docker 操作結果 */
+export type DockerResult<T> = {
+	success: boolean,
+	data: T | null,
+	message: string | null,
+};
+
+/**  Docker 狀態響應 */
+export type DockerStatus = {
+	connected: boolean,
+	version: string | null,
+	api_version: string | null,
+	os: string | null,
+	arch: string | null,
+};
+
 export type EmptyResponse = Record<string, never>;
 
 /**

@@ -18,8 +18,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { FileTypeIcon } from "@/lib/file-icons";
 import { apiClient } from "@/lib/api-client";
-import type { AppType } from "@/store/window-store";
-import { useWindowStore } from "@/store/window-store";
+import { isAppType, useWindowStore } from "@/store/window-store";
 import type { FileInfo } from "@/types/api";
 
 interface SearchResult {
@@ -97,8 +96,11 @@ const evaluateMath = (expr: string): { result: number; valid: boolean } => {
     }
     // Replace ^ with ** for exponentiation
     const jsExpr = sanitized.replace(/\^/g, "**");
-    // eslint-disable-next-line no-eval
-    const result = Function(`"use strict"; return (${jsExpr})`)();
+    // ⚠️ 這裡確實是動態求值，安全性靠上面那道 `^[\d+\-*/().%^]+$` ——
+    // 字元集裡沒有任何字母，所以構造不出識別字，碰不到任何作用域裡的東西。
+    // `Function` 的回傳一定是 any，先標成 unknown，下面的 typeof 才真的在收窄。
+    const evaluate = new Function(`"use strict"; return (${jsExpr})`) as () => unknown;
+    const result = evaluate();
     if (typeof result === "number" && !isNaN(result) && isFinite(result)) {
       return { result, valid: true };
     }
@@ -211,7 +213,7 @@ export const SpotlightSearch = ({
 
   const handleAppSelect = (appId: string) => {
     onOpenChange(false);
-    openWindow(appId as AppType);
+    if (isAppType(appId)) openWindow(appId);
   };
 
   const handleCopyMathResult = () => {

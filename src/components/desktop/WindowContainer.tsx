@@ -27,18 +27,13 @@ const Terminal = lazyComponent(
   <div className="h-full w-full bg-[#1a1a2e] animate-pulse" />,
 );
 
-const WindowContent = ({
-  appType,
-  props,
-  windowId,
-}: {
-  appType: string;
-  props?: any;
-  windowId: string;
-}) => {
-  switch (appType) {
+// ⚠️ 收整個 window 而不是拆開的 (appType, props)：`WindowState` 是以 appType
+// 判別的聯集，拆成兩個參數之後 TS 就沒辦法把它們關聯起來，`props` 只能是 any。
+// 傳整筆進來，`case "preview"` 底下的 `window.props` 才會是 `{ file: FileInfo }`。
+const WindowContent = ({ window }: { window: WindowState }) => {
+  switch (window.appType) {
     case "finder":
-      return <Finder windowId={windowId} />;
+      return <Finder windowId={window.id} />;
     case "dashboard":
       return <Dashboard />;
     case "docker":
@@ -46,22 +41,24 @@ const WindowContent = ({
     case "photos":
       return <Photos />;
     case "preview":
-      return <FilePreview {...props} windowId={windowId} />;
+      // props 是選填的（例如從 session 還原回來的視窗可能沒有），沒有檔案就
+      // 沒什麼好預覽的
+      return window.props ? <FilePreview file={window.props.file} windowId={window.id} /> : null;
     case "terminal":
-      // If containerId is provided, render ContainerTerminal connected to that container
-      if (props?.containerId) {
-        return <ContainerTerminal containerId={props.containerId} />;
-      }
-      // Otherwise render standalone Terminal
-      return <Terminal windowId={windowId} />;
+      // 有 containerId 就接那個容器的 shell，否則是一般 terminal
+      return window.props?.containerId !== undefined ? (
+        <ContainerTerminal containerId={window.props.containerId} />
+      ) : (
+        <Terminal windowId={window.id} />
+      );
     case "calculator":
-      return <Calculator windowId={windowId} />;
+      return <Calculator windowId={window.id} />;
     case "settings":
       return <Settings />;
     default:
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground">
-          {appType} content goes here
+          {window.appType} content goes here
         </div>
       );
   }
@@ -491,7 +488,7 @@ const Window = ({ window }: { window: WindowState }) => {
       </div>
 
       <div className="flex-1 overflow-hidden relative z-0">
-        <WindowContent appType={window.appType} props={window.props} windowId={window.id} />
+        <WindowContent window={window} />
       </div>
     </motion.div>
   );
@@ -516,8 +513,7 @@ export const WindowContainer = () => {
     };
 
     const handleDragMove = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      const { x, y } = customEvent.detail;
+      const { x, y } = (e as CustomEvent<{ x: number; y: number }>).detail;
       const screenWidth = window.innerWidth;
 
       // Relaxed thresholds to 50px
@@ -533,8 +529,7 @@ export const WindowContainer = () => {
     };
 
     const handleDragEnd = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      const { windowId } = customEvent.detail;
+      const { windowId } = (e as CustomEvent<{ windowId: string }>).detail;
 
       if (windowId && previewState !== "none") {
         const screenWidth = window.innerWidth;

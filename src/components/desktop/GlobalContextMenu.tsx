@@ -14,7 +14,7 @@ import {
   Power,
   Upload,
 } from "lucide-react";
-import { useWindowStore } from "@/store/window-store";
+import { isAppType, useWindowStore } from "@/store/window-store";
 import { cn } from "@/lib/utils";
 import { useUpload } from "@/features/files/api/useFiles";
 import { useRescan } from "@/features/system/api/useSystem";
@@ -233,7 +233,9 @@ export const GlobalContextMenu = ({ onWallpaperChange }: GlobalContextMenuProps)
               icon={AppWindow}
               label="開啟"
               onClick={() => {
-                if (menu.targetId) openWindow(menu.targetId as any);
+                if (menu.targetId !== undefined && isAppType(menu.targetId)) {
+                  openWindow(menu.targetId);
+                }
                 setMenu((prev) => ({ ...prev, isOpen: false }));
               }}
             />
