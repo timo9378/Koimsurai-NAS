@@ -27,7 +27,7 @@ export const DesktopIcons = () => {
   const createFolder = useCreateFolder();
   const renameFile = useRename();
   const { openWindow, windows, updateWindowAppState, focusWindow } = useWindowStore();
-  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(() => new Set());
   const queryClient = useQueryClient();
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -142,6 +142,9 @@ export const DesktopIcons = () => {
         }
 
         // Wait a bit for the mutation's onSuccess to complete
+        // 這是「等一下再 refetch」的睡眠，不是掛在元件上的 timer——promise 一
+        // resolve 就沒了，沒有需要 cleanup 的東西。
+        // oxlint-disable-next-line @eslint-react/web-api-no-leaked-timeout
         await new Promise((resolve) => setTimeout(resolve, 300));
 
         // Trigger refetch to get the new folder and wait for it
@@ -152,6 +155,7 @@ export const DesktopIcons = () => {
           setPendingRenameFolder(name);
         } else {
           // If folder doesn't appear yet, try one more refetch
+          // oxlint-disable-next-line @eslint-react/web-api-no-leaked-timeout
           await new Promise((resolve) => setTimeout(resolve, 200));
           await refetch();
           setPendingRenameFolder(name);
@@ -231,11 +235,11 @@ export const DesktopIcons = () => {
   // But that might spam 409 Conflict.
   // Let's check root files list?
   const { data: rootFiles } = useFiles({ path: "/" });
-  const hasCheckedDesktop = useRef(false);
+  const hasCheckedDesktopRef = useRef(false);
 
   useEffect(() => {
-    if (rootFiles && !hasCheckedDesktop.current) {
-      hasCheckedDesktop.current = true;
+    if (rootFiles && !hasCheckedDesktopRef.current) {
+      hasCheckedDesktopRef.current = true;
       const hasDesktop = rootFiles.some((f) => f.name === "Desktop" && f.is_dir);
       if (!hasDesktop) {
         createFolder.mutate({ path: "/", name: "Desktop" });

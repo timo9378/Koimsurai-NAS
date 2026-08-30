@@ -891,11 +891,9 @@ export const Finder = ({ windowId }: FinderProps) => {
       // 先「同步」snapshot 所有 entry：DataTransferItemList 只在 drop 事件同步期間有效，
       // 一旦下面第一個 await 發生，瀏覽器就會清空 items → 之前 webkitGetAsEntry() 只有第一個檔案拿得到，
       // 其餘回傳 null（這就是「拖多檔只上傳第一個、要一張一張傳」的根因）。
-      const droppedEntries: FileSystemEntry[] = [];
-      for (let i = 0; i < items.length; i++) {
-        const entry = items[i]?.webkitGetAsEntry();
-        if (entry) droppedEntries.push(entry);
-      }
+      const droppedEntries = Array.from(items)
+        .map((item) => item.webkitGetAsEntry())
+        .filter((entry): entry is FileSystemEntry => entry !== null);
 
       // Process all dropped items
       for (const entry of droppedEntries) {

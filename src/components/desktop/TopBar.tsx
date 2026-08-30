@@ -460,17 +460,17 @@ export const TopBar = () => {
           {menuConfig.appName}
         </span>
 
-        {menuConfig.menus.map((menu, index) => (
-          <DropdownMenu key={index}>
+        {menuConfig.menus.map((menu) => (
+          <DropdownMenu key={menu.label}>
             <DropdownMenuTrigger className="outline-none">
               <span className="hidden sm:inline hover:bg-white/10 px-2 py-0.5 rounded cursor-default transition-colors">
                 {menu.label}
               </span>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="bg-black/80 backdrop-blur-xl border-white/10 text-white">
-              {menu.items.map((item, itemIndex) => (
+              {menu.items.map((item) => (
                 <DropdownMenuItem
-                  key={itemIndex}
+                  key={item}
                   className="focus:bg-white/10 focus:text-white cursor-default"
                 >
                   {item}

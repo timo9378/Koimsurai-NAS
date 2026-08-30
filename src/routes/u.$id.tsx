@@ -296,11 +296,11 @@ function UploadPage() {
       if (items.length === 0) return;
 
       // Collect entries via webkitGetAsEntry (supports folders)
-      const topEntries: FileSystemEntry[] = [];
-      for (let i = 0; i < items.length; i++) {
-        const entry = items[i]?.webkitGetAsEntry();
-        if (entry) topEntries.push(entry);
-      }
+      // ⚠️ 同步快照：DataTransferItemList 只在 drop 事件同步期間有效，
+      // 第一個 await 之後瀏覽器就會清空它。
+      const topEntries = Array.from(items)
+        .map((item) => item.webkitGetAsEntry())
+        .filter((entry): entry is FileSystemEntry => entry !== null);
 
       if (topEntries.length === 0) {
         // Fallback: plain files
@@ -837,9 +837,9 @@ function UploadPage() {
                     {/* Expanded file list for folders — show first 50 files */}
                     {group.isFolder && expandedGroup === group.id && (
                       <div className="border-t border-zinc-700/30 px-3 py-2 max-h-48 overflow-y-auto">
-                        {group.files.slice(0, 50).map((f, i) => (
+                        {group.files.slice(0, 50).map((f) => (
                           <div
-                            key={i}
+                            key={f.relativePath || f.file.name}
                             className="flex items-center gap-2 py-0.5 text-xs text-zinc-500"
                           >
                             <File className="h-3 w-3 shrink-0" />

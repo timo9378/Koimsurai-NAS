@@ -352,9 +352,9 @@ export const Dashboard = () => {
                   Loading processes...
                 </div>
               ) : (
-                topProcesses.slice(0, 12).map((proc, i) => (
+                topProcesses.slice(0, 12).map((proc) => (
                   <div
-                    key={`${proc.pid}-${i}`}
+                    key={proc.pid}
                     className={cn(
                       "grid grid-cols-12 gap-2 text-xs px-2 py-1.5 rounded-lg",
                       (proc.cpu_usage ?? 0) > 50
@@ -409,12 +409,12 @@ export const Dashboard = () => {
             </div>
 
             <div className="flex-1 overflow-auto custom-scrollbar space-y-3">
-              {systemStatus?.disks.map((disk, i) => {
+              {systemStatus?.disks.map((disk) => {
                 const used = disk.total_space - disk.available_space;
                 const percent = (used / disk.total_space) * 100;
                 const display = getDiskDisplayName(disk);
                 return (
-                  <div key={i} className="bg-white dark:bg-white/5 rounded-lg p-3">
+                  <div key={disk.mount_point} className="bg-white dark:bg-white/5 rounded-lg p-3">
                     <div className="flex justify-between items-center mb-2">
                       <div>
                         <div className="text-sm text-gray-900 dark:text-white font-medium">
@@ -779,11 +779,11 @@ export const Dashboard = () => {
         <div className="text-lg font-semibold text-gray-900 dark:text-white">Storage Devices</div>
       </div>
       <div className="flex-1 overflow-auto custom-scrollbar space-y-4">
-        {systemStatus?.disks.map((disk, i) => {
+        {systemStatus?.disks.map((disk) => {
           const percentage = ((disk.total_space - disk.available_space) / disk.total_space) * 100;
           const display = getDiskDisplayName(disk);
           return (
-            <div key={i} className="bg-gray-100 dark:bg-white/5 rounded-xl p-4">
+            <div key={disk.mount_point} className="bg-gray-100 dark:bg-white/5 rounded-xl p-4">
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <div className="font-medium text-gray-900 dark:text-white">{display.name}</div>

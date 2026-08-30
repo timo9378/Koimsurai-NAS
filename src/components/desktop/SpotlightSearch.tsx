@@ -99,6 +99,7 @@ const evaluateMath = (expr: string): { result: number; valid: boolean } => {
     // ⚠️ 這裡確實是動態求值，安全性靠上面那道 `^[\d+\-*/().%^]+$` ——
     // 字元集裡沒有任何字母，所以構造不出識別字，碰不到任何作用域裡的東西。
     // `Function` 的回傳一定是 any，先標成 unknown，下面的 typeof 才真的在收窄。
+    // oxlint-disable-next-line typescript/no-implied-eval
     const evaluate = new Function(`"use strict"; return (${jsExpr})`) as () => unknown;
     const result = evaluate();
     if (typeof result === "number" && !isNaN(result) && isFinite(result)) {

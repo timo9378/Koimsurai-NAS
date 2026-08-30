@@ -702,7 +702,9 @@ export const MobileLayout = () => {
               <Home className="w-3.5 h-3.5" />
             </button>
             {pathParts.map((part, i) => (
-              <React.Fragment key={i}>
+              // key 用「到這一段為止的完整路徑」而不是 index —— 路徑裡同名的
+              // 目錄（/a/b/a）用 part 當 key 會撞號。
+              <React.Fragment key={pathParts.slice(0, i + 1).join("/")}>
                 <ChevronRight className="w-3 h-3 shrink-0 text-gray-300" />
                 <button
                   onClick={() => navigateTo("/" + pathParts.slice(0, i + 1).join("/"))}

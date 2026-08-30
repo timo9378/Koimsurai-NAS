@@ -47,17 +47,21 @@ jobs:
       - name: oxfmt --check
         run: pnpm check:format
 
-      # ⚠️ 這道**目前刻意不擋**（continue-on-error）。導入當下的存量是
-      # 594 個（error 401 / warning 193），其中 177 個是 no-unsafe-* 與
-      # no-explicit-any —— 那批不是「清理」而是替 `catch (e: any)` 與未型別化的
-      # props 補型別，半做完比不做更難接手。
+      # 存量已經清到 0（導入當下是 594：error 401 / warning 193），所以這道
+      # 從 continue-on-error 改成真的擋。`--max-warnings 0` 是關鍵——沒有它，
+      # warning 會靜靜地累積回去，而這批規則裡最會抓到真 bug 的幾條
+      # （no-unnecessary-condition、exhaustive-deps、set-state-in-effect）
+      # 預設就是 warning。
       #
-      # 用 continue-on-error 而不是把規則關掉，理由跟 sora-to-ki 對 biome 的處置
-      # 一樣：藏起來就沒有人會回來清。數字留在 CI 輸出裡，清到 0 之後把這行拿掉
-      # 並補上 `--max-warnings 0`。
-      - name: oxlint（type-aware；存量 594，暫不擋）
-        continue-on-error: true
-        run: pnpm exec oxlint --type-aware --tsconfig=tsconfig.json src
+      # 清理過程中確實留了一些 oxlint-disable，每一個旁邊都寫了為什麼那裡
+      # 不能照規則做（虛擬清單需要 roving tabindex、button 不能巢狀、
+      # 對話框的 autoFocus 是 WAI-ARIA 要求的…）。
+      - name: oxlint（type-aware）
+        run: pnpm exec oxlint --type-aware --tsconfig=tsconfig.json --max-warnings 0 src
+
+      # CSS 的格式與 lint（biome 只管 CSS，JS/TS 交給 oxlint + oxfmt）
+      - name: biome（CSS）
+        run: pnpm lint:css
 
       # --passWithNoTests：測試基礎設施已就緒但還沒寫第一條。
       # 有了它，加測試不必再動 CI。

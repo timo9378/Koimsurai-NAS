@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, forwardRef } from "react";
+import React, { useRef } from "react";
 import { Virtuoso, VirtuosoGrid } from "react-virtuoso";
 import {
   Upload,
@@ -116,17 +116,21 @@ interface FileListProps {
 
 // VirtuosoGrid custom components — defined outside the component to avoid re-renders
 const gridComponents = {
-  List: forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-    ({ style, children, ...props }, ref) => (
-      <div
-        ref={ref}
-        {...props}
-        style={style}
-        className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-4 p-4 content-start"
-      >
-        {children}
-      </div>
-    ),
+  // React 19 起 ref 就是一般的 prop，不需要 forwardRef 包一層
+  List: ({
+    style,
+    children,
+    ref,
+    ...props
+  }: React.HTMLAttributes<HTMLDivElement> & { ref?: React.Ref<HTMLDivElement> }) => (
+    <div
+      ref={ref}
+      {...props}
+      style={style}
+      className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-4 p-4 content-start"
+    >
+      {children}
+    </div>
   ),
   Item: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
     <div {...props}>{children}</div>

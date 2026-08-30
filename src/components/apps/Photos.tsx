@@ -130,10 +130,13 @@ export const Photos = () => {
                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
                       </button>
                     ))}
-                    {/* Fill empty slots if row is not full */}
+                    {/* Fill empty slots if row is not full — 只是把最後一列補滿的
+                        空格子，沒有內容也沒有身分，index 就是正確的 key */}
+                    {/* oxlint-disable @eslint-react/no-array-index-key */}
                     {Array.from({ length: 6 - item.items.length }).map((_, i) => (
                       <div key={`empty-${i}`} />
                     ))}
+                    {/* oxlint-enable @eslint-react/no-array-index-key */}
                   </div>
                 );
               }

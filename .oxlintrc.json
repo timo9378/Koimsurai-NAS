@@ -370,7 +370,9 @@
   "overrides": [
     {
       "files": [
-        "src/routes/**"
+        "src/routes/**",
+        "src/components/providers/socket-provider.tsx",
+        "src/lib/file-icons.tsx"
       ],
       "rules": {
         "react/only-export-components": "off"

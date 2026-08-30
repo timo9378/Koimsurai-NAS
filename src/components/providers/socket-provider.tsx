@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import { createContext, use, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { Job, WsServerMessage } from "@/types/api";
@@ -20,7 +20,9 @@ const SocketContext = createContext<SocketContextType>({
   isConnected: false,
 });
 
-export const useSocket = () => useContext(SocketContext);
+// React 19 起 `use()` 取代 `useContext()`（它還能在條件式裡呼叫，
+// 也能讀 Promise，是同一個 API 的超集）
+export const useSocket = () => use(SocketContext);
 
 export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const [socket, setSocket] = useState<WebSocket | null>(null);
@@ -137,6 +139,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   }, [queryClient]);
 
   return (
-    <SocketContext.Provider value={{ socket, isConnected }}>{children}</SocketContext.Provider>
+    // React 19 起 Context 本身就能當 Provider 用，不必再寫 .Provider
+    <SocketContext value={{ socket, isConnected }}>{children}</SocketContext>
   );
 };

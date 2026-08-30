@@ -13,6 +13,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint --type-aware --tsconfig=tsconfig.json src",
+    "lint:css": "biome check --config-path=.config/biome.json .",
+    "format:css": "biome format --config-path=.config/biome.json --write .",
     "format": "oxfmt src",
     "check:format": "oxfmt --check src",
     "test": "vitest run --passWithNoTests",

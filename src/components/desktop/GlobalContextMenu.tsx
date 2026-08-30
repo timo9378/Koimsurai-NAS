@@ -43,6 +43,9 @@ export const GlobalContextMenu = ({ onWallpaperChange }: GlobalContextMenuProps)
   });
 
   const menuRef = useRef<HTMLDivElement>(null);
+  // 先關再開的那個 50ms timer（見下方 handleContextMenu）。存起來是為了在
+  // 卸載時清掉——否則對著已經不存在的元件 setState。
+  const reopenTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const upload = useUpload();
   const rescan = useRescan();
@@ -149,7 +152,9 @@ export const GlobalContextMenu = ({ onWallpaperChange }: GlobalContextMenuProps)
 
       setMenu({ isOpen: false, x: 0, y: 0, type: null });
 
-      setTimeout(() => {
+      // 先關再開：同一個位置重按右鍵時，不這樣做選單不會重新定位。
+      clearTimeout(reopenTimerRef.current);
+      reopenTimerRef.current = setTimeout(() => {
         setMenu({
           isOpen: true,
           x: newX,
@@ -172,6 +177,7 @@ export const GlobalContextMenu = ({ onWallpaperChange }: GlobalContextMenuProps)
     return () => {
       document.removeEventListener("contextmenu", handleContextMenu);
       document.removeEventListener("click", handleClick);
+      clearTimeout(reopenTimerRef.current);
     };
   }, []);
 
@@ -253,7 +259,7 @@ export const GlobalContextMenu = ({ onWallpaperChange }: GlobalContextMenuProps)
             />
           </>
         );
-      case "window-title":
+      case "window-title": {
         const windowId = menu.targetId;
         const targetWindow = windows.find((w) => w.id === windowId);
         if (!targetWindow) return null;
@@ -291,6 +297,7 @@ export const GlobalContextMenu = ({ onWallpaperChange }: GlobalContextMenuProps)
             />
           </>
         );
+      }
       default:
         return null;
     }

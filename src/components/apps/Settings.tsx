@@ -168,7 +168,7 @@ const StorageSection = () => {
         <p className="text-sm text-gray-500 dark:text-zinc-400 mt-1">檢視磁碟使用狀況</p>
       </div>
 
-      {systemStatus?.disks.map((disk: DiskInfo, i: number) => {
+      {systemStatus?.disks.map((disk: DiskInfo) => {
         const usedPercent =
           disk.total_space > 0
             ? ((disk.total_space - disk.available_space) / disk.total_space) * 100
@@ -176,7 +176,7 @@ const StorageSection = () => {
 
         return (
           <div
-            key={i}
+            key={disk.mount_point}
             className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 space-y-3"
           >
             <div className="flex items-center justify-between">
@@ -525,9 +525,9 @@ const SecuritySection = () => {
           </div>
 
           <div className="grid grid-cols-2 gap-2 font-mono text-sm">
-            {backupCodes.map((c, i) => (
+            {backupCodes.map((c) => (
               <div
-                key={i}
+                key={c}
                 className="p-2 rounded-md bg-white dark:bg-zinc-900 border border-amber-200 dark:border-amber-500/20 text-center tracking-wider"
               >
                 {c}

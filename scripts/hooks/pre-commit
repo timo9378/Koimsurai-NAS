@@ -30,13 +30,18 @@ if echo "$staged" | grep -qE '\.(ts|tsx)$'; then
   # 展開成多行，而 `// eslint-disable-next-line` 只蓋下一行 —— 展開之後違規
   # 就跑到抑制範圍外了。sora-to-ki 導入 oxfmt 那次一口氣撞到 6 處。
   #
-  # oxlint 目前**不擋**（存量 594，見 ci.yml 的說明），只印出來讓人看見；
-  # 清到 0 之後這裡與 CI 都要補上 --max-warnings 0。
-  echo "▶ oxlint（type-aware，僅提示不擋）"
-  pnpm exec oxlint --type-aware --tsconfig=tsconfig.json src --quiet || true
+  # 存量已清到 0，所以這裡跟 CI 一樣真的擋。--max-warnings 0 不能省：
+  # 最會抓到真 bug 的幾條規則預設是 warning。
+  echo "▶ oxlint（type-aware）"
+  pnpm exec oxlint --type-aware --tsconfig=tsconfig.json --max-warnings 0 src || fail=1
 
   echo "▶ oxfmt --check"
   pnpm exec oxfmt --check src || fail=1
+fi
+
+if echo "$staged" | grep -qE '\.css$'; then
+  echo "▶ biome（CSS）"
+  pnpm lint:css || fail=1
 fi
 
 if echo "$staged" | grep -qE '^backend/.*\.rs$'; then

@@ -1,4 +1,4 @@
-import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
+import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
 
 /**
  * 攔截器往 request config 上掛的重試狀態。
@@ -50,7 +50,7 @@ apiClient.interceptors.response.use(
         if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
           window.location.href = "/login";
         }
-        return Promise.reject(error);
+        return Promise.reject(error instanceof Error ? error : new Error(String(error)));
       }
 
       originalRequest._retry = true;
@@ -69,9 +69,13 @@ apiClient.interceptors.response.use(
         if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
           window.location.href = "/login";
         }
-        return Promise.reject(refreshError);
+        // reject 的理由一律是 Error：不是的話，接到的人只能對著 unknown
+        // 做型別體操，stack trace 也早就沒了。
+        return Promise.reject(
+          refreshError instanceof Error ? refreshError : new Error(String(refreshError)),
+        );
       }
     }
-    return Promise.reject(error);
+    return Promise.reject(error instanceof Error ? error : new Error(String(error)));
   },
 );

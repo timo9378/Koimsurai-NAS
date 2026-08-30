@@ -36,7 +36,7 @@ const createUploadQueue = (concurrency: number) => {
             await task();
             resolve();
           } catch (err) {
-            reject(err);
+            reject(err instanceof Error ? err : new Error(String(err)));
           }
         });
         void run();
