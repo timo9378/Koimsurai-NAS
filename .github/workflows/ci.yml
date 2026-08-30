@@ -84,14 +84,16 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
-          components: clippy, rustfmt
+          # llvm-tools-preview 是 cargo-llvm-cov 的前提（它用 LLVM 的
+          # instrumentation-based coverage，不是 gcov）
+          components: clippy, rustfmt, llvm-tools-preview
       - uses: Swatinem/rust-cache@258712b0b7b1ddf8bddc9fc3b0faca682b2736c3 # v2
         with:
           prefix-key: v1-rust
           shared-key: workspace-lint-test
       - uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2
         with:
-          tool: cargo-nextest,cargo-audit,cargo-shear,typos-cli
+          tool: cargo-nextest,cargo-llvm-cov,cargo-audit,cargo-shear,typos-cli
 
       # ⚠️ 這三道都要在 **repo 根**跑，不是 backend/：
       #   typos 掃整個 repo（含 .md 與 workflow 檔），在 backend/ 底下會漏掉根目錄的檔案
@@ -115,8 +117,38 @@ jobs:
       # ⚠️ 一律 nextest 且帶 --no-fail-fast。`cargo test` 在這個專案是壞的：
       # 測試會寫 process 全域的 env 與 static，同行程平行跑會互相蓋，症狀是
       # 「隨機幾條紅、每次紅的還不一樣」，看起來完全像測試本身會抖。
-      - name: nextest
-        run: cargo nextest run --locked --no-fail-fast
+      #
+      # 用 llvm-cov 包起來跑，一次拿到「測試有沒有過」與「涵蓋了多少」兩個訊號
+      # ——分成兩道會把整個測試套件跑兩次。
+      #
+      # ⚠️ --fail-under-regions 24 是**棘輪**不是目標。導入當下實測 25.19%
+      #    （functions 24.61 / lines 26.43），留約 1pp 餘裕：加一段還沒測到的
+      #    新功能不該當場擋下，但「刪掉一批測試」會被抓到。補了測試就把數字往上調。
+      #
+      #    25% 這個數字本身不必太在意——真正該看的是分佈，見下面那步印出來的
+      #    逐檔表。目前 0% 的裡面有幾個是「壞了不會有症狀」的：
+      #      handlers/upload_link.rs  唯一**免身分**就能寫檔案的公開端點
+      #      handlers/share.rs        密碼與過期判定；邏輯反了 = 連結永不過期
+      #      handlers/terminal.rs     受限 shell 的指令白名單
+      #      handlers/upload.rs       分塊續傳的 offset
+      #      utils/image.rs           縮圖產生（會處理使用者上傳的檔案）
+      - name: nextest + 覆蓋率
+        run: |
+          cargo llvm-cov nextest --locked --no-fail-fast \
+            --fail-under-regions 24 --summary-only 2>&1 | tee coverage.txt
+
+      # 逐檔表寫進 job summary：聚合數字看不出「哪裡是空的」，而那才是要看的。
+      # !cancelled()：沒過門檻時上一步會紅，那時候最需要看這張表。
+      - name: 覆蓋率摘要
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo '### 後端覆蓋率'
+            echo
+            echo '```'
+            cat coverage.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # 契約守門：Rust struct 改了卻沒重跑 export_types → 產生的 TS 與 committed 不一致 → 擋下。
       # 這是型別橋唯一的自動保障，少了它「漏改」不會有任何症狀。

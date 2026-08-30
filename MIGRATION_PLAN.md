@@ -542,13 +542,32 @@ VITE_RELEASE=$(git -C Koimsurai-NAS rev-parse --short HEAD) \
 | `fast-check` | 已安裝，**0 條** property test | 前端目前只有定樁測試；路徑正規化、file-icons 的解析順序適合 property |
 | `knip` | 已安裝，沒有 script 也沒進 CI | 加 `knip.json` + `pnpm knip` script |
 | `@vitest/coverage-v8` | 有 `test:coverage`，但**沒有門檻也沒進 CI** | `--coverage.thresholds.*` + CI 一道 |
-| `cargo llvm-cov` | 後端完全沒有覆蓋率 | `cargo llvm-cov nextest --fail-under-regions N` |
+| `cargo llvm-cov` | ✅ 已接 CI，門檻 `--fail-under-regions 24` | — |
 
 ### 未安裝（工具鏈盤點列了但還沒引入）
 
 Playwright + `@axe-core/playwright`（E2E 與自動化可及性檢查）、
 Stryker（前端變異測試）、`@lhci/cli`（效能預算）、schemathesis（吃 utoipa
 的 OpenAPI 做 API fuzz）。
+
+### 後端覆蓋率的分佈（2026-08-31 導入時實測）
+
+聚合是 **regions 25.19% / functions 24.61% / lines 26.43%**，但真正該看的是分佈。
+有測試的只有 auth / file / versioning / ffmpeg / cleanup / db / routes 那幾塊；
+以下是 **0%**，而且都屬於「壞了不會有症狀」的那種：
+
+| 檔案 | 壞了會怎樣 |
+|---|---|
+| `handlers/upload_link.rs` | 唯一**免身分**就能寫檔案的公開端點 |
+| `handlers/share.rs` | 密碼與過期判定；邏輯反了 = 分享連結永不過期，功能「正常」 |
+| `handlers/terminal.rs` | 受限 shell 的指令白名單 |
+| `handlers/upload.rs` | 分塊續傳的 offset；算錯只會默默寫壞檔案 |
+| `utils/image.rs` | 縮圖產生 —— 處理的是使用者上傳的檔案 |
+| `handlers/trash.rs` / `tag.rs` / `version.rs` | 一般 CRUD，優先度低 |
+
+另外兩個不到一半的：`middleware/auth.rs` 47.75%（認證守衛，條件反了就是全部放行）、
+`utils/jwt.rs` 51.67%（簽章驗證）。這兩個加上上面前五個，就是 `.cargo/mutants.toml`
+裡列的「值得逐檔跑 mutants」清單——先補測試，再用 mutants 驗那些測試是真的在驗行為。
 
 ### 程式面的已知債
 

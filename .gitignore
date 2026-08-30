@@ -14,7 +14,14 @@ node_modules/
 !.yarn/versions
 
 # testing
-/coverage
+# ⚠️ 不要寫成 `/coverage`（開頭斜線＝只釘在 repo 根，子目錄的同名產物不會被忽略，
+# 跟先前 `/node_modules` 讓 backend/node_modules 被 commit 進去是同一個坑）
+coverage/
+coverage.txt
+lcov.info
+# cargo-llvm-cov 的中繼檔（在 workspace root 的 target/ 底下，已被 target 涵蓋，
+# 但用 --output-dir 時會落在別處）
+llvm-cov-target/
 
 # production
 /build
