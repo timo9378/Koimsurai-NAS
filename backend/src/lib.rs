@@ -46,10 +46,17 @@ pub async fn create_app(pool: SqlitePool, storage_path: PathBuf) -> axum::Router
     // Initialize Indexer
     let indexer = Arc::new(Indexer::new(pool.clone(), storage_path.clone()));
 
-    // Run initial scan (non-blocking for tests might be better, but keeping consistent)
-    if let Err(e) = indexer.initial_scan().await {
-        tracing::error!("Initial scan failed: {}", e);
-    }
+    // ⚠️ 初始掃描**不能** await —— 它會擋住整個 create_app，伺服器要等掃完才綁 port。
+    //
+    // 遷移前這只是「掃描期間 API 不通」；SPA 改由後端供應之後，變成「掃描期間整個站
+    // 是掛的」。實測 320k 個檔案的掃描跑超過 90 秒還沒結束，而 files 表本來就持久化，
+    // 服務期間拿到的是上一輪的結果，不是空的 —— 用短暫的資料稍舊換全站可用，划算得多。
+    let indexer_initial = indexer.clone();
+    tokio::spawn(async move {
+        if let Err(e) = indexer_initial.initial_scan().await {
+            tracing::error!("Initial scan failed: {}", e);
+        }
+    });
 
     // Spawn file watcher
     let indexer_clone = indexer.clone();
