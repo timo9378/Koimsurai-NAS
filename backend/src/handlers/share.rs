@@ -117,6 +117,10 @@ pub async fn access_share_link(
     let (file_path_str, password_hash, expires_at) = row.ok_or(AppError::Status(StatusCode::NOT_FOUND))?;
 
     // Check expiry
+    //
+    // ⚠️ cargo-mutants 會把這個 `>` 換成 `>=` 而測不出差別 —— 那是**等價變異**，
+    // 不要追。兩者只在 `now` 與 `expiry` 奈秒級剛好相等時不同，寫不出能分辨
+    // 的輸入。同樣的情形在 upload_link.rs 有兩處。
     if let Some(expiry) = expires_at {
         if Utc::now() > expiry {
             return Err(AppError::Status(StatusCode::NOT_FOUND));

@@ -114,7 +114,7 @@ pub async fn get_upload_link_info(
     let (target_path, password_hash, expires_at, max_files, max_file_size, uploaded_count, created_at) =
         row.ok_or(AppError::Status(StatusCode::NOT_FOUND))?;
 
-    // 檢查是否過期
+    // 檢查是否過期（`>` vs `>=` 是等價變異，見 share.rs 的說明）
     if let Some(expiry) = expires_at {
         if Utc::now() > expiry {
             return Err(AppError::Status(StatusCode::GONE));
@@ -179,7 +179,7 @@ pub async fn upload_via_link(
     let (target_path, password_hash, expires_at, max_files, max_file_size, uploaded_count) =
         row.ok_or(AppError::Status(StatusCode::NOT_FOUND))?;
 
-    // 檢查是否過期
+    // 檢查是否過期（`>` vs `>=` 是等價變異，見 share.rs 的說明）
     if let Some(expiry) = expires_at {
         if Utc::now() > expiry {
             return Err(AppError::Status(StatusCode::GONE));

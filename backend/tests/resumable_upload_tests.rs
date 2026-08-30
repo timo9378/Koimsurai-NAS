@@ -285,6 +285,49 @@ async fn an_absolute_target_path_is_treated_as_relative_to_storage() {
 }
 
 #[tokio::test]
+async fn uploading_an_image_queues_a_thumbnail_job_but_a_text_file_does_not() {
+    // ⚠️ cargo-mutants 指出來的：決定要不要排縮圖工作的那個
+    //    `mime_type.starts_with("image/") || ... || is_likely_media(...)`
+    //    三段條件，改成 `&&` 之後沒有任何測試會紅——原本的測試只上傳 .txt/.bin。
+    //    壞掉的症狀是「圖片的縮圖永遠不產生」，畫面上就是一格永遠空白，
+    //    沒有錯誤訊息。
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "image_uploader").await;
+
+    // 最小的合法 PNG 檔頭就夠了 —— 這裡驗的是「有沒有排工作」，不是縮圖產得出來
+    let png: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+    let (_, body) = init(
+        &app,
+        &client,
+        "",
+        "photo.png",
+        i64::try_from(png.len()).expect("len"),
+    )
+    .await;
+    let id = body["upload_id"].as_str().expect("id").to_string();
+    assert!(send_chunk(&app, &client, &id, Some(0), png).await.is_success());
+
+    let thumb_jobs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM jobs WHERE job_type LIKE '%Thumbnail%'")
+        .fetch_one(&app.pool)
+        .await
+        .expect("query jobs");
+    assert_eq!(thumb_jobs, 1, "上傳圖片應該排一個縮圖工作");
+
+    // 反向：純文字不該排
+    let (_, body) = init(&app, &client, "", "notes.txt", 5).await;
+    let id = body["upload_id"].as_str().expect("id").to_string();
+    assert!(send_chunk(&app, &client, &id, Some(0), b"plain")
+        .await
+        .is_success());
+
+    let thumb_jobs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM jobs WHERE job_type LIKE '%Thumbnail%'")
+        .fetch_one(&app.pool)
+        .await
+        .expect("query jobs");
+    assert_eq!(thumb_jobs, 1, "文字檔不該排縮圖工作");
+}
+
+#[tokio::test]
 async fn a_session_belongs_to_its_creator() {
     let app = spawn_app().await;
     let owner = register_and_login(&app, "owner").await;

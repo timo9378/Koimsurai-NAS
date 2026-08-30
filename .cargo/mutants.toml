@@ -15,6 +15,34 @@
 # 「cargo test failed in an unmutated tree, so no mutants were tested」。
 test_tool = "nextest"
 
+# ── 2026-08-31 第一次跑的結果（六個安全相關檔案，四片平行約 40 分鐘）──
+#
+#   utils/jwt.rs            caught  4 / missed   0   100%
+#   handlers/share.rs       caught 11 / missed   1    92%
+#   handlers/upload.rs      caught 11 / missed   2    85%
+#   middleware/auth.rs      caught  9 / missed   2    82%
+#   handlers/upload_link.rs caught 19 / missed   5    79%
+#   handlers/terminal.rs    caught 18 / missed 111    14%
+#
+# 前五個 79–100%：那些測試是真的在驗行為，不只是把程式碼跑過一遍。
+# terminal.rs 低是預期的——只測了白名單（is_command_safe），而那支檔案還有
+# 一千多個 region 的 WebSocket handler、Tab 補全、cd、pipeline 執行沒碰。
+#
+# 漏網的那 10 個（terminal 以外）分成兩類：
+#
+# ⚠️ **等價變異，不要追**：三處 `Utc::now() > expiry` 換成 `>=`。
+#    兩者只在奈秒級剛好相等時不同，寫不出能分辨的輸入。
+#    已在 share.rs / upload_link.rs 的該行旁註明。
+#
+# 其餘七個都是真的缺口，已補測試：
+#   - `total_bytes > max_size` 的邊界（上限 10 bytes 時，10 到底進不進得來）
+#   - `target_path == "/" || is_empty()` 的結果從來沒被斷言過
+#   - CSRF 檢查只測了 POST，DELETE / PATCH 的分支沒人看
+#   - 決定要不要排縮圖工作的三段條件，測試只上傳過 .txt/.bin
+#
+# 教訓跟 sora-to-ki 那邊一樣：**覆蓋率高不代表測得有效**。這四個缺口所在的
+# 檔案覆蓋率都在 85% 以上，但那幾條分支「被執行過」而沒有「被斷言過」。
+
 # 這裡刻意**還沒有** exclude_re。
 #
 # 會想加的第一批（Debug/Display 的實作、純 getter）確實是等價變異，但

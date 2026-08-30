@@ -180,6 +180,41 @@ async fn cookie_mutating_request_with_matching_origin_is_allowed() {
 }
 
 #[tokio::test]
+async fn csrf_check_covers_delete_and_patch_too() {
+    // ⚠️ cargo-mutants 指出來的：把 `|| method == DELETE` 或 `|| method == PATCH`
+    //    改成 `&&` 之後沒有任何測試會紅 —— 因為原本只測了 POST。
+    //    後果是 DELETE/PATCH 的端點（垃圾桶、稽核日誌、刪檔、續傳分塊）
+    //    完全沒有 CSRF 防護，而 POST 的還在，所以看起來一切正常。
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "csrf_methods").await;
+
+    let res = client
+        .delete(format!("{}/api/trash", app.address))
+        .send()
+        .await
+        .expect("delete");
+    assert_eq!(res.status(), StatusCode::FORBIDDEN, "DELETE 也要做 CSRF 檢查");
+
+    let res = client
+        .patch(format!("{}/api/upload/session/whatever", app.address))
+        .body("x")
+        .send()
+        .await
+        .expect("patch");
+    assert_eq!(res.status(), StatusCode::FORBIDDEN, "PATCH 也要做 CSRF 檢查");
+
+    // 帶了 Origin 就該通過 CSRF 這一關（後面是 404 還是 200 不是這裡的重點）
+    let res = client
+        .patch(format!("{}/api/upload/session/whatever", app.address))
+        .header("Origin", app.origin_header())
+        .body("x")
+        .send()
+        .await
+        .expect("patch");
+    assert_ne!(res.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
 async fn cookie_read_request_does_not_need_origin() {
     let app = spawn_app().await;
     let client = register_and_login(&app, "reader").await;

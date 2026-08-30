@@ -220,6 +220,51 @@ async fn oversized_file_is_rejected_and_not_left_on_disk() {
 }
 
 #[tokio::test]
+async fn a_file_exactly_at_the_size_limit_is_accepted() {
+    // ⚠️ cargo-mutants 指出來的邊界：`total_bytes > max_size` 換成 `>=` 之後
+    //    沒有任何測試會紅。差別是「上限 10 bytes」到底代表 10 進得來還是進不來
+    //    —— 原本的測試只送 5 和 100，正好跳過那個點。
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "boundary_uploader").await;
+    let id = create_link(&app, &client, json!({ "target_path": "/", "max_file_size": 10 })).await;
+
+    assert!(
+        upload(&app, &id, "", "exact.txt", vec![b'a'; 10])
+            .await
+            .status()
+            .is_success(),
+        "剛好等於上限應該收下"
+    );
+    assert_eq!(
+        upload(&app, &id, "", "over.txt", vec![b'a'; 11]).await.status(),
+        StatusCode::PAYLOAD_TOO_LARGE,
+        "多一個 byte 就該擋"
+    );
+}
+
+#[tokio::test]
+async fn root_target_is_displayed_as_root_not_as_a_slash() {
+    // ⚠️ 也是 cargo-mutants 指出來的：`target_path == "/" || target_path.is_empty()`
+    //    這個條件沒有任何測試在看它的結果。壞掉的話上傳頁的標題會變成
+    //    「上傳檔案到『/』」，醜但不會有人察覺是 bug。
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "root_uploader").await;
+
+    for target in ["/", ""] {
+        let id = create_link(&app, &client, json!({ "target_path": target })).await;
+        let info: Value = Client::new()
+            .get(format!("{}/api/upload-link/{id}/info", app.address))
+            .send()
+            .await
+            .expect("info")
+            .json()
+            .await
+            .expect("json");
+        assert_eq!(info["target_folder"], "Root", "target_path={target:?}");
+    }
+}
+
+#[tokio::test]
 async fn relative_path_cannot_escape_the_target_folder() {
     let app = spawn_app().await;
     let client = register_and_login(&app, "traversal_uploader").await;
