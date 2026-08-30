@@ -377,6 +377,9 @@ export const useFavorites = () => {
 
 export const useDownload = () => {
   return useMutation({
+    // 這裡沒有 await（下載交給瀏覽器原生處理），但 mutationFn 的型別要求
+    // 回傳 Promise，async 拿不掉。
+    // oxlint-disable-next-line typescript/require-await
     mutationFn: async (path: string) => {
       const cleanPath = path.startsWith("/") ? path.slice(1) : path;
       // Encode each path segment to handle special characters (Chinese, spaces, etc.)

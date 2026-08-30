@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Share2,
@@ -60,6 +60,13 @@ function ShareDialogBody({
   isDirectory = false,
   onCreateShare,
 }: Omit<ShareDialogProps, "isOpen">) {
+  // ⚠️ 隨機的 name 是為了擋瀏覽器的密碼自動填入（單靠 autoComplete="new-password"
+  // 在 Chrome 上不夠）。原本寫 `${Date.now()}`——那是在 render 中做有副作用的
+  // 呼叫：每次 render 都是不同的 name，React 每次都要改 DOM 屬性，而且在
+  // StrictMode / concurrent 下同一次 render 可能算出兩個不同值。
+  // useId 是 React 為「穩定的唯一識別字」提供的東西，一次算好、整個生命週期不變。
+  const passwordFieldId = useId();
+
   const [step, setStep] = useState<"config" | "result">("config");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -208,7 +215,7 @@ function ShareDialogBody({
                   <div className="relative">
                     <Input
                       type={showPassword ? "text" : "password"}
-                      name={`share-password-${Date.now()}`}
+                      name={`share-password-${passwordFieldId}`}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="輸入分享密碼..."

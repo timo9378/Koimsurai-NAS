@@ -74,7 +74,7 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
   );
 
   const initializeTerminal = useCallback(
-    async (tabId: string) => {
+    (tabId: string) => {
       const tab = tabs.find((t) => t.id === tabId);
       if (!tab || tab.terminal || !terminalContainerRef.current) return;
 
@@ -244,8 +244,10 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
     if (activeTabId) {
       const tab = tabs.find((t) => t.id === activeTabId);
       if (tab && !tab.terminal) {
-        // Small delay to ensure DOM is ready
-        setTimeout(() => void initializeTerminal(activeTabId), 100);
+        // ⚠️ 一定要回傳 cleanup：沒有的話，切分頁或在這 100ms 內關掉視窗，
+        //    timer 還是會跑，對著已經卸載的 DOM 建 terminal。
+        const timer = setTimeout(() => initializeTerminal(activeTabId), 100);
+        return () => clearTimeout(timer);
       }
     }
   }, [activeTabId, tabs, initializeTerminal]);
@@ -262,7 +264,7 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
             const dimensions = { cols: activeTab.terminal.cols, rows: activeTab.terminal.rows };
             activeTab.ws.send(JSON.stringify({ type: "resize", ...dimensions }));
           }
-        } catch (e) {
+        } catch {
           // Ignore fit errors
         }
       }
@@ -430,7 +432,7 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
                   <span className="text-red-400">{error}</span>
                   <button
                     onClick={() => {
-                      if (activeTabId) void initializeTerminal(activeTabId);
+                      if (activeTabId) initializeTerminal(activeTabId);
                     }}
                     className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
                   >

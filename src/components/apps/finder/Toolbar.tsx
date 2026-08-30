@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useId, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -270,6 +270,13 @@ export const Toolbar = ({
   onSearchChange,
   onMoveToPath,
 }: ToolbarProps) => {
+  // ⚠️ 隨機的 name 是為了擋瀏覽器的密碼自動填入（單靠 autoComplete="new-password"
+  // 在 Chrome 上不夠）。原本寫 `${Date.now()}`——那是在 render 中做有副作用的
+  // 呼叫：每次 render 都是不同的 name，React 每次都要改 DOM 屬性，而且在
+  // StrictMode / concurrent 下同一次 render 可能算出兩個不同值。
+  // useId 是 React 為「穩定的唯一識別字」提供的東西，一次算好、整個生命週期不變。
+  const searchFieldId = useId();
+
   return (
     <div className="h-14 flex items-center justify-between px-4 border-b border-white/10 bg-white/40 dark:bg-black/40 backdrop-blur-md shrink-0">
       <div className="flex items-center gap-4">
@@ -360,7 +367,7 @@ export const Toolbar = ({
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-blue-500 transition-colors" />
           <input
             type="search"
-            name={`finder-search-${Date.now()}`}
+            name={`finder-search-${searchFieldId}`}
             placeholder="Search"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}

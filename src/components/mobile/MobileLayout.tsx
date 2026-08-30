@@ -523,7 +523,7 @@ export const MobileLayout = () => {
             await navigator.clipboard.writeText(url);
             toast.success("Share link copied!");
           }
-        } catch (e) {
+        } catch {
           toast.error("Failed to create share link");
         }
         break;

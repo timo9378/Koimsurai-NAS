@@ -52,7 +52,7 @@ export const useContainers = () => {
   });
 };
 
-export const useContainerStats = (id: string, enabled: boolean = false) => {
+export const useContainerStats = (id: string, enabled = false) => {
   return useQuery<ContainerStats>({
     queryKey: ["docker", "container", id, "stats"],
     queryFn: async () => {
@@ -66,7 +66,7 @@ export const useContainerStats = (id: string, enabled: boolean = false) => {
   });
 };
 
-export const useContainerLogs = (id: string, enabled: boolean = false) => {
+export const useContainerLogs = (id: string, enabled = false) => {
   return useQuery<string>({
     queryKey: ["docker", "container", id, "logs"],
     queryFn: async () => {

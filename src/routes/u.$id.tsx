@@ -138,8 +138,12 @@ function groupByTopFolder(entries: { file: File; relativePath: string }[]): Uplo
   for (const e of entries) {
     const slash = e.relativePath.indexOf("/");
     const folder = slash > 0 ? e.relativePath.slice(0, slash) : "__root__";
-    if (!map.has(folder)) map.set(folder, []);
-    map.get(folder)!.push(e);
+    let group = map.get(folder);
+    if (!group) {
+      group = [];
+      map.set(folder, group);
+    }
+    group.push(e);
   }
   const groups: UploadGroup[] = [];
   for (const [folder, files] of map) {
@@ -255,11 +259,14 @@ function UploadPage() {
   const addIndividualFiles = useCallback(
     (newFiles: File[]) => {
       let filtered = newFiles;
-      if (uploadInfo?.max_file_size) {
-        const oversized = filtered.filter((f) => f.size > uploadInfo.max_file_size!);
+      // 綁成區域變數：`!` 會在重構時默默失效，而 `!= null` 是因為 0 是合法的
+      // 上限值（表示不准傳檔），用真假值判斷會把它當成「沒有限制」。
+      const maxFileSize = uploadInfo?.max_file_size;
+      if (maxFileSize != null) {
+        const oversized = filtered.filter((f) => f.size > maxFileSize);
         if (oversized.length > 0) {
-          setError(`部分檔案超過大小限制 (${formatFileSize(uploadInfo.max_file_size)})`);
-          filtered = filtered.filter((f) => f.size <= uploadInfo.max_file_size!);
+          setError(`部分檔案超過大小限制 (${formatFileSize(maxFileSize)})`);
+          filtered = filtered.filter((f) => f.size <= maxFileSize);
         }
       }
       const newGroups: UploadGroup[] = filtered.map((file) => ({

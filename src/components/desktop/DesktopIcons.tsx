@@ -60,9 +60,8 @@ export const DesktopIcons = () => {
   // Calculate default position for a file
   const getFilePosition = (file: FileInfo, index: number): IconPosition => {
     // Check if we have a saved position
-    if (iconPositions.has(file.path)) {
-      return iconPositions.get(file.path)!;
-    }
+    const saved = iconPositions.get(file.path);
+    if (saved) return saved;
 
     // Calculate default position based on index
     // Icons flow top to bottom, then left to right

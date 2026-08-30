@@ -124,7 +124,7 @@ function SharePage() {
     }
   };
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
     if (!shareInfo) return;
 
     setIsDownloading(true);
@@ -440,7 +440,7 @@ function SharePage() {
 
                   {/* Download Button */}
                   <Button
-                    onClick={() => void handleDownload()}
+                    onClick={handleDownload}
                     disabled={isDownloading}
                     className="w-full h-12 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium shadow-lg"
                   >

@@ -55,7 +55,7 @@ interface TabState {
   searchQuery: string;
 }
 
-const createTab = (path: string = "/"): TabState => ({
+const createTab = (path = "/"): TabState => ({
   id: crypto.randomUUID(),
   path,
   history: [path],
@@ -111,7 +111,7 @@ const persistTabs = (windowId: string | undefined, tabs: TabState[], activeTabId
   if (!windowId || typeof window === "undefined") return;
   try {
     const serialized: { tabs: SerializedTabState[]; activeTabId: string } = {
-      tabs: tabs.map(({ selectedFiles, ...rest }) => rest),
+      tabs: tabs.map(({ selectedFiles: _selectedFiles, ...rest }) => rest),
       activeTabId,
     };
     localStorage.setItem(`${TABS_STORAGE_KEY}-${windowId}`, JSON.stringify(serialized));
@@ -223,7 +223,7 @@ export const Finder = ({ windowId }: FinderProps) => {
   );
 
   // Tab management functions
-  const addTab = (path: string = "/") => {
+  const addTab = (path = "/") => {
     const newTab = createTab(path);
     setTabs((prev) => [...prev, newTab]);
     setActiveTabId(newTab.id);
@@ -761,7 +761,7 @@ export const Finder = ({ windowId }: FinderProps) => {
     }
   };
 
-  const handleShare = async (file: FileInfo) => {
+  const handleShare = (file: FileInfo) => {
     setShareFile(file);
     setIsShareDialogOpen(true);
   };
@@ -960,10 +960,12 @@ export const Finder = ({ windowId }: FinderProps) => {
             : currentPath
           : targetDir;
 
-        if (!filesByDir.has(uploadPath)) {
-          filesByDir.set(uploadPath, []);
+        let group = filesByDir.get(uploadPath);
+        if (!group) {
+          group = [];
+          filesByDir.set(uploadPath, group);
         }
-        filesByDir.get(uploadPath)!.push(file);
+        group.push(file);
       }
 
       // Upload all groups concurrently (each group uses the upload queue internally)
@@ -1221,7 +1223,7 @@ export const Finder = ({ windowId }: FinderProps) => {
           onRestore={(name) => restoreFromTrash.mutate(name)}
           onDelete={handleDelete}
           onDownload={(path) => downloadFile.mutate(path)}
-          onShare={(...args) => void handleShare(...args)}
+          onShare={handleShare}
           onToggleStar={(path) => toggleStar.mutate(path)}
           onRenameStart={handleRenameStart}
           onTag={(file) => {

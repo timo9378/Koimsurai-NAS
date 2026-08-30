@@ -17,8 +17,9 @@ const createUploadQueue = (concurrency: number) => {
 
   const run = async () => {
     if (running >= concurrency || queue.length === 0) return;
+    const task = queue.shift();
+    if (!task) return;
     running++;
-    const task = queue.shift()!;
     try {
       await task();
     } finally {
@@ -125,7 +126,7 @@ export const useFileUpload = () => {
     file: File,
     currentPath: string,
     resumeUploadId?: string,
-    startOffset: number = 0,
+    startOffset = 0,
   ) => {
     const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
     let upload_id = resumeUploadId;

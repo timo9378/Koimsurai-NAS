@@ -67,7 +67,7 @@ export const useDockerContainers = () => {
 };
 
 // Get stats for a single container
-export const useContainerStats = (containerId: string, enabled: boolean = true) => {
+export const useContainerStats = (containerId: string, enabled = true) => {
   return useQuery({
     queryKey: ["docker", "container", containerId, "stats"],
     queryFn: async () => {

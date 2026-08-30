@@ -10,6 +10,42 @@ interface CalculatorProps {
 
 type Operation = "+" | "-" | "×" | "÷" | "%" | null;
 
+const BASE_CLASSES =
+  "flex items-center justify-center rounded-xl font-medium text-xl transition-all duration-150 active:scale-95 select-none";
+
+const VARIANT_CLASSES = {
+  default: "bg-[#505050] hover:bg-[#606060] text-white",
+  operator: "bg-[#ff9500] hover:bg-[#ffaa33] text-white",
+  function: "bg-[#a5a5a5] hover:bg-[#b5b5b5] text-black",
+  equal: "bg-[#ff9500] hover:bg-[#ffaa33] text-white",
+};
+
+/**
+ * ⚠️ 定義在模組層級，不要放進 `Calculator` 的函式主體裡。
+ *
+ * 元件定義在 render 之內的話，每次 render 都是一個**新的元件型別**——React
+ * 認不出它跟上一次是同一個，於是整棵子樹卸載再重掛，而不是更新。這裡剛好
+ * 沒有內部狀態所以看不出症狀，但按鈕上的 CSS transition 每次 render 都會從頭
+ * 開始，而且 19 顆按鈕全部重建 DOM。
+ *
+ * 這個元件本來就只吃 props、沒有用到任何閉包變數，搬出來零成本。
+ */
+const Button = ({
+  children,
+  onClick,
+  variant = "default",
+  className,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  variant?: "default" | "operator" | "function" | "equal";
+  className?: string;
+}) => (
+  <button onClick={onClick} className={cn(BASE_CLASSES, VARIANT_CLASSES[variant], className)}>
+    {children}
+  </button>
+);
+
 export const Calculator = ({ windowId: _windowId }: CalculatorProps) => {
   const [display, setDisplay] = useState("0");
   const [previousValue, setPreviousValue] = useState<number | null>(null);
@@ -180,34 +216,6 @@ export const Calculator = ({ windowId: _windowId }: CalculatorProps) => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [inputDigit, inputDot, performOperation, inputPercent, calculate, handleBackspace, clearAll]);
-
-  const Button = ({
-    children,
-    onClick,
-    variant = "default",
-    className,
-  }: {
-    children: React.ReactNode;
-    onClick: () => void;
-    variant?: "default" | "operator" | "function" | "equal";
-    className?: string;
-  }) => {
-    const baseClasses =
-      "flex items-center justify-center rounded-xl font-medium text-xl transition-all duration-150 active:scale-95 select-none";
-
-    const variantClasses = {
-      default: "bg-[#505050] hover:bg-[#606060] text-white",
-      operator: "bg-[#ff9500] hover:bg-[#ffaa33] text-white",
-      function: "bg-[#a5a5a5] hover:bg-[#b5b5b5] text-black",
-      equal: "bg-[#ff9500] hover:bg-[#ffaa33] text-white",
-    };
-
-    return (
-      <button onClick={onClick} className={cn(baseClasses, variantClasses[variant], className)}>
-        {children}
-      </button>
-    );
-  };
 
   // Format display number
   const formatDisplay = (value: string) => {
