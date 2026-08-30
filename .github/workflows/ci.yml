@@ -65,8 +65,7 @@ jobs:
       - name: biome（CSS）
         run: pnpm lint:css
 
-      # --passWithNoTests：測試基礎設施已就緒但還沒寫第一條。
-      # 有了它，加測試不必再動 CI。
+      # --passWithNoTests 已經拿掉：測試存在了，空跑就該是錯誤。
       - name: vitest
         run: pnpm test
 

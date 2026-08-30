@@ -379,6 +379,21 @@
       }
     },
     {
+      // 測試檔放寬兩條：
+      //   no-non-null-assertion —— 測試裡 `windows[0]!` 是刻意的，斷言失敗時
+      //     直接丟例外正是我們要的（比 `?.` 之後得到 undefined 再比對好查）。
+      //   no-empty-function —— jsdom 缺的 API 需要空實作的 stub。
+      "files": [
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "src/test/**"
+      ],
+      "rules": {
+        "typescript/no-non-null-assertion": "off",
+        "no-empty-function": "off"
+      }
+    },
+    {
       "files": [
         "**/*.cjs",
         "*.config.js"

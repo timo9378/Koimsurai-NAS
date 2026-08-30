@@ -17,7 +17,9 @@
     "format:css": "biome format --config-path=.config/biome.json --write .",
     "format": "oxfmt src '!src/**/*.css'",
     "check:format": "oxfmt --check src '!src/**/*.css'",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "export:types": "cargo run --manifest-path backend/Cargo.toml --bin export_types"
   },
   "dependencies": {
@@ -69,7 +71,9 @@
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/router-plugin": "^1.168.35",
     "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

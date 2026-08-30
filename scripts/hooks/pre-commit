@@ -38,6 +38,10 @@ if echo "$staged" | grep -qE '\.(ts|tsx)$'; then
   # 排除 CSS：那邊歸 biome 管（見下面那段），兩個 formatter 會互相改回去
   echo "▶ oxfmt --check"
   pnpm check:format || fail=1
+
+  # 整包 <2 秒，放進 hook 划算。慢的（vite build）留在 CI。
+  echo "▶ vitest"
+  pnpm test || fail=1
 fi
 
 if echo "$staged" | grep -qE '\.css$'; then
