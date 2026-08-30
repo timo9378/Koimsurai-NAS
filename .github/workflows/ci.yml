@@ -44,6 +44,8 @@ jobs:
       # ⚠️ 必須排在 oxlint **之前或之後都可以，但本機 hook 裡要在 oxlint 之後**：
       #    oxfmt 會把單行的 `if (x) { a; return; }` 展開成多行，而
       #    `// eslint-disable-next-line` 只蓋下一行，展開後違規就跑到抑制範圍外。
+      # ⚠️ oxfmt 排除了 CSS（見 package.json 的 script）：CSS 歸 biome 管，
+      #    兩個 formatter 對同一個檔案有不同意見會互相把對方的結果改回去。
       - name: oxfmt --check
         run: pnpm check:format
 

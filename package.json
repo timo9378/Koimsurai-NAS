@@ -15,8 +15,8 @@
     "lint": "oxlint --type-aware --tsconfig=tsconfig.json src",
     "lint:css": "biome check --config-path=.config/biome.json .",
     "format:css": "biome format --config-path=.config/biome.json --write .",
-    "format": "oxfmt src",
-    "check:format": "oxfmt --check src",
+    "format": "oxfmt src '!src/**/*.css'",
+    "check:format": "oxfmt --check src '!src/**/*.css'",
     "test": "vitest run --passWithNoTests",
     "export:types": "cargo run --manifest-path backend/Cargo.toml --bin export_types"
   },

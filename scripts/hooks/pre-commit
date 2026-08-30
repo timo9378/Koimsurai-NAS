@@ -35,8 +35,9 @@ if echo "$staged" | grep -qE '\.(ts|tsx)$'; then
   echo "▶ oxlint（type-aware）"
   pnpm exec oxlint --type-aware --tsconfig=tsconfig.json --max-warnings 0 src || fail=1
 
+  # 排除 CSS：那邊歸 biome 管（見下面那段），兩個 formatter 會互相改回去
   echo "▶ oxfmt --check"
-  pnpm exec oxfmt --check src || fail=1
+  pnpm check:format || fail=1
 fi
 
 if echo "$staged" | grep -qE '\.css$'; then
