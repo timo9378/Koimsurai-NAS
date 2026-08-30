@@ -1,0 +1,123 @@
+# cargo-mutants —— 變異測試。
+#
+# 為什麼獨立一個 workflow 而不是接在 ci.yml：跑一次要一~兩小時，接上去等於每次
+# push 都要等，而它的產出是「需要人去讀的清單」而不是紅綠燈。
+#
+# ⚠️ **不在本機跑。** 開發機就是 NAS 本體，上面同時跑著實際在用的服務，而 mutants
+#    會把每個變異都重編譯 + 重跑一次完整測試套件，CPU 會被吃滿數小時。
+#    判準與逐檔建議見 .cargo/mutants.toml。
+#
+# 怎麼用：
+#     gh workflow run mutants.yml
+#     gh workflow run mutants.yml -f paths=backend/src/utils/jwt.rs
+#     gh run watch && gh run view --log   # 或直接看 Actions 頁的 job summary
+name: Mutants
+
+on:
+  workflow_dispatch:
+    inputs:
+      paths:
+        # ⚠️ 含斜線的 glob 比對的是**完整路徑**（從 workspace root 起算），
+        #    所以要寫 backend/src/... 而不是 src/...
+        description: '只跑這些檔案的 glob，從 repo 根起算（空白 = 全跑）。例：backend/src/utils/jwt.rs'
+        required: false
+        default: ''
+  schedule:
+    # 每週日 19:00 UTC = 週一 03:00 Asia/Taipei。週期性跑是為了看趨勢，不擋任何東西。
+    - cron: '0 19 * * 0'
+
+# 同一分支重複觸發時取消舊的 —— 這個 workflow 很貴，沒必要同時跑兩份。
+concurrency:
+  group: mutants-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  mutants:
+    # ⚠️ shard 是 **0-based**（0/4 ~ 3/4）。寫成 1..4 的話 4/4 會落在範圍外。
+    name: shard ${{ matrix.shard }}/4
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+      - uses: Swatinem/rust-cache@258712b0b7b1ddf8bddc9fc3b0faca682b2736c3 # v2
+        with:
+          prefix-key: v1-rust
+          # 跟 CI 共用 key：mutants 第一步是先建一次未變異的樹，可以直接沿用
+          # CI 已經編好的相依。save-if: false —— 不要讓這個 workflow 去覆蓋
+          # CI 的快取（它的 target/ 裡混著各種變異的產物）。
+          shared-key: workspace-lint-test
+          save-if: false
+      - uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2
+        with:
+          tool: cargo-nextest,cargo-mutants
+
+      # ⚠️ inputs.paths 走 env，不要直接 ${{ }} 內插進 run —— 內插等於把使用者
+      #    輸入貼進 shell 腳本，一個 `; rm -rf …` 就直接執行了（zizmor 會擋）。
+      #
+      # 一律做 baseline（不加 --baseline=skip）：baseline 失敗代表測試本身就是
+      # 壞的，那時候任何變異分數都沒有意義。
+      #
+      # --timeout-multiplier 5：這裡的測試會起 axum + 開 SQLite，單條約 4 秒，
+      # 而變異可能造成無窮迴圈。乘數太小會把「本來就慢」誤判成 timeout ——
+      # timeout 算成「被抓到」，所以分數會虛高。
+      - name: cargo mutants
+        env:
+          MUTANT_PATHS: ${{ inputs.paths }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          if [ -n "$MUTANT_PATHS" ]; then
+            echo "::notice::只跑 $MUTANT_PATHS"
+            cargo mutants --no-shuffle --timeout-multiplier 5 --file "$MUTANT_PATHS"
+          else
+            cargo mutants --no-shuffle --timeout-multiplier 5 --shard "$SHARD/4"
+          fi
+
+      # ⚠️ 有漏網的變異時 cargo mutants 會回非 0，而那正是最需要看報告的時候。
+      #    只在成功時上傳等於「壞掉時看不到資料」。
+      - name: 上傳結果
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v6
+        with:
+          name: mutants-shard-${{ matrix.shard }}
+          path: mutants.out/
+          retention-days: 14
+
+      # 把漏網清單直接寫進 job summary，不必下載 artifact 才看得到。
+      - name: 摘要
+        if: ${{ !cancelled() }}
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -uo pipefail
+          {
+            echo "### mutants shard $SHARD/4"
+            echo
+            for f in caught missed timeout unviable; do
+              if [ -f "mutants.out/$f.txt" ]; then
+                echo "- **$f**: $(wc -l < "mutants.out/$f.txt")"
+              else
+                echo "- **$f**: （無檔案）"
+              fi
+            done
+            if [ -s mutants.out/missed.txt ]; then
+              echo
+              echo '<details><summary>漏網的變異（改了行為但測試沒紅）</summary>'
+              echo
+              echo '```'
+              cat mutants.out/missed.txt
+              echo '```'
+              echo
+              echo '</details>'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

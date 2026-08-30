@@ -1,0 +1,47 @@
+# cargo-mutants 設定。
+#
+# ⚠️ **不要在這台機器上跑。** 這台就是 NAS 本體，mutants 會把每個變異都重跑一次
+#    完整測試套件（每次要編譯 + 起 axum + 開 SQLite），CPU 會被吃滿好幾個小時，
+#    而上面同時跑著使用者實際在用的服務。要跑就用 GitHub Actions：
+#
+#        gh workflow run mutants.yml                       # 全跑（分片，約 1~2 小時）
+#        gh workflow run mutants.yml -f paths=src/utils/jwt.rs   # 單檔（幾分鐘）
+#
+#    設定見 .github/workflows/mutants.yml。它不接在 CI 上，不會擋 push。
+
+# ⚠️ 一定要用 nextest。預設的 `cargo test` 會把同一個 test binary 的測試放在同一個
+# process 平行跑，而這裡的測試會寫 process 全域的 env 與 static（見 ci.yml 那段
+# 說明）→ 互相蓋 → baseline 就失敗，cargo-mutants 會直接停在
+# 「cargo test failed in an unmutated tree, so no mutants were tested」。
+test_tool = "nextest"
+
+# 這裡刻意**還沒有** exclude_re。
+#
+# 會想加的第一批（Debug/Display 的實作、純 getter）確實是等價變異，但
+# `exclude_re` 比對的是 `--list` 印出來的變異名稱，而那個名稱長什麼樣要跑過
+# 一次才知道。憑猜測寫上去的正規表示式如果對不到，會安靜地不生效——設定檔裡
+# 有一條「看起來有在做事」但其實沒有的規則，比沒有規則更糟。
+#
+# 第一次在 Actions 上跑完之後，照 mutants.out/caught.txt 裡的實際格式再補。
+
+# 判準：「壞了會不會安靜地錯」
+# ---------------------------
+# 全跑一次的結果，在目前的覆蓋率下大半等於「哪些檔案沒被測到」——那件事看覆蓋率
+# 報告更快。真正划算的是逐檔跑那些「弄壞之後功能看起來完全正常」的地方：
+#
+#   utils/jwt.rs              簽章驗證被削弱不會有任何症狀，直到有人偽造 token
+#   middleware/               認證守衛：條件反了就是「全部放行」，測試若只驗
+#                             正向路徑就完全抓不到
+#   handlers/upload.rs        分塊上傳的 offset／續傳判斷：算錯只會默默寫壞檔案
+#   handlers/file.rs          路徑正規化與 traversal 防護（proptest_security.rs
+#                             已覆蓋一部分，值得確認變異真的被殺掉）
+#   handlers/report_tunnel.rs DSN 比對：比對放寬之後就是一個對外開放的轉發器，
+#                             而且完全沒有症狀
+#   services/                 排程與快取的條件判斷：破掉之後功能正常，只是每次
+#                             請求多打 N 次外部呼叫或 DB
+#
+# 反過來，炸了就會知道的東西（大部分 handler 的 passthrough）不必花這個時間。
+#
+# ⚠️ 覆蓋率高不代表測得有效。這件事在 sora-to-ki 實測過：有個檔覆蓋 98.67%
+#    而變異分數只有 43%——測試把每一行都跑過了，但沒有任何一條斷言會因為
+#    行為改變而失敗。
