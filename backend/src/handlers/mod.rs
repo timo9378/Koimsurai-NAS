@@ -5,6 +5,7 @@ pub mod file;
 pub mod job;
 pub mod media;
 pub mod permission;
+pub mod report_tunnel;
 pub mod search;
 pub mod share;
 pub mod system;

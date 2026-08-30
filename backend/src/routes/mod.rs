@@ -5,6 +5,7 @@
 // 仍會擋），必須放模組層級。上游改寫之後可以拿掉。
 #![allow(clippy::needless_for_each, reason = "utoipa OpenApi derive 的巨集展開")]
 
+use crate::handlers::report_tunnel;
 use crate::handlers::{
     audit, auth, docker, file, job, media, permission, search, share, system, tag, terminal, trash, upload,
     upload_link, version, webdav, ws,
@@ -260,6 +261,9 @@ pub async fn create_router(state: AppState) -> Router {
         .route("/webdav/*path", any(webdav::webdav_handler))
         // Public health check for uptime monitoring (no auth, returns 200)
         .route("/health", get(|| async { "OK" }))
+        // 前端錯誤回報的轉發端點（Sentry SDK 的 tunnel 目的地）。
+        // ⚠️ 刻意無認證：錯誤可能發生在登入之前。防濫用見該 handler 的說明。
+        .route("/api/_report", post(report_tunnel::tunnel))
         .layer(cors)
         .layer(session_layer)
         .with_state(state)

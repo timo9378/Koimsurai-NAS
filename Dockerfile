@@ -21,12 +21,45 @@ COPY tsconfig.json vite.config.ts index.html ./
 COPY src ./src
 COPY public ./public
 
-# `pnpm build` = tsc --noEmit && vite build，型別錯誤在這裡就會擋下建置
+# `pnpm build` = tsc --noEmit && vite build，型別錯誤在這裡就會擋下建置。
+# ⚠️ VITE_RELEASE 沒帶的話 SDK 不會帶版本標記 —— 功能仍正常，只是 GlitchTip 上的
+#    issue 歸不到某次部署。要帶就 `VITE_RELEASE=$(git rev-parse --short HEAD)`。
+ARG VITE_RELEASE
 RUN pnpm build
 
-# ⚠️ vite 的 `sourcemap: 'hidden'` **只拿掉 sourceMappingURL 註解，不會阻止
-# .map 被供應** —— 實測 /assets/*.js.map 直接 200。這步是必要的，不是清潔癖。
-# （要送 GlitchTip 的話，上傳步驟要插在這一行之前。）
+# ── source map → GlitchTip ──────────────────────────────────────────
+# 三件事綁在 build 裡，所以不存在「忘記傳」或「順序錯」：先烙 debug id、
+# 再上傳、最後從映像刪掉。分開做的話順序錯的症狀是「stack trace 依然
+# minify，且沒有任何錯誤訊息」—— 查不出來的那種。
+#
+# 用 @sentry/cli 而不是 glitchtip 自己的：GlitchTip 的 find_source_files
+# 本來就優先比對 debug_id，兩者相容。
+
+# 1) inject：在每支 JS 與它的 .map 裡烙一個 UUID。純本機操作，不碰網路。
+#    有了它，比對不再依賴檔名或 release 名稱 —— 那是最容易錯的一環。
+RUN pnpm exec sentry-cli sourcemaps inject dist/assets
+
+# 2) upload。⚠️ token 走 BuildKit secret 而不是 ARG —— ARG 會留在映像歷史裡。
+#    ⚠️ 沒帶 secret 時整步跳過（例如 CI 只想驗 build 過不過）；有帶就必須成功，
+#      刻意讓它會擋下部署：靜靜跳過等於錯誤追蹤白裝，而那不會有人發現。
+ARG SENTRY_URL=https://glitchtip.koimsurai.com
+ARG SENTRY_ORG=koimsurai
+ARG SENTRY_PROJECT=koimsurai-nas
+RUN --mount=type=secret,id=sentry_token \
+    if [ -s /run/secrets/sentry_token ]; then \
+      SENTRY_AUTH_TOKEN="$(cat /run/secrets/sentry_token)" \
+      SENTRY_URL="$SENTRY_URL" SENTRY_ORG="$SENTRY_ORG" SENTRY_PROJECT="$SENTRY_PROJECT" \
+      pnpm exec sentry-cli sourcemaps upload dist/assets \
+        --release "${VITE_RELEASE:-unknown}" --url-prefix '~/assets'; \
+    else \
+      echo "⚠️  沒有 sentry_token secret，跳過 source map 上傳"; \
+    fi
+
+# 3) 刪掉 .map。
+#    ⚠️ 這步是必要的，而且原因跟直覺相反：vite 的 `sourcemap: 'hidden'` **只拿掉
+#      bundle 結尾的 sourceMappingURL 註解，不會阻止檔案被供應**。實測過 ——
+#      /assets/*.js.map 直接 200，整站原始碼可下載。
+#      GlitchTip 已經有了自己那份，production 映像不需要留。
 RUN find dist -name '*.map' -delete
 
 # ── Stage 2：後端 ────────────────────────────────────────────────────

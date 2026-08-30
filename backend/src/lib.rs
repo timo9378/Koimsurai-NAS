@@ -162,6 +162,13 @@ pub async fn create_app(pool: SqlitePool, storage_path: PathBuf) -> axum::Router
     // JWT secret — 啟動時讀取一次，避免每次請求都讀 env var
     let jwt_secret = Arc::new(env::var("JWT_SECRET").expect("JWT_SECRET must be set (checked in main.rs)"));
 
+    // 共用的 HTTP client。只設 connect_timeout —— 整體 timeout 由各呼叫端依用途決定
+    // （小的 POST 給明確上限，串流/大檔傳輸不設）。
+    let http = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .build()
+        .expect("建立 HTTP client 失敗（TLS/系統層損壞才可能）");
+
     let state = AppState {
         pool,
         storage_path,
@@ -174,6 +181,7 @@ pub async fn create_app(pool: SqlitePool, storage_path: PathBuf) -> axum::Router
         transcode_semaphore,
         docker_service,
         ai_service,
+        http,
     };
 
     let router = routes::create_router(state).await;

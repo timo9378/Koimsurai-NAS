@@ -7,3 +7,6 @@ packages:
 allowBuilds:
   pnpm: true
   esbuild: true
+  # postinstall 下載平台對應的 binary（source map 上傳用，見 Dockerfile）。
+  # 不核可的話 pnpm install 會噴 ERR_PNPM_IGNORED_BUILDS。
+  '@sentry/cli': true

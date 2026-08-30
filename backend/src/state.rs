@@ -54,4 +54,8 @@ pub struct AppState {
     /// AI 圖片標籤服務（可選）
     /// AI image tagging service (optional)
     pub ai_service: Option<Arc<AiService>>,
+    /// 共用的 HTTP client（目前只有錯誤回報轉發在用）。
+    /// ⚠️ 一顆共用，不要在 handler 裡 `Client::new()` —— 每次重建會丟掉連線池，
+    /// 而且測試也無從注入。只設 `connect_timeout：整體` timeout 由呼叫端逐次決定。
+    pub http: reqwest::Client,
 }

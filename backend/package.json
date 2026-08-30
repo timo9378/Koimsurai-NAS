@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@sentry/browser": "^10.72.0"
+  },
+  "devDependencies": {
+    "@sentry/cli": "^3.7.0"
+  }
+}
