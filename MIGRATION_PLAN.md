@@ -10,11 +10,13 @@ Next.js 16 → Vite + TanStack Router（純 SPA），收攏後端成 monorepo，
 | 0 · monorepo 收攏 | ✅ `829f069`（外加資安事件處理，見 §9）|
 | 1 · Next → Vite SPA | ✅ `0f638a6` |
 | 2 · 型別橋（specta）| ✅ `5b76798` + `2334724`（發現並修掉 5 處前後端不一致，見 §10）|
-| 3 · 工具鏈落地 | ⬜ |
+| 3 · 工具鏈落地 | ✅ 後端 clippy/-D warnings + rustfmt 全綠；前端 oxlint/oxfmt/vitest 就位；CI 三個 job 上線 |
 | 4 · 部署（ServeDir + GlitchTip）| ⬜ |
 
-**Phase 3 待辦（已知）**：82 個既有的未使用宣告要清，同時把 `tsconfig.json` 的
-`noUnusedLocals` / `noUnusedParameters` 改回 `true`。
+**Phase 3 未竟**：oxlint 存量 594（CI 中 `continue-on-error` 不擋），其中 177 個是
+`no-unsafe-*` / `no-explicit-any` —— 那批是替 `catch (e: any)` 與未型別化 props
+補型別的**型別化工程**，不是清理。清到 0 之後把 ci.yml 的 `continue-on-error`
+拿掉並補 `--max-warnings 0`。
 
 ---
 
