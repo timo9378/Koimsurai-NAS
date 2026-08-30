@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   Palette,
   HardDrive,
@@ -20,21 +20,21 @@ import {
   Check,
   Loader2,
   AlertTriangle,
-} from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
-import { cn } from '@/lib/utils';
-import { useTheme } from 'next-themes';
-import type { DockPosition } from '@/store/window-store';
-import { useWindowStore } from '@/store/window-store';
-import { useSystemStatus } from '@/features/system/api/useSystem';
+} from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+import { cn } from "@/lib/utils";
+import { useTheme } from "next-themes";
+import type { DockPosition } from "@/store/window-store";
+import { useWindowStore } from "@/store/window-store";
+import { useSystemStatus } from "@/features/system/api/useSystem";
 import {
   useTwoFactorStatus,
   useTwoFactorSetup,
   useTwoFactorVerifySetup,
   useTwoFactorDisable,
-} from '@/features/auth/api/useAuth';
+} from "@/features/auth/api/useAuth";
 
-type SettingsSection = 'appearance' | 'dock' | 'storage' | 'account' | 'security' | 'about';
+type SettingsSection = "appearance" | "dock" | "storage" | "account" | "security" | "about";
 
 interface SettingsItemProps {
   icon: React.ElementType;
@@ -48,16 +48,18 @@ const SettingsItem = ({ icon: Icon, label, isActive, onClick }: SettingsItemProp
   <button
     onClick={onClick}
     className={cn(
-      'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left',
+      "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-left",
       isActive
-        ? 'bg-blue-500/20 text-blue-500 dark:text-blue-400'
-        : 'text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5'
+        ? "bg-blue-500/20 text-blue-500 dark:text-blue-400"
+        : "text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5",
     )}
   >
-    <div className={cn(
-      'p-1.5 rounded-lg',
-      isActive ? 'bg-blue-500/20' : 'bg-gray-200 dark:bg-white/10'
-    )}>
+    <div
+      className={cn(
+        "p-1.5 rounded-lg",
+        isActive ? "bg-blue-500/20" : "bg-gray-200 dark:bg-white/10",
+      )}
+    >
       <Icon className="w-4 h-4" />
     </div>
     <span className="flex-1">{label}</span>
@@ -79,18 +81,18 @@ const AppearanceSection = () => {
         <label className="text-sm font-medium text-gray-700 dark:text-zinc-300">主題模式</label>
         <div className="grid grid-cols-3 gap-3">
           {[
-            { id: 'light', label: '淺色', icon: Sun },
-            { id: 'dark', label: '深色', icon: Moon },
-            { id: 'system', label: '跟隨系統', icon: Monitor },
+            { id: "light", label: "淺色", icon: Sun },
+            { id: "dark", label: "深色", icon: Moon },
+            { id: "system", label: "跟隨系統", icon: Monitor },
           ].map((opt) => (
             <button
               key={opt.id}
               onClick={() => setTheme(opt.id)}
               className={cn(
-                'flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all',
+                "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
                 theme === opt.id
-                  ? 'border-blue-500 bg-blue-500/10'
-                  : 'border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5'
+                  ? "border-blue-500 bg-blue-500/10"
+                  : "border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5",
               )}
             >
               <opt.icon className="w-6 h-6" />
@@ -117,18 +119,18 @@ const DockSection = () => {
         <label className="text-sm font-medium text-gray-700 dark:text-zinc-300">Dock 位置</label>
         <div className="grid grid-cols-3 gap-3">
           {[
-            { id: 'left' as DockPosition, label: '左側', icon: ArrowLeft },
-            { id: 'bottom' as DockPosition, label: '底部', icon: ArrowDown },
-            { id: 'right' as DockPosition, label: '右側', icon: ArrowRight },
+            { id: "left" as DockPosition, label: "左側", icon: ArrowLeft },
+            { id: "bottom" as DockPosition, label: "底部", icon: ArrowDown },
+            { id: "right" as DockPosition, label: "右側", icon: ArrowRight },
           ].map((opt) => (
             <button
               key={opt.id}
               onClick={() => setDockPosition(opt.id)}
               className={cn(
-                'flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all',
+                "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all",
                 dockPosition === opt.id
-                  ? 'border-blue-500 bg-blue-500/10'
-                  : 'border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5'
+                  ? "border-blue-500 bg-blue-500/10"
+                  : "border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5",
               )}
             >
               <opt.icon className="w-6 h-6" />
@@ -145,11 +147,11 @@ const StorageSection = () => {
   const { data: systemStatus } = useSystemStatus();
 
   const formatSize = (bytes: number) => {
-    if (bytes === 0) return '0 B';
+    if (bytes === 0) return "0 B";
     const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const sizes = ["B", "KB", "MB", "GB", "TB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
   return (
@@ -160,26 +162,37 @@ const StorageSection = () => {
       </div>
 
       {systemStatus?.disks?.map((disk: any, i: number) => {
-        const usedPercent = disk.total_space > 0
-          ? ((disk.total_space - disk.available_space) / disk.total_space) * 100
-          : 0;
+        const usedPercent =
+          disk.total_space > 0
+            ? ((disk.total_space - disk.available_space) / disk.total_space) * 100
+            : 0;
 
         return (
-          <div key={i} className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 space-y-3">
+          <div
+            key={i}
+            className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 space-y-3"
+          >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <HardDrive className="w-5 h-5 text-gray-500 dark:text-zinc-400" />
-                <span className="font-medium text-gray-900 dark:text-white">{disk.name || disk.mount_point}</span>
+                <span className="font-medium text-gray-900 dark:text-white">
+                  {disk.name || disk.mount_point}
+                </span>
               </div>
               <span className="text-sm text-gray-500 dark:text-zinc-400">
-                {formatSize(disk.total_space - disk.available_space)} / {formatSize(disk.total_space)}
+                {formatSize(disk.total_space - disk.available_space)} /{" "}
+                {formatSize(disk.total_space)}
               </span>
             </div>
             <div className="w-full h-2 bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
               <div
                 className={cn(
-                  'h-full rounded-full transition-all',
-                  usedPercent > 90 ? 'bg-red-500' : usedPercent > 70 ? 'bg-yellow-500' : 'bg-blue-500'
+                  "h-full rounded-full transition-all",
+                  usedPercent > 90
+                    ? "bg-red-500"
+                    : usedPercent > 70
+                      ? "bg-yellow-500"
+                      : "bg-blue-500",
                 )}
                 style={{ width: `${usedPercent}%` }}
               />
@@ -219,9 +232,7 @@ const AccountSection = () => {
       </div>
 
       <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
-        <p className="text-sm text-amber-700 dark:text-amber-400">
-          密碼修改功能即將推出
-        </p>
+        <p className="text-sm text-amber-700 dark:text-amber-400">密碼修改功能即將推出</p>
       </div>
     </div>
   );
@@ -233,7 +244,7 @@ const AccountSection = () => {
      idle (未啟用) → setup (拿 QR + 輸入第一個 code) → verified (顯示 backup codes)
      enabled        → 顯示狀態 + 停用按鈕
    ───────────────────────────────────────────────── */
-type SecurityStep = 'idle' | 'setup' | 'verified' | 'disable';
+type SecurityStep = "idle" | "setup" | "verified" | "disable";
 
 const SecuritySection = () => {
   const { data: status, isLoading: statusLoading, refetch } = useTwoFactorStatus();
@@ -241,46 +252,46 @@ const SecuritySection = () => {
   const verifySetupMutation = useTwoFactorVerifySetup();
   const disableMutation = useTwoFactorDisable();
 
-  const [step, setStep] = useState<SecurityStep>('idle');
+  const [step, setStep] = useState<SecurityStep>("idle");
   const [setupData, setSetupData] = useState<{ secret: string; otpauth_uri: string } | null>(null);
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState("");
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [copiedSecret, setCopiedSecret] = useState(false);
   const [copiedAllCodes, setCopiedAllCodes] = useState(false);
-  const [disablePassword, setDisablePassword] = useState('');
-  const [disableCode, setDisableCode] = useState('');
-  const [error, setError] = useState('');
+  const [disablePassword, setDisablePassword] = useState("");
+  const [disableCode, setDisableCode] = useState("");
+  const [error, setError] = useState("");
 
   const startSetup = async () => {
-    setError('');
+    setError("");
     try {
       const data = await setupMutation.mutateAsync();
       setSetupData(data);
-      setStep('setup');
+      setStep("setup");
     } catch (e) {
       console.error(e);
-      setError('Failed to start 2FA setup');
+      setError("Failed to start 2FA setup");
     }
   };
 
   const verifySetup = async () => {
-    setError('');
+    setError("");
     if (code.trim().length !== 6) {
-      setError('Enter the 6-digit code from your authenticator app');
+      setError("Enter the 6-digit code from your authenticator app");
       return;
     }
     try {
       const data = await verifySetupMutation.mutateAsync(code.trim());
       setBackupCodes(data.backup_codes);
-      setStep('verified');
-      setCode('');
+      setStep("verified");
+      setCode("");
     } catch {
-      setError('Invalid code, please try again');
+      setError("Invalid code, please try again");
     }
   };
 
   const finishSetup = () => {
-    setStep('idle');
+    setStep("idle");
     setSetupData(null);
     setBackupCodes([]);
     setCopiedAllCodes(false);
@@ -288,16 +299,16 @@ const SecuritySection = () => {
   };
 
   const startDisable = () => {
-    setError('');
-    setDisablePassword('');
-    setDisableCode('');
-    setStep('disable');
+    setError("");
+    setDisablePassword("");
+    setDisableCode("");
+    setStep("disable");
   };
 
   const confirmDisable = async () => {
-    setError('');
+    setError("");
     if (!disablePassword || !disableCode) {
-      setError('Both password and code are required');
+      setError("Both password and code are required");
       return;
     }
     try {
@@ -305,19 +316,19 @@ const SecuritySection = () => {
         password: disablePassword,
         code: disableCode.trim(),
       });
-      setStep('idle');
-      setDisablePassword('');
-      setDisableCode('');
+      setStep("idle");
+      setDisablePassword("");
+      setDisableCode("");
       refetch();
     } catch {
-      setError('Wrong password or code');
+      setError("Wrong password or code");
     }
   };
 
-  const copyToClipboard = async (text: string, kind: 'secret' | 'codes') => {
+  const copyToClipboard = async (text: string, kind: "secret" | "codes") => {
     try {
       await navigator.clipboard.writeText(text);
-      if (kind === 'secret') {
+      if (kind === "secret") {
         setCopiedSecret(true);
         setTimeout(() => setCopiedSecret(false), 1500);
       } else {
@@ -351,10 +362,10 @@ const SecuritySection = () => {
       {/* 狀態卡 */}
       <div
         className={cn(
-          'p-4 rounded-xl border space-y-3',
+          "p-4 rounded-xl border space-y-3",
           enabled
-            ? 'border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10'
-            : 'border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10'
+            ? "border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10"
+            : "border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10",
         )}
       >
         <div className="flex items-center gap-3">
@@ -366,11 +377,13 @@ const SecuritySection = () => {
           <div className="flex-1">
             <div
               className={cn(
-                'font-medium',
-                enabled ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'
+                "font-medium",
+                enabled
+                  ? "text-emerald-700 dark:text-emerald-300"
+                  : "text-amber-700 dark:text-amber-300",
               )}
             >
-              {enabled ? '2FA 已啟用' : '2FA 尚未啟用'}
+              {enabled ? "2FA 已啟用" : "2FA 尚未啟用"}
             </div>
             {enabled && (
               <div className="text-xs text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">
@@ -382,7 +395,7 @@ const SecuritySection = () => {
       </div>
 
       {/* idle 狀態下的主要動作 */}
-      {step === 'idle' && (
+      {step === "idle" && (
         <div className="flex flex-wrap gap-2">
           {!enabled && (
             <button
@@ -406,10 +419,12 @@ const SecuritySection = () => {
       )}
 
       {/* setup 步驟：QR + 輸入 code */}
-      {step === 'setup' && setupData && (
+      {step === "setup" && setupData && (
         <div className="space-y-4 p-5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900/50">
           <div className="space-y-2">
-            <h4 className="font-medium text-gray-900 dark:text-white">1. 用 Authenticator app 掃描 QR Code</h4>
+            <h4 className="font-medium text-gray-900 dark:text-white">
+              1. 用 Authenticator app 掃描 QR Code
+            </h4>
             <p className="text-xs text-gray-500 dark:text-zinc-400">
               Google Authenticator / Authy / 1Password 任一個都可以
             </p>
@@ -426,25 +441,31 @@ const SecuritySection = () => {
               <div className="flex items-center gap-2 p-2 rounded-md bg-gray-100 dark:bg-zinc-800 font-mono text-xs break-all">
                 <span className="flex-1">{setupData.secret}</span>
                 <button
-                  onClick={() => copyToClipboard(setupData.secret, 'secret')}
+                  onClick={() => copyToClipboard(setupData.secret, "secret")}
                   className="p-1 rounded hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors shrink-0"
                   title="複製 secret"
                 >
-                  {copiedSecret ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                  {copiedSecret ? (
+                    <Check className="w-4 h-4 text-emerald-500" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
                 </button>
               </div>
             </div>
           </div>
 
           <div className="space-y-2 pt-2">
-            <h4 className="font-medium text-gray-900 dark:text-white">2. 輸入 app 顯示的 6 位 code</h4>
+            <h4 className="font-medium text-gray-900 dark:text-white">
+              2. 輸入 app 顯示的 6 位 code
+            </h4>
             <input
               type="text"
               inputMode="numeric"
               autoFocus
               maxLength={6}
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
               placeholder="123456"
               className="w-full max-w-[200px] h-11 px-3 rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-zinc-800 text-center font-mono text-lg tracking-widest focus:border-blue-500 focus:outline-none"
             />
@@ -466,7 +487,12 @@ const SecuritySection = () => {
               驗證並啟用
             </button>
             <button
-              onClick={() => { setStep('idle'); setSetupData(null); setCode(''); setError(''); }}
+              onClick={() => {
+                setStep("idle");
+                setSetupData(null);
+                setCode("");
+                setError("");
+              }}
               className="px-4 py-2 rounded-lg bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-zinc-300 text-sm font-medium transition-colors"
             >
               取消
@@ -476,14 +502,17 @@ const SecuritySection = () => {
       )}
 
       {/* verified 步驟：顯示 8 個 backup codes */}
-      {step === 'verified' && backupCodes.length > 0 && (
+      {step === "verified" && backupCodes.length > 0 && (
         <div className="space-y-4 p-5 rounded-xl border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/5">
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div className="flex-1 space-y-1">
-              <h4 className="font-medium text-amber-900 dark:text-amber-200">儲存 Backup Codes（只會顯示這一次）</h4>
+              <h4 className="font-medium text-amber-900 dark:text-amber-200">
+                儲存 Backup Codes（只會顯示這一次）
+              </h4>
               <p className="text-xs text-amber-700 dark:text-amber-300/80">
-                換手機或 Authenticator app 故障時，每組可使用一次。請存到密碼管理器或印出來放安全地方。
+                換手機或 Authenticator app
+                故障時，每組可使用一次。請存到密碼管理器或印出來放安全地方。
               </p>
             </div>
           </div>
@@ -501,11 +530,15 @@ const SecuritySection = () => {
 
           <div className="flex gap-2 pt-2">
             <button
-              onClick={() => copyToClipboard(backupCodes.join('\n'), 'codes')}
+              onClick={() => copyToClipboard(backupCodes.join("\n"), "codes")}
               className="px-4 py-2 rounded-lg bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 border border-gray-200 dark:border-white/10 text-sm font-medium transition-colors flex items-center gap-2"
             >
-              {copiedAllCodes ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
-              {copiedAllCodes ? '已複製' : '複製全部'}
+              {copiedAllCodes ? (
+                <Check className="w-4 h-4 text-emerald-500" />
+              ) : (
+                <Copy className="w-4 h-4" />
+              )}
+              {copiedAllCodes ? "已複製" : "複製全部"}
             </button>
             <button
               onClick={finishSetup}
@@ -518,7 +551,7 @@ const SecuritySection = () => {
       )}
 
       {/* disable 步驟：要密碼 + code 確認 */}
-      {step === 'disable' && (
+      {step === "disable" && (
         <div className="space-y-4 p-5 rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/5">
           <div className="flex items-start gap-3">
             <ShieldAlert className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
@@ -563,7 +596,10 @@ const SecuritySection = () => {
               確認停用
             </button>
             <button
-              onClick={() => { setStep('idle'); setError(''); }}
+              onClick={() => {
+                setStep("idle");
+                setError("");
+              }}
               className="px-4 py-2 rounded-lg bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-700 dark:text-zinc-300 text-sm font-medium transition-colors"
             >
               取消
@@ -597,13 +633,34 @@ const AboutSection = () => {
 
       <div className="space-y-2">
         {[
-          { label: 'CPU 使用率', value: systemStatus ? `${Math.round(systemStatus.cpu_usage ?? 0)}%` : '-' },
-          { label: '記憶體', value: systemStatus ? `${(systemStatus.used_memory / (1024 * 1024 * 1024)).toFixed(1)} / ${(systemStatus.total_memory / (1024 * 1024 * 1024)).toFixed(1)} GB` : '-' },
-          { label: 'Swap', value: systemStatus ? `${(systemStatus.used_swap / (1024 * 1024 * 1024)).toFixed(1)} / ${(systemStatus.total_swap / (1024 * 1024 * 1024)).toFixed(1)} GB` : '-' },
-          { label: 'GPU', value: systemStatus?.gpu ? `${systemStatus.gpu.name} (${Math.round(systemStatus.gpu.utilization ?? 0)}%)` : '無 GPU 資訊' },
-          { label: '磁碟數量', value: systemStatus ? `${systemStatus.disks.length} 個磁碟` : '-' },
+          {
+            label: "CPU 使用率",
+            value: systemStatus ? `${Math.round(systemStatus.cpu_usage ?? 0)}%` : "-",
+          },
+          {
+            label: "記憶體",
+            value: systemStatus
+              ? `${(systemStatus.used_memory / (1024 * 1024 * 1024)).toFixed(1)} / ${(systemStatus.total_memory / (1024 * 1024 * 1024)).toFixed(1)} GB`
+              : "-",
+          },
+          {
+            label: "Swap",
+            value: systemStatus
+              ? `${(systemStatus.used_swap / (1024 * 1024 * 1024)).toFixed(1)} / ${(systemStatus.total_swap / (1024 * 1024 * 1024)).toFixed(1)} GB`
+              : "-",
+          },
+          {
+            label: "GPU",
+            value: systemStatus?.gpu
+              ? `${systemStatus.gpu.name} (${Math.round(systemStatus.gpu.utilization ?? 0)}%)`
+              : "無 GPU 資訊",
+          },
+          { label: "磁碟數量", value: systemStatus ? `${systemStatus.disks.length} 個磁碟` : "-" },
         ].map((item) => (
-          <div key={item.label} className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-white/5 last:border-0">
+          <div
+            key={item.label}
+            className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-white/5 last:border-0"
+          >
             <span className="text-sm text-gray-500 dark:text-zinc-400">{item.label}</span>
             <span className="text-sm font-medium text-gray-900 dark:text-white">{item.value}</span>
           </div>
@@ -620,25 +677,31 @@ const AboutSection = () => {
 };
 
 const SECTIONS: { id: SettingsSection; label: string; icon: React.ElementType }[] = [
-  { id: 'appearance', label: '外觀', icon: Palette },
-  { id: 'dock', label: 'Dock', icon: Layout },
-  { id: 'storage', label: '儲存空間', icon: HardDrive },
-  { id: 'account', label: '帳戶', icon: User },
-  { id: 'security', label: '安全性', icon: ShieldCheck },
-  { id: 'about', label: '關於', icon: Info },
+  { id: "appearance", label: "外觀", icon: Palette },
+  { id: "dock", label: "Dock", icon: Layout },
+  { id: "storage", label: "儲存空間", icon: HardDrive },
+  { id: "account", label: "帳戶", icon: User },
+  { id: "security", label: "安全性", icon: ShieldCheck },
+  { id: "about", label: "關於", icon: Info },
 ];
 
 export const Settings = () => {
-  const [activeSection, setActiveSection] = useState<SettingsSection>('appearance');
+  const [activeSection, setActiveSection] = useState<SettingsSection>("appearance");
 
   const renderSection = () => {
     switch (activeSection) {
-      case 'appearance': return <AppearanceSection />;
-      case 'dock': return <DockSection />;
-      case 'storage': return <StorageSection />;
-      case 'account': return <AccountSection />;
-      case 'security': return <SecuritySection />;
-      case 'about': return <AboutSection />;
+      case "appearance":
+        return <AppearanceSection />;
+      case "dock":
+        return <DockSection />;
+      case "storage":
+        return <StorageSection />;
+      case "account":
+        return <AccountSection />;
+      case "security":
+        return <SecuritySection />;
+      case "about":
+        return <AboutSection />;
     }
   };
 
@@ -647,7 +710,9 @@ export const Settings = () => {
       {/* Sidebar */}
       <div className="w-56 border-r border-gray-200 dark:border-white/10 p-3 space-y-1 overflow-y-auto">
         <div className="px-3 py-2 mb-2">
-          <h2 className="text-sm font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">設定</h2>
+          <h2 className="text-sm font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
+            設定
+          </h2>
         </div>
         {SECTIONS.map((section) => (
           <SettingsItem
@@ -663,9 +728,7 @@ export const Settings = () => {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-lg">
-          {renderSection()}
-        </div>
+        <div className="max-w-lg">{renderSection()}</div>
       </div>
     </div>
   );

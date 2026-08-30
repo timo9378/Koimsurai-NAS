@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import React, { useRef, forwardRef } from 'react';
-import { Virtuoso, VirtuosoGrid } from 'react-virtuoso';
+import React, { useRef, forwardRef } from "react";
+import { Virtuoso, VirtuosoGrid } from "react-virtuoso";
 import {
   Upload,
   Trash2,
@@ -20,11 +20,11 @@ import {
   List as ListIcon,
   Move,
   Folder,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
-import type { FileInfo } from '@/types/api';
-import { useThumbnail } from '@/features/files/api/useFiles';
-import { FileTypeIcon } from '@/lib/file-icons';
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { FileInfo } from "@/types/api";
+import { useThumbnail } from "@/features/files/api/useFiles";
+import { FileTypeIcon } from "@/lib/file-icons";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -32,30 +32,27 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { MOVE_MIME } from '@/lib/dnd';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { MOVE_MIME } from "@/lib/dnd";
 
 const FileIcon = ({ file, currentPath }: { file: FileInfo; currentPath?: string }) => {
-  const isImage = file.mime_type?.startsWith('image/');
+  const isImage = file.mime_type?.startsWith("image/");
 
   const thumbnailPath = isImage
-    ? (file.path
+    ? file.path
       ? file.path
-      : (currentPath && currentPath !== '/')
-        ? `${currentPath.replace(/^\//, '')}/${file.name}`
-        : file.name)
-    : ''; // Empty string disables the query due to enabled: !!path
+      : currentPath && currentPath !== "/"
+        ? `${currentPath.replace(/^\//, "")}/${file.name}`
+        : file.name
+    : ""; // Empty string disables the query due to enabled: !!path
 
-  const { data: thumbnail } = useThumbnail(thumbnailPath, 'medium');
+  const { data: thumbnail } = useThumbnail(thumbnailPath, "medium");
 
   // 圖片檔案：優先顯示縮圖
   if (isImage && thumbnail) {
-    return <img src={thumbnail} alt={file.name} className="w-12 h-12 object-cover rounded shadow-sm" />;
+    return (
+      <img src={thumbnail} alt={file.name} className="w-12 h-12 object-cover rounded shadow-sm" />
+    );
   }
 
   // 其他檔案類型：使用 FileTypeIcon
@@ -83,15 +80,15 @@ const SmallFileIcon = ({ file }: { file: FileInfo }) => {
 interface FileListProps {
   files?: FileInfo[];
   isLoading: boolean;
-  viewMode: 'grid' | 'list';
+  viewMode: "grid" | "list";
   currentPath: string;
   selectedFiles: Set<string>;
   renamingFile: string | null;
   renameValue: string;
   isTrashMode: boolean;
   isDragging: boolean;
-  sortBy?: 'name' | 'size' | 'modified';
-  sortDirection?: 'asc' | 'desc';
+  sortBy?: "name" | "size" | "modified";
+  sortDirection?: "asc" | "desc";
   onFileClick: (file: FileInfo, e: React.MouseEvent) => void;
   onFileDoubleClick: (file: FileInfo) => void;
   onSelectionClear: () => void;
@@ -112,27 +109,27 @@ interface FileListProps {
   onCreateFolder?: () => void;
   onUpload?: () => void;
   onRefresh?: () => void;
-  onViewModeChange?: (mode: 'grid' | 'list') => void;
-  onSortChange?: (field: 'name' | 'size' | 'modified') => void;
+  onViewModeChange?: (mode: "grid" | "list") => void;
+  onSortChange?: (field: "name" | "size" | "modified") => void;
   onMoveFiles?: (sourceNames: string[], targetFolderName: string) => void;
 }
 
 // VirtuosoGrid custom components — defined outside the component to avoid re-renders
 const gridComponents = {
-  List: forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ style, children, ...props }, ref) => (
-    <div
-      ref={ref}
-      {...props}
-      style={style}
-      className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-4 p-4 content-start"
-    >
-      {children}
-    </div>
-  )),
+  List: forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+    ({ style, children, ...props }, ref) => (
+      <div
+        ref={ref}
+        {...props}
+        style={style}
+        className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-4 p-4 content-start"
+      >
+        {children}
+      </div>
+    ),
+  ),
   Item: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-    <div {...props}>
-      {children}
-    </div>
+    <div {...props}>{children}</div>
   ),
 };
 
@@ -146,8 +143,8 @@ export const FileList = ({
   renameValue,
   isTrashMode,
   isDragging,
-  sortBy = 'name',
-  sortDirection = 'asc',
+  sortBy = "name",
+  sortDirection = "asc",
   onFileClick,
   onFileDoubleClick,
   onSelectionClear,
@@ -179,18 +176,19 @@ export const FileList = ({
 
   const handleItemDragStart = (e: React.DragEvent, file: FileInfo) => {
     // 拖的是已選取的檔案 → 搬整批;否則只搬這一個
-    const names = selectedFiles.has(file.name) && selectedFiles.size > 0
-      ? Array.from(selectedFiles)
-      : [file.name];
+    const names =
+      selectedFiles.has(file.name) && selectedFiles.size > 0
+        ? Array.from(selectedFiles)
+        : [file.name];
     e.dataTransfer.setData(MOVE_MIME, JSON.stringify(names));
-    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.effectAllowed = "move";
   };
 
   const handleFolderDragOver = (e: React.DragEvent, folder: FileInfo) => {
     if (!folder.is_dir || !e.dataTransfer.types.includes(MOVE_MIME)) return;
     e.preventDefault();
     e.stopPropagation();
-    e.dataTransfer.dropEffect = 'move';
+    e.dataTransfer.dropEffect = "move";
     if (dropTargetFolder !== folder.name) setDropTargetFolder(folder.name);
   };
 
@@ -216,7 +214,12 @@ export const FileList = ({
     }
   }, [renamingFile]);
 
-  const [selectionBox, setSelectionBox] = React.useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
+  const [selectionBox, setSelectionBox] = React.useState<{
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+  } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const isSelectingRef = useRef(false);
   // Virtuoso 內部捲軸偏移量 — 由 onScroll 回呼更新
@@ -227,60 +230,68 @@ export const FileList = ({
 
   // ── 座標計算式框選 ──
   // 不依賴 DOM refs，直接用 Grid/List 的佈局參數推算每個 item 的邏輯位置
-  const calculateAndApplySelection = React.useCallback((box: { startX: number; startY: number; currentX: number; currentY: number }) => {
-    if (!containerRef.current || !files?.length || !onSelectionChangeRef.current) return;
+  const calculateAndApplySelection = React.useCallback(
+    (box: { startX: number; startY: number; currentX: number; currentY: number }) => {
+      if (!containerRef.current || !files?.length || !onSelectionChangeRef.current) return;
 
-    const boxLeft = Math.min(box.startX, box.currentX);
-    const boxTop = Math.min(box.startY, box.currentY);
-    const boxRight = Math.max(box.startX, box.currentX);
-    const boxBottom = Math.max(box.startY, box.currentY);
+      const boxLeft = Math.min(box.startX, box.currentX);
+      const boxTop = Math.min(box.startY, box.currentY);
+      const boxRight = Math.max(box.startX, box.currentX);
+      const boxBottom = Math.max(box.startY, box.currentY);
 
-    const newSelected = new Set<string>();
+      const newSelected = new Set<string>();
 
-    if (viewMode === 'grid') {
-      // Grid 佈局參數（對應 CSS: minmax(100px,1fr), gap-4, p-4）
-      const GAP = 16;
-      const PADDING = 16;
-      const MIN_COL_W = 100;
-      const containerW = containerRef.current.clientWidth;
-      const availableW = containerW - PADDING * 2;
-      // auto-fill 算法：盡可能多的欄位，每欄至少 MIN_COL_W
-      const cols = Math.max(1, Math.floor((availableW + GAP) / (MIN_COL_W + GAP)));
-      const cellW = (availableW - GAP * (cols - 1)) / cols;
-      // 估算每個 cell 高度（icon 48 + text ~20 + padding 16 ≈ 84）
-      const CELL_H = 84;
+      if (viewMode === "grid") {
+        // Grid 佈局參數（對應 CSS: minmax(100px,1fr), gap-4, p-4）
+        const GAP = 16;
+        const PADDING = 16;
+        const MIN_COL_W = 100;
+        const containerW = containerRef.current.clientWidth;
+        const availableW = containerW - PADDING * 2;
+        // auto-fill 算法：盡可能多的欄位，每欄至少 MIN_COL_W
+        const cols = Math.max(1, Math.floor((availableW + GAP) / (MIN_COL_W + GAP)));
+        const cellW = (availableW - GAP * (cols - 1)) / cols;
+        // 估算每個 cell 高度（icon 48 + text ~20 + padding 16 ≈ 84）
+        const CELL_H = 84;
 
-      files.forEach((file, index) => {
-        const col = index % cols;
-        const row = Math.floor(index / cols);
-        const itemLeft = PADDING + col * (cellW + GAP);
-        const itemTop = PADDING + row * (CELL_H + GAP);
-        const itemRight = itemLeft + cellW;
-        const itemBottom = itemTop + CELL_H;
+        files.forEach((file, index) => {
+          const col = index % cols;
+          const row = Math.floor(index / cols);
+          const itemLeft = PADDING + col * (cellW + GAP);
+          const itemTop = PADDING + row * (CELL_H + GAP);
+          const itemRight = itemLeft + cellW;
+          const itemBottom = itemTop + CELL_H;
 
-        const intersects = !(boxLeft > itemRight || boxRight < itemLeft || boxTop > itemBottom || boxBottom < itemTop);
-        if (intersects) newSelected.add(file.name);
-      });
-    } else {
-      // List 佈局：header 36px，每行 32px
-      const HEADER_H = 36;
-      const ROW_H = 32;
+          const intersects = !(
+            boxLeft > itemRight ||
+            boxRight < itemLeft ||
+            boxTop > itemBottom ||
+            boxBottom < itemTop
+          );
+          if (intersects) newSelected.add(file.name);
+        });
+      } else {
+        // List 佈局：header 36px，每行 32px
+        const HEADER_H = 36;
+        const ROW_H = 32;
 
-      files.forEach((file, index) => {
-        const itemTop = HEADER_H + index * ROW_H;
-        const itemBottom = itemTop + ROW_H;
+        files.forEach((file, index) => {
+          const itemTop = HEADER_H + index * ROW_H;
+          const itemBottom = itemTop + ROW_H;
 
-        const intersects = !(boxTop > itemBottom || boxBottom < itemTop);
-        if (intersects) newSelected.add(file.name);
-      });
-    }
+          const intersects = !(boxTop > itemBottom || boxBottom < itemTop);
+          if (intersects) newSelected.add(file.name);
+        });
+      }
 
-    onSelectionChangeRef.current(newSelected);
-  }, [files, viewMode]);
+      onSelectionChangeRef.current(newSelected);
+    },
+    [files, viewMode],
+  );
 
   const handleMouseDown = (e: React.MouseEvent) => {
     // Only start selection if clicking on empty space (not on a file item)
-    if (e.button === 0 && !(e.target as HTMLElement).closest('[data-file-item]')) {
+    if (e.button === 0 && !(e.target as HTMLElement).closest("[data-file-item]")) {
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect) {
         const startX = e.clientX - rect.left;
@@ -299,7 +310,7 @@ export const FileList = ({
     const currentX = e.clientX - rect.left;
     const currentY = e.clientY - rect.top + scrollOffsetRef.current;
 
-    setSelectionBox(prev => {
+    setSelectionBox((prev) => {
       if (!prev) return null;
       return { ...prev, currentX, currentY };
     });
@@ -333,25 +344,28 @@ export const FileList = ({
     }
   }, [calculateAndApplySelection]);
 
-  const handleContainerClick = React.useCallback((e: React.MouseEvent) => {
-    // Don't clear selection if we just finished a box selection
-    if (justFinishedSelectingRef.current) {
-      return;
-    }
-    // Only clear if clicking on empty space, not on a file item
-    if (!(e.target as HTMLElement).closest('[data-file-item]')) {
-      onSelectionClear();
-    }
-  }, [onSelectionClear]);
+  const handleContainerClick = React.useCallback(
+    (e: React.MouseEvent) => {
+      // Don't clear selection if we just finished a box selection
+      if (justFinishedSelectingRef.current) {
+        return;
+      }
+      // Only clear if clicking on empty space, not on a file item
+      if (!(e.target as HTMLElement).closest("[data-file-item]")) {
+        onSelectionClear();
+      }
+    },
+    [onSelectionClear],
+  );
 
   // Add/remove document event listeners
   React.useEffect(() => {
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
     };
   }, [handleMouseMove, handleMouseUp]);
 
@@ -365,37 +379,40 @@ export const FileList = ({
           onMouseDown={handleMouseDown}
           onPointerDown={(e) => {
             if (e.button === 2) {
-              document.dispatchEvent(new PointerEvent('pointerdown', {
-                bubbles: true,
-                cancelable: true,
-                view: window,
-                button: 0,
-                buttons: 1
-              }));
-              setContextMenuKey(prev => prev + 1);
+              document.dispatchEvent(
+                new PointerEvent("pointerdown", {
+                  bubbles: true,
+                  cancelable: true,
+                  view: window,
+                  button: 0,
+                  buttons: 1,
+                }),
+              );
+              setContextMenuKey((prev) => prev + 1);
             }
           }}
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={onDrop}
         >
-          {selectionBox && (() => {
-            // 框選座標含 scroll offset，但顯示時需轉換回視窗座標
-            const scrollOff = scrollOffsetRef.current;
-            const dispStartY = selectionBox.startY - scrollOff;
-            const dispCurrentY = selectionBox.currentY - scrollOff;
-            return (
-              <div
-                className="absolute border border-blue-500/50 bg-blue-500/20 z-50 pointer-events-none"
-                style={{
-                  left: Math.min(selectionBox.startX, selectionBox.currentX),
-                  top: Math.min(dispStartY, dispCurrentY),
-                  width: Math.abs(selectionBox.currentX - selectionBox.startX),
-                  height: Math.abs(dispCurrentY - dispStartY),
-                }}
-              />
-            );
-          })()}
+          {selectionBox &&
+            (() => {
+              // 框選座標含 scroll offset，但顯示時需轉換回視窗座標
+              const scrollOff = scrollOffsetRef.current;
+              const dispStartY = selectionBox.startY - scrollOff;
+              const dispCurrentY = selectionBox.currentY - scrollOff;
+              return (
+                <div
+                  className="absolute border border-blue-500/50 bg-blue-500/20 z-50 pointer-events-none"
+                  style={{
+                    left: Math.min(selectionBox.startX, selectionBox.currentX),
+                    top: Math.min(dispStartY, dispCurrentY),
+                    width: Math.abs(selectionBox.currentX - selectionBox.startX),
+                    height: Math.abs(dispCurrentY - dispStartY),
+                  }}
+                />
+              );
+            })()}
           {isDragging && (
             <div className="absolute inset-0 z-50 flex items-center justify-center bg-blue-500/10 dark:bg-blue-500/20 backdrop-blur-sm border-2 border-blue-500 border-dashed m-2 rounded-lg pointer-events-none">
               <div className="flex flex-col items-center gap-2 text-blue-600 dark:text-blue-400">
@@ -406,13 +423,15 @@ export const FileList = ({
           )}
           {isLoading ? (
             <div className="flex items-center justify-center h-full text-gray-500">Loading...</div>
-          ) : viewMode === 'grid' ? (
+          ) : viewMode === "grid" ? (
             <VirtuosoGrid
-              style={{ height: '100%', width: '100%' }}
+              style={{ height: "100%", width: "100%" }}
               data={files ?? []}
               overscan={200}
               components={gridComponents}
-              onScroll={(e) => { scrollOffsetRef.current = (e.target as HTMLElement).scrollTop; }}
+              onScroll={(e) => {
+                scrollOffsetRef.current = (e.target as HTMLElement).scrollTop;
+              }}
               itemContent={(_index, file) => (
                 <ContextMenu key={file.name}>
                   <ContextMenuTrigger>
@@ -421,9 +440,14 @@ export const FileList = ({
                       draggable={!isTrashMode && renamingFile !== file.name}
                       onDragStart={(e) => handleItemDragStart(e, file)}
                       onDragOver={(e) => handleFolderDragOver(e, file)}
-                      onDragLeave={() => { if (dropTargetFolder === file.name) setDropTargetFolder(null); }}
+                      onDragLeave={() => {
+                        if (dropTargetFolder === file.name) setDropTargetFolder(null);
+                      }}
                       onDrop={(e) => handleFolderDrop(e, file)}
-                      onClick={(e) => { e.stopPropagation(); onFileClick(file, e); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onFileClick(file, e);
+                      }}
                       onDoubleClick={(e) => {
                         e.stopPropagation();
                         if (renamingFile === file.name) return;
@@ -434,7 +458,7 @@ export const FileList = ({
                         selectedFiles.has(file.name)
                           ? "bg-blue-500/20 ring-1 ring-blue-500/50"
                           : "hover:bg-black/5 dark:hover:bg-white/5",
-                        dropTargetFolder === file.name && "ring-2 ring-blue-500 bg-blue-500/30"
+                        dropTargetFolder === file.name && "ring-2 ring-blue-500 bg-blue-500/30",
                       )}
                     >
                       <FileIcon file={file} currentPath={currentPath} />
@@ -446,23 +470,25 @@ export const FileList = ({
                           onChange={(e) => onRenameChange(e.target.value)}
                           onBlur={onRenameSubmit}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter') onRenameSubmit();
-                            if (e.key === 'Escape') onRenameCancel();
+                            if (e.key === "Enter") onRenameSubmit();
+                            if (e.key === "Escape") onRenameCancel();
                           }}
                           onClick={(e) => e.stopPropagation()}
                           onDoubleClick={(e) => {
                             e.stopPropagation();
-                            (e.currentTarget).select();
+                            e.currentTarget.select();
                           }}
                           className="text-xs text-center px-1 rounded w-full bg-white dark:bg-black border border-blue-500 focus:outline-none text-black dark:text-white"
                         />
                       ) : (
-                        <span className={cn(
-                          "text-xs text-center px-1 rounded truncate w-full transition-colors",
-                          selectedFiles.has(file.name)
-                            ? "text-blue-700 dark:text-blue-300 font-medium bg-blue-500/10"
-                            : "text-gray-700 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-white"
-                        )}>
+                        <span
+                          className={cn(
+                            "text-xs text-center px-1 rounded truncate w-full transition-colors",
+                            selectedFiles.has(file.name)
+                              ? "text-blue-700 dark:text-blue-300 font-medium bg-blue-500/10"
+                              : "text-gray-700 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-white",
+                          )}
+                        >
                           {file.name}
                         </span>
                       )}
@@ -484,14 +510,27 @@ export const FileList = ({
                         <ContextMenuItem onClick={() => onFileDoubleClick(file)}>
                           <Folder className="mr-2 h-4 w-4" /> Open
                         </ContextMenuItem>
-                        <ContextMenuItem onClick={() => onDownload?.(file.path || (currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`))}>
+                        <ContextMenuItem
+                          onClick={() =>
+                            onDownload?.(
+                              file.path ||
+                                (currentPath === "/"
+                                  ? `/${file.name}`
+                                  : `${currentPath}/${file.name}`),
+                            )
+                          }
+                        >
                           <Download className="mr-2 h-4 w-4" /> Download
                         </ContextMenuItem>
                         <ContextMenuItem onClick={() => onShare?.(file)}>
                           <Share2 className="mr-2 h-4 w-4" /> Share
                         </ContextMenuItem>
                         <ContextMenuItem onClick={() => onToggleStar?.(file.path || file.name)}>
-                          {file.is_starred ? <StarOff className="mr-2 h-4 w-4" /> : <Star className="mr-2 h-4 w-4" />}
+                          {file.is_starred ? (
+                            <StarOff className="mr-2 h-4 w-4" />
+                          ) : (
+                            <Star className="mr-2 h-4 w-4" />
+                          )}
                           {file.is_starred ? "Remove from Favorites" : "Add to Favorites"}
                         </ContextMenuItem>
                         <ContextMenuSeparator />
@@ -529,192 +568,241 @@ export const FileList = ({
             <div className="w-full h-full flex flex-col text-sm text-gray-700 dark:text-gray-200">
               <div className="grid grid-cols-[minmax(200px,1fr)_80px_120px] gap-2 px-4 py-2 border-b border-white/10 font-medium text-gray-500 bg-white/80 dark:bg-black/80 backdrop-blur-sm z-10 shrink-0">
                 <button
-                  onClick={() => onSortChange?.('name')}
+                  onClick={() => onSortChange?.("name")}
                   className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-300 text-left"
                 >
                   Name
-                  {sortBy === 'name' && (
-                    <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  {sortBy === "name" && (
+                    <span className="text-xs">{sortDirection === "asc" ? "↑" : "↓"}</span>
                   )}
                 </button>
                 <button
-                  onClick={() => onSortChange?.('size')}
+                  onClick={() => onSortChange?.("size")}
                   className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-300 text-left"
                 >
                   Size
-                  {sortBy === 'size' && (
-                    <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  {sortBy === "size" && (
+                    <span className="text-xs">{sortDirection === "asc" ? "↑" : "↓"}</span>
                   )}
                 </button>
                 <button
-                  onClick={() => onSortChange?.('modified')}
+                  onClick={() => onSortChange?.("modified")}
                   className="flex items-center gap-1 hover:text-gray-700 dark:hover:text-gray-300 text-left"
                 >
                   Date Modified
-                  {sortBy === 'modified' && (
-                    <span className="text-xs">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  {sortBy === "modified" && (
+                    <span className="text-xs">{sortDirection === "asc" ? "↑" : "↓"}</span>
                   )}
                 </button>
               </div>
               <TooltipProvider delayDuration={300}>
-              <Virtuoso
-                style={{ flex: 1 }}
-                data={files ?? []}
-                overscan={200}
-                onScroll={(e) => { scrollOffsetRef.current = (e.target as HTMLElement).scrollTop; }}
-                itemContent={(_index, file) => (
-                <ContextMenu key={file.name}>
-                  <ContextMenuTrigger>
-                    <div
-                      data-file-item
-                      draggable={!isTrashMode && renamingFile !== file.name}
-                      onDragStart={(e) => handleItemDragStart(e, file)}
-                      onDragOver={(e) => handleFolderDragOver(e, file)}
-                      onDragLeave={() => { if (dropTargetFolder === file.name) setDropTargetFolder(null); }}
-                      onDrop={(e) => handleFolderDrop(e, file)}
-                      onClick={(e) => { e.stopPropagation(); onFileClick(file, e); }}
-                      onDoubleClick={(e) => {
-                        e.stopPropagation();
-                        if (renamingFile === file.name) return;
-                        onFileDoubleClick(file);
-                      }}
-                      className={cn(
-                        "grid grid-cols-[minmax(200px,1fr)_80px_120px] gap-2 px-4 py-1.5 cursor-pointer transition-colors duration-150",
-                        selectedFiles.has(file.name)
-                          ? "bg-blue-500 text-white"
-                          : "hover:bg-blue-500/10 even:bg-black/5 dark:even:bg-white/5",
-                        dropTargetFolder === file.name && "ring-2 ring-blue-500 ring-inset bg-blue-500/30"
-                      )}
-                    >
-                      <div className="flex items-center gap-2 min-w-0 overflow-hidden">
-                        <div className="shrink-0">
-                          <SmallFileIcon file={file} />
+                <Virtuoso
+                  style={{ flex: 1 }}
+                  data={files ?? []}
+                  overscan={200}
+                  onScroll={(e) => {
+                    scrollOffsetRef.current = (e.target as HTMLElement).scrollTop;
+                  }}
+                  itemContent={(_index, file) => (
+                    <ContextMenu key={file.name}>
+                      <ContextMenuTrigger>
+                        <div
+                          data-file-item
+                          draggable={!isTrashMode && renamingFile !== file.name}
+                          onDragStart={(e) => handleItemDragStart(e, file)}
+                          onDragOver={(e) => handleFolderDragOver(e, file)}
+                          onDragLeave={() => {
+                            if (dropTargetFolder === file.name) setDropTargetFolder(null);
+                          }}
+                          onDrop={(e) => handleFolderDrop(e, file)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onFileClick(file, e);
+                          }}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            if (renamingFile === file.name) return;
+                            onFileDoubleClick(file);
+                          }}
+                          className={cn(
+                            "grid grid-cols-[minmax(200px,1fr)_80px_120px] gap-2 px-4 py-1.5 cursor-pointer transition-colors duration-150",
+                            selectedFiles.has(file.name)
+                              ? "bg-blue-500 text-white"
+                              : "hover:bg-blue-500/10 even:bg-black/5 dark:even:bg-white/5",
+                            dropTargetFolder === file.name &&
+                              "ring-2 ring-blue-500 ring-inset bg-blue-500/30",
+                          )}
+                        >
+                          <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+                            <div className="shrink-0">
+                              <SmallFileIcon file={file} />
+                            </div>
+                            {renamingFile === file.name ? (
+                              <input
+                                ref={renameInputRef}
+                                type="text"
+                                value={renameValue}
+                                onChange={(e) => onRenameChange(e.target.value)}
+                                onBlur={onRenameSubmit}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") onRenameSubmit();
+                                  if (e.key === "Escape") onRenameCancel();
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation();
+                                  e.currentTarget.select();
+                                }}
+                                className="text-sm px-1 rounded bg-white dark:bg-black border border-blue-500 focus:outline-none text-black dark:text-white flex-1 min-w-0"
+                              />
+                            ) : (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="truncate cursor-default">{file.name}</span>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" align="start">
+                                  <div className="space-y-1">
+                                    <div className="font-medium">{file.name}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                      Size:{" "}
+                                      {file.is_dir
+                                        ? "Folder"
+                                        : `${(file.size / 1024).toFixed(1)} KB`}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                      Modified: {new Date(file.modified).toLocaleString()}
+                                    </div>
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
+                          <div
+                            className={cn(
+                              "text-xs shrink-0 flex items-center",
+                              selectedFiles.has(file.name) ? "text-blue-100" : "text-gray-500",
+                            )}
+                          >
+                            {file.is_dir ? "--" : `${(file.size / 1024).toFixed(1)} KB`}
+                          </div>
+                          <div
+                            className={cn(
+                              "text-xs shrink-0 flex items-center",
+                              selectedFiles.has(file.name) ? "text-blue-100" : "text-gray-500",
+                            )}
+                          >
+                            {new Date(file.modified).toLocaleDateString()}
+                          </div>
                         </div>
-                        {renamingFile === file.name ? (
-                          <input
-                            ref={renameInputRef}
-                            type="text"
-                            value={renameValue}
-                            onChange={(e) => onRenameChange(e.target.value)}
-                            onBlur={onRenameSubmit}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') onRenameSubmit();
-                              if (e.key === 'Escape') onRenameCancel();
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                            onDoubleClick={(e) => {
-                              e.stopPropagation();
-                              (e.currentTarget).select();
-                            }}
-                            className="text-sm px-1 rounded bg-white dark:bg-black border border-blue-500 focus:outline-none text-black dark:text-white flex-1 min-w-0"
-                          />
+                      </ContextMenuTrigger>
+                      <ContextMenuContent className="w-64">
+                        {isTrashMode ? (
+                          <>
+                            <ContextMenuItem onClick={() => onRestore?.(file.name)}>
+                              <Move className="mr-2 h-4 w-4" /> Put Back
+                            </ContextMenuItem>
+                            <ContextMenuSeparator />
+                            <ContextMenuItem className="text-red-600">
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete Immediately
+                            </ContextMenuItem>
+                          </>
                         ) : (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="truncate cursor-default">{file.name}</span>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom" align="start">
-                              <div className="space-y-1">
-                                <div className="font-medium">{file.name}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  Size: {file.is_dir ? 'Folder' : `${(file.size / 1024).toFixed(1)} KB`}
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  Modified: {new Date(file.modified).toLocaleString()}
-                                </div>
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
+                          <>
+                            <ContextMenuItem onClick={() => onFileDoubleClick(file)}>
+                              <Folder className="mr-2 h-4 w-4" /> Open
+                            </ContextMenuItem>
+                            <ContextMenuItem
+                              onClick={() =>
+                                onDownload?.(
+                                  file.path ||
+                                    (currentPath === "/"
+                                      ? `/${file.name}`
+                                      : `${currentPath}/${file.name}`),
+                                )
+                              }
+                            >
+                              <Download className="mr-2 h-4 w-4" /> Download
+                            </ContextMenuItem>
+                            <ContextMenuItem onClick={() => onShare?.(file)}>
+                              <Share2 className="mr-2 h-4 w-4" /> Share
+                            </ContextMenuItem>
+                            <ContextMenuItem onClick={() => onToggleStar?.(file.path || file.name)}>
+                              {file.is_starred ? (
+                                <StarOff className="mr-2 h-4 w-4" />
+                              ) : (
+                                <Star className="mr-2 h-4 w-4" />
+                              )}
+                              {file.is_starred ? "Remove from Favorites" : "Add to Favorites"}
+                            </ContextMenuItem>
+                            <ContextMenuSeparator />
+                            <ContextMenuItem onClick={() => onRenameStart?.(file)}>
+                              <Edit2 className="mr-2 h-4 w-4" /> Rename
+                            </ContextMenuItem>
+                            <ContextMenuItem>
+                              <Copy className="mr-2 h-4 w-4" /> Copy
+                            </ContextMenuItem>
+                            <ContextMenuItem>
+                              <Move className="mr-2 h-4 w-4" /> Move to...
+                            </ContextMenuItem>
+                            <ContextMenuSeparator />
+                            <ContextMenuItem>
+                              <Info className="mr-2 h-4 w-4" /> Get Info
+                            </ContextMenuItem>
+                            <ContextMenuSeparator />
+                            <ContextMenuItem
+                              className="text-red-600"
+                              onClick={() => onDelete?.(file)}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" /> Move to Trash
+                            </ContextMenuItem>
+                          </>
                         )}
-                      </div>
-                      <div className={cn("text-xs shrink-0 flex items-center", selectedFiles.has(file.name) ? "text-blue-100" : "text-gray-500")}>
-                        {file.is_dir ? '--' : `${(file.size / 1024).toFixed(1)} KB`}
-                      </div>
-                      <div className={cn("text-xs shrink-0 flex items-center", selectedFiles.has(file.name) ? "text-blue-100" : "text-gray-500")}>
-                        {new Date(file.modified).toLocaleDateString()}
-                      </div>
-                    </div>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent className="w-64">
-                    {isTrashMode ? (
-                      <>
-                        <ContextMenuItem onClick={() => onRestore?.(file.name)}>
-                          <Move className="mr-2 h-4 w-4" /> Put Back
-                        </ContextMenuItem>
-                        <ContextMenuSeparator />
-                        <ContextMenuItem className="text-red-600">
-                          <Trash2 className="mr-2 h-4 w-4" /> Delete Immediately
-                        </ContextMenuItem>
-                      </>
-                    ) : (
-                      <>
-                        <ContextMenuItem onClick={() => onFileDoubleClick(file)}>
-                          <Folder className="mr-2 h-4 w-4" /> Open
-                        </ContextMenuItem>
-                        <ContextMenuItem onClick={() => onDownload?.(file.path || (currentPath === '/' ? `/${file.name}` : `${currentPath}/${file.name}`))}>
-                          <Download className="mr-2 h-4 w-4" /> Download
-                        </ContextMenuItem>
-                        <ContextMenuItem onClick={() => onShare?.(file)}>
-                          <Share2 className="mr-2 h-4 w-4" /> Share
-                        </ContextMenuItem>
-                        <ContextMenuItem onClick={() => onToggleStar?.(file.path || file.name)}>
-                          {file.is_starred ? <StarOff className="mr-2 h-4 w-4" /> : <Star className="mr-2 h-4 w-4" />}
-                          {file.is_starred ? "Remove from Favorites" : "Add to Favorites"}
-                        </ContextMenuItem>
-                        <ContextMenuSeparator />
-                        <ContextMenuItem onClick={() => onRenameStart?.(file)}>
-                          <Edit2 className="mr-2 h-4 w-4" /> Rename
-                        </ContextMenuItem>
-                        <ContextMenuItem>
-                          <Copy className="mr-2 h-4 w-4" /> Copy
-                        </ContextMenuItem>
-                        <ContextMenuItem>
-                          <Move className="mr-2 h-4 w-4" /> Move to...
-                        </ContextMenuItem>
-                        <ContextMenuSeparator />
-                        <ContextMenuItem>
-                          <Info className="mr-2 h-4 w-4" /> Get Info
-                        </ContextMenuItem>
-                        <ContextMenuSeparator />
-                        <ContextMenuItem className="text-red-600" onClick={() => onDelete?.(file)}>
-                          <Trash2 className="mr-2 h-4 w-4" /> Move to Trash
-                        </ContextMenuItem>
-                      </>
-                    )}
-                  </ContextMenuContent>
-                </ContextMenu>
-              )}
-              />
+                      </ContextMenuContent>
+                    </ContextMenu>
+                  )}
+                />
               </TooltipProvider>
             </div>
           )}
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-64">
-        <ContextMenuItem onClick={(e) => {
-          e.stopPropagation();
-          onCreateFolder?.();
-        }}>
+        <ContextMenuItem
+          onClick={(e) => {
+            e.stopPropagation();
+            onCreateFolder?.();
+          }}
+        >
           <Plus className="mr-2 h-4 w-4" /> New Folder
         </ContextMenuItem>
-        <ContextMenuItem onClick={(e) => {
-          e.stopPropagation();
-          onUpload?.();
-        }}>
+        <ContextMenuItem
+          onClick={(e) => {
+            e.stopPropagation();
+            onUpload?.();
+          }}
+        >
           <Upload className="mr-2 h-4 w-4" /> Upload Files
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem onClick={(e) => {
-          e.stopPropagation();
-          onViewModeChange?.(viewMode === 'grid' ? 'list' : 'grid');
-        }}>
-          {viewMode === 'grid' ? <ListIcon className="mr-2 h-4 w-4" /> : <LayoutGrid className="mr-2 h-4 w-4" />}
-          {viewMode === 'grid' ? 'Switch to List View' : 'Switch to Grid View'}
+        <ContextMenuItem
+          onClick={(e) => {
+            e.stopPropagation();
+            onViewModeChange?.(viewMode === "grid" ? "list" : "grid");
+          }}
+        >
+          {viewMode === "grid" ? (
+            <ListIcon className="mr-2 h-4 w-4" />
+          ) : (
+            <LayoutGrid className="mr-2 h-4 w-4" />
+          )}
+          {viewMode === "grid" ? "Switch to List View" : "Switch to Grid View"}
         </ContextMenuItem>
-        <ContextMenuItem onClick={(e) => {
-          e.stopPropagation();
-          onRefresh?.();
-        }}>
+        <ContextMenuItem
+          onClick={(e) => {
+            e.stopPropagation();
+            onRefresh?.();
+          }}
+        >
           <RefreshCw className="mr-2 h-4 w-4" /> Refresh
         </ContextMenuItem>
       </ContextMenuContent>

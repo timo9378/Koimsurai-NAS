@@ -1,5 +1,5 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api-client";
 
 export interface ContainerInfo {
   id: string;
@@ -36,9 +36,9 @@ export interface ImageInfo {
 
 export const useDockerStatus = () => {
   return useQuery({
-    queryKey: ['docker', 'status'],
+    queryKey: ["docker", "status"],
     queryFn: async () => {
-      const response = await apiClient.get('/docker/status');
+      const response = await apiClient.get("/docker/status");
       return response.data;
     },
     refetchInterval: 10000,
@@ -47,9 +47,9 @@ export const useDockerStatus = () => {
 
 export const useContainers = () => {
   return useQuery<ContainerInfo[]>({
-    queryKey: ['docker', 'containers'],
+    queryKey: ["docker", "containers"],
     queryFn: async () => {
-      const response = await apiClient.get('/docker/containers?all=true');
+      const response = await apiClient.get("/docker/containers?all=true");
       return response.data.data;
     },
     refetchInterval: 3000,
@@ -58,7 +58,7 @@ export const useContainers = () => {
 
 export const useContainerStats = (id: string, enabled: boolean = false) => {
   return useQuery<ContainerStats>({
-    queryKey: ['docker', 'container', id, 'stats'],
+    queryKey: ["docker", "container", id, "stats"],
     queryFn: async () => {
       const response = await apiClient.get(`/docker/containers/${id}/stats`);
       return response.data.data;
@@ -75,12 +75,12 @@ export interface LogEntry {
 
 export const useContainerLogs = (id: string, enabled: boolean = false) => {
   return useQuery<string>({
-    queryKey: ['docker', 'container', id, 'logs'],
+    queryKey: ["docker", "container", id, "logs"],
     queryFn: async () => {
       const response = await apiClient.get(`/docker/containers/${id}/logs?tail=100`);
       const logEntries: LogEntry[] = response.data.data || [];
       // Convert LogEntry array to single string for TerminalView
-      return logEntries.map(entry => entry.message).join('');
+      return logEntries.map((entry) => entry.message).join("");
     },
     enabled,
     refetchInterval: 5000,
@@ -95,7 +95,7 @@ export const useContainerActions = () => {
       await apiClient.post(`/docker/containers/${id}/start`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['docker', 'containers'] });
+      queryClient.invalidateQueries({ queryKey: ["docker", "containers"] });
     },
   });
 
@@ -104,7 +104,7 @@ export const useContainerActions = () => {
       await apiClient.post(`/docker/containers/${id}/stop`, { timeout: 10 });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['docker', 'containers'] });
+      queryClient.invalidateQueries({ queryKey: ["docker", "containers"] });
     },
   });
 
@@ -113,7 +113,7 @@ export const useContainerActions = () => {
       await apiClient.post(`/docker/containers/${id}/restart`, { timeout: 10 });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['docker', 'containers'] });
+      queryClient.invalidateQueries({ queryKey: ["docker", "containers"] });
     },
   });
 
@@ -122,7 +122,7 @@ export const useContainerActions = () => {
       await apiClient.delete(`/docker/containers/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['docker', 'containers'] });
+      queryClient.invalidateQueries({ queryKey: ["docker", "containers"] });
     },
   });
 
@@ -131,9 +131,9 @@ export const useContainerActions = () => {
 
 export const useImages = () => {
   return useQuery<ImageInfo[]>({
-    queryKey: ['docker', 'images'],
+    queryKey: ["docker", "images"],
     queryFn: async () => {
-      const response = await apiClient.get('/docker/images');
+      const response = await apiClient.get("/docker/images");
       return response.data.data;
     },
   });
@@ -144,10 +144,10 @@ export const usePullImage = () => {
 
   return useMutation({
     mutationFn: async ({ image, tag }: { image: string; tag: string }) => {
-      await apiClient.post('/docker/images/pull', { image, tag });
+      await apiClient.post("/docker/images/pull", { image, tag });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['docker', 'images'] });
+      queryClient.invalidateQueries({ queryKey: ["docker", "images"] });
     },
   });
 };
@@ -160,7 +160,7 @@ export const useRemoveImage = () => {
       await apiClient.delete(`/docker/images/${encodeURIComponent(id)}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['docker', 'images'] });
+      queryClient.invalidateQueries({ queryKey: ["docker", "images"] });
     },
   });
 };
@@ -179,9 +179,9 @@ export interface NetworkInfo {
 
 export const useNetworks = () => {
   return useQuery<NetworkInfo[]>({
-    queryKey: ['docker', 'networks'],
+    queryKey: ["docker", "networks"],
     queryFn: async () => {
-      const response = await apiClient.get('/docker/networks');
+      const response = await apiClient.get("/docker/networks");
       return response.data.data;
     },
     refetchInterval: 5000,

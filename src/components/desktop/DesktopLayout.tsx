@@ -1,14 +1,14 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState, useRef } from 'react';
-import { TopBar } from './TopBar';
-import { WindowContainer } from './WindowContainer';
-import { UploadStatus } from './UploadStatus';
-import { GlobalContextMenu } from './GlobalContextMenu';
-import { DesktopIcons } from './DesktopIcons';
-import { useFileUpload } from '@/features/files/hooks/useFileUpload'; // Updated import
-import { useWindowStore } from '@/store/window-store';
-import { MOVE_MIME } from '@/lib/dnd';
+import React, { useEffect, useState, useRef } from "react";
+import { TopBar } from "./TopBar";
+import { WindowContainer } from "./WindowContainer";
+import { UploadStatus } from "./UploadStatus";
+import { GlobalContextMenu } from "./GlobalContextMenu";
+import { DesktopIcons } from "./DesktopIcons";
+import { useFileUpload } from "@/features/files/hooks/useFileUpload"; // Updated import
+import { useWindowStore } from "@/store/window-store";
+import { MOVE_MIME } from "@/lib/dnd";
 
 interface DesktopLayoutProps {
   children?: React.ReactNode;
@@ -23,7 +23,9 @@ interface SelectionBox {
 }
 
 export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
-  const [wallpaper, setWallpaper] = React.useState('https://images.unsplash.com/photo-1477346611705-65d1883cee1e?q=80&w=2070&auto=format&fit=crop');
+  const [wallpaper, setWallpaper] = React.useState(
+    "https://images.unsplash.com/photo-1477346611705-65d1883cee1e?q=80&w=2070&auto=format&fit=crop",
+  );
   const [selection, setSelection] = useState<SelectionBox>({
     startX: 0,
     startY: 0,
@@ -39,7 +41,7 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
   const { snapWindow, maximizeWindow } = useWindowStore();
 
   useEffect(() => {
-    const saved = localStorage.getItem('desktop-wallpaper');
+    const saved = localStorage.getItem("desktop-wallpaper");
     if (saved) setWallpaper(saved);
   }, []);
 
@@ -72,39 +74,41 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
       }
       // Snap left
       else if (x < 50) {
-        snapWindow(windowId, 'left', {
+        snapWindow(windowId, "left", {
           position: { x: 0, y: 0 },
-          size: { width: screenWidth / 2, height: screenHeight }
+          size: { width: screenWidth / 2, height: screenHeight },
         });
       }
       // Snap right
       else if (x > screenWidth - 50) {
-        snapWindow(windowId, 'right', {
+        snapWindow(windowId, "right", {
           position: { x: screenWidth / 2, y: 0 },
-          size: { width: screenWidth / 2, height: screenHeight }
+          size: { width: screenWidth / 2, height: screenHeight },
         });
       }
     };
 
-    window.addEventListener('window-drag-move', handleDragMove);
-    window.addEventListener('window-drag-end', handleDragEnd);
+    window.addEventListener("window-drag-move", handleDragMove);
+    window.addEventListener("window-drag-end", handleDragEnd);
 
     return () => {
-      window.removeEventListener('window-drag-move', handleDragMove);
-      window.removeEventListener('window-drag-end', handleDragEnd);
+      window.removeEventListener("window-drag-move", handleDragMove);
+      window.removeEventListener("window-drag-end", handleDragEnd);
     };
   }, [snapWindow]);
 
   const handleWallpaperChange = (url: string) => {
     setWallpaper(url);
-    localStorage.setItem('desktop-wallpaper', url);
+    localStorage.setItem("desktop-wallpaper", url);
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
     // Only start selection if clicking directly on the desktop background
     // content-wrapper is the div acting as the interactive layer for icons/windows
     const target = e.target as HTMLElement;
-    const isInteractive = target.closest('button, a, input, [data-context-type="desktop-icon"], .window-container, [data-context-type="topbar"], .desktop-window');
+    const isInteractive = target.closest(
+      'button, a, input, [data-context-type="desktop-icon"], .window-container, [data-context-type="topbar"], .desktop-window',
+    );
 
     // Check if we are clicking on background (root or wrapper) AND not on an interactive element
     if (!isInteractive && e.button === 0) {
@@ -120,7 +124,7 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (selection.isSelecting) {
-      setSelection(prev => ({
+      setSelection((prev) => ({
         ...prev,
         currentX: e.clientX,
         currentY: e.clientY,
@@ -133,10 +137,10 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
       const height = Math.abs(e.clientY - selection.startY);
 
       // Dispatch event for DesktopIcons to handle selection
-      const event = new CustomEvent('desktop-selection-change', {
+      const event = new CustomEvent("desktop-selection-change", {
         detail: {
-          rect: { left, top, width, height }
-        }
+          rect: { left, top, width, height },
+        },
       });
       window.dispatchEvent(event);
     }
@@ -144,9 +148,9 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
 
   const handleMouseUp = () => {
     if (selection.isSelecting) {
-      setSelection(prev => ({ ...prev, isSelecting: false }));
+      setSelection((prev) => ({ ...prev, isSelecting: false }));
       // Dispatch event to end selection
-      window.dispatchEvent(new Event('desktop-selection-end'));
+      window.dispatchEvent(new Event("desktop-selection-end"));
     }
   };
 
@@ -177,7 +181,7 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
 
     // Use shared hook logic
     // We upload to /Desktop
-    await handleUploadFiles(files, '/Desktop');
+    await handleUploadFiles(files, "/Desktop");
   };
 
   // Calculate box dimensions
@@ -200,7 +204,9 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
       onDrop={handleDrop}
     >
       {/* Overlay for better contrast */}
-      <div className={`absolute inset-0 bg-black/20 pointer-events-none transition-colors duration-300 ${isDraggingFile ? 'bg-blue-500/20' : ''}`} />
+      <div
+        className={`absolute inset-0 bg-black/20 pointer-events-none transition-colors duration-300 ${isDraggingFile ? "bg-blue-500/20" : ""}`}
+      />
 
       {/* Maximize Preview */}
       {maximizePreview && (

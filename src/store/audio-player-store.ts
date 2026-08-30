@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
 interface AudioPlayerState {
   // Current playing audio
@@ -14,15 +14,28 @@ interface AudioPlayerState {
   windowId: string | null;
   volume: number;
   isMuted: boolean;
-  
+
   // Reference to the active audio element
   activeAudioRef: HTMLAudioElement | null;
-  
+
   // Actions
   setAudioState: (state: Partial<AudioPlayerState>) => void;
-  registerAudio: (src: string, audioRef: HTMLAudioElement, windowId?: string, title?: string, artist?: string, albumArt?: string) => void;
+  registerAudio: (
+    src: string,
+    audioRef: HTMLAudioElement,
+    windowId?: string,
+    title?: string,
+    artist?: string,
+    albumArt?: string,
+  ) => void;
   unregisterAudio: (src: string) => void;
-  play: (src: string, title?: string, artist?: string, albumArt?: string, windowId?: string) => void;
+  play: (
+    src: string,
+    title?: string,
+    artist?: string,
+    albumArt?: string,
+    windowId?: string,
+  ) => void;
   pause: () => void;
   stop: () => void;
   toggleMiniPlayer: (show: boolean) => void;
@@ -32,11 +45,11 @@ interface AudioPlayerState {
 }
 
 // Storage keys
-const VOLUME_STORAGE_KEY = 'koimsurai-player-volume';
-const MUTED_STORAGE_KEY = 'koimsurai-player-muted';
+const VOLUME_STORAGE_KEY = "koimsurai-player-volume";
+const MUTED_STORAGE_KEY = "koimsurai-player-muted";
 
 const getSavedVolume = (): number => {
-  if (typeof window === 'undefined') return 1;
+  if (typeof window === "undefined") return 1;
   const saved = sessionStorage.getItem(VOLUME_STORAGE_KEY);
   if (saved) {
     const vol = parseFloat(saved);
@@ -46,8 +59,8 @@ const getSavedVolume = (): number => {
 };
 
 const getSavedMuted = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  return sessionStorage.getItem(MUTED_STORAGE_KEY) === 'true';
+  if (typeof window === "undefined") return false;
+  return sessionStorage.getItem(MUTED_STORAGE_KEY) === "true";
 };
 
 export const useAudioPlayerStore = create<AudioPlayerState>((set, get) => ({
@@ -61,8 +74,8 @@ export const useAudioPlayerStore = create<AudioPlayerState>((set, get) => ({
   currentTime: 0,
   duration: 0,
   windowId: null,
-  volume: typeof window !== 'undefined' ? getSavedVolume() : 1,
-  isMuted: typeof window !== 'undefined' ? getSavedMuted() : false,
+  volume: typeof window !== "undefined" ? getSavedVolume() : 1,
+  isMuted: typeof window !== "undefined" ? getSavedMuted() : false,
   activeAudioRef: null,
 
   setAudioState: (state) => set(state),
@@ -70,17 +83,17 @@ export const useAudioPlayerStore = create<AudioPlayerState>((set, get) => ({
   // Register an audio element - this will stop any other playing audio
   registerAudio: (src, audioRef, windowId, title, artist, albumArt) => {
     const { activeAudioRef, currentSrc, volume, isMuted } = get();
-    
+
     // If there's already an active audio and it's different, stop it
     if (activeAudioRef && currentSrc !== src) {
       activeAudioRef.pause();
       activeAudioRef.currentTime = 0;
     }
-    
+
     // Apply saved volume to new audio
     audioRef.volume = volume;
     audioRef.muted = isMuted;
-    
+
     set({
       isActive: true,
       currentSrc: src,
@@ -163,7 +176,7 @@ export const useAudioPlayerStore = create<AudioPlayerState>((set, get) => ({
       activeAudioRef.muted = false;
     }
     sessionStorage.setItem(VOLUME_STORAGE_KEY, volume.toString());
-    sessionStorage.setItem(MUTED_STORAGE_KEY, 'false');
+    sessionStorage.setItem(MUTED_STORAGE_KEY, "false");
     set({ volume, isMuted: false });
   },
 

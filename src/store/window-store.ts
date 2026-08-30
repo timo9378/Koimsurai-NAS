@@ -1,9 +1,19 @@
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
-export type AppType = 'finder' | 'launchpad' | 'photos' | 'docker' | 'settings' | 'trash' | 'calculator' | 'terminal' | 'dashboard' | 'preview';
-export type DockPosition = 'bottom' | 'left' | 'right';
-export type SnapState = 'left' | 'right' | 'maximize' | null;
+export type AppType =
+  | "finder"
+  | "launchpad"
+  | "photos"
+  | "docker"
+  | "settings"
+  | "trash"
+  | "calculator"
+  | "terminal"
+  | "dashboard"
+  | "preview";
+export type DockPosition = "bottom" | "left" | "right";
+export type SnapState = "left" | "right" | "maximize" | null;
 
 export interface WindowState {
   id: string;
@@ -13,7 +23,10 @@ export interface WindowState {
   isMinimized: boolean;
   isMaximized: boolean;
   snapState: SnapState;
-  restoreBounds: { position: { x: number; y: number }; size: { width: number; height: number } } | null;
+  restoreBounds: {
+    position: { x: number; y: number };
+    size: { width: number; height: number };
+  } | null;
   zIndex: number;
   position: { x: number; y: number };
   size: { width: number; height: number };
@@ -26,14 +39,24 @@ interface WindowStore {
   windows: WindowState[];
   activeWindowId: string | null;
   nextZIndex: number;
-  windowHistory: Record<string, { position: { x: number; y: number }; size: { width: number; height: number } }>;
+  windowHistory: Record<
+    string,
+    { position: { x: number; y: number }; size: { width: number; height: number } }
+  >;
   dockPosition: DockPosition;
 
   openWindow: (appType: AppType, title?: string, props?: any) => void;
   closeWindow: (id: string) => void;
   minimizeWindow: (id: string) => void;
-  maximizeWindow: (id: string, bounds?: { position: { x: number; y: number }; size: { width: number; height: number } }) => void;
-  snapWindow: (id: string, snapState: SnapState, bounds: { position: { x: number; y: number }; size: { width: number; height: number } }) => void;
+  maximizeWindow: (
+    id: string,
+    bounds?: { position: { x: number; y: number }; size: { width: number; height: number } },
+  ) => void;
+  snapWindow: (
+    id: string,
+    snapState: SnapState,
+    bounds: { position: { x: number; y: number }; size: { width: number; height: number } },
+  ) => void;
   restoreWindow: (id: string) => void;
   focusWindow: (id: string) => void;
   updateWindowPosition: (id: string, position: { x: number; y: number }) => void;
@@ -47,13 +70,13 @@ interface WindowStore {
 }
 
 export const useWindowStore = create(
-  persist<WindowStore, [], [], Pick<WindowStore, 'windowHistory' | 'dockPosition'>>(
+  persist<WindowStore, [], [], Pick<WindowStore, "windowHistory" | "dockPosition">>(
     (set, get) => ({
       windows: [],
       activeWindowId: null,
       nextZIndex: 100,
       windowHistory: {},
-      dockPosition: 'bottom',
+      dockPosition: "bottom",
       showDesktop: false,
 
       toggleShowDesktop: () => {
@@ -61,16 +84,24 @@ export const useWindowStore = create(
         const newShowDesktop = !showDesktop;
 
         if (newShowDesktop) {
-          const visibleWindowIds = windows.filter(w => !w.isMinimized).map(w => w.id);
+          const visibleWindowIds = windows.filter((w) => !w.isMinimized).map((w) => w.id);
 
           set((state) => ({
             showDesktop: true,
-            windows: state.windows.map(w => visibleWindowIds.includes(w.id) ? { ...w, isMinimized: true, wasMinimizedByShowDesktop: true } : w)
+            windows: state.windows.map((w) =>
+              visibleWindowIds.includes(w.id)
+                ? { ...w, isMinimized: true, wasMinimizedByShowDesktop: true }
+                : w,
+            ),
           }));
         } else {
           set((state) => ({
             showDesktop: false,
-            windows: state.windows.map(w => (w as any).wasMinimizedByShowDesktop ? { ...w, isMinimized: false, wasMinimizedByShowDesktop: undefined } : w)
+            windows: state.windows.map((w) =>
+              (w as any).wasMinimizedByShowDesktop
+                ? { ...w, isMinimized: false, wasMinimizedByShowDesktop: undefined }
+                : w,
+            ),
           }));
         }
       },
@@ -82,11 +113,11 @@ export const useWindowStore = create(
         set({ showDesktop: false });
 
         // Apps that can have multiple instances
-        const multiInstanceApps: AppType[] = ['finder', 'terminal', 'preview', 'photos'];
+        const multiInstanceApps: AppType[] = ["finder", "terminal", "preview", "photos"];
 
         // For singleton apps (not in multiInstanceApps), focus existing window instead of creating new one
         if (!multiInstanceApps.includes(appType)) {
-          const existingWindow = windows.find(w => w.appType === appType);
+          const existingWindow = windows.find((w) => w.appType === appType);
           if (existingWindow) {
             focusWindow(existingWindow.id);
             return;
@@ -107,8 +138,10 @@ export const useWindowStore = create(
 
         // Restore from history if available
         const history = windowHistory[appType];
-        const position = history ? history.position : { x: 100 + windows.length * 20, y: 100 + windows.length * 20 };
-        const size = history ? history.size : (defaultSizes[appType] || { width: 800, height: 600 });
+        const position = history
+          ? history.position
+          : { x: 100 + windows.length * 20, y: 100 + windows.length * 20 };
+        const size = history ? history.size : defaultSizes[appType] || { width: 800, height: 600 };
 
         const newWindow: WindowState = {
           id,
@@ -134,7 +167,7 @@ export const useWindowStore = create(
 
       closeWindow: (id) => {
         const { windows } = get();
-        const windowToClose = windows.find(w => w.id === id);
+        const windowToClose = windows.find((w) => w.id === id);
 
         if (windowToClose) {
           set((state) => ({
@@ -142,13 +175,13 @@ export const useWindowStore = create(
               ...state.windowHistory,
               [windowToClose.appType]: {
                 position: windowToClose.position,
-                size: windowToClose.size
-              }
-            }
+                size: windowToClose.size,
+              },
+            },
           }));
 
           // Clean up persisted Finder tab state from localStorage
-          if (windowToClose.appType === 'finder' && typeof window !== 'undefined') {
+          if (windowToClose.appType === "finder" && typeof window !== "undefined") {
             try {
               localStorage.removeItem(`finder-tabs-${id}`);
             } catch {
@@ -165,16 +198,14 @@ export const useWindowStore = create(
 
       minimizeWindow: (id) => {
         set((state) => ({
-          windows: state.windows.map((w) =>
-            w.id === id ? { ...w, isMinimized: true } : w
-          ),
+          windows: state.windows.map((w) => (w.id === id ? { ...w, isMinimized: true } : w)),
           activeWindowId: state.activeWindowId === id ? null : state.activeWindowId,
         }));
       },
 
       maximizeWindow: (id, bounds) => {
         set((state) => {
-          const window = state.windows.find(w => w.id === id);
+          const window = state.windows.find((w) => w.id === id);
           if (!window) return state;
 
           // If already maximized, do nothing
@@ -183,31 +214,37 @@ export const useWindowStore = create(
           // Save current state before maximizing
           const restoreBounds = {
             position: window.position,
-            size: window.size
+            size: window.size,
           };
 
           // 統一使用一套邏輯：如果沒有提供bounds，計算預設的全螢幕尺寸（帶邊距）
-          const screenWidth = typeof globalThis.window !== 'undefined' ? globalThis.window.innerWidth : 1920;
-          const screenHeight = typeof globalThis.window !== 'undefined' ? globalThis.window.innerHeight : 1080;
+          const screenWidth =
+            typeof globalThis.window !== "undefined" ? globalThis.window.innerWidth : 1920;
+          const screenHeight =
+            typeof globalThis.window !== "undefined" ? globalThis.window.innerHeight : 1080;
 
           // 使用與預覽一致的邊距：top: 48px, left/right: 24px, bottom: 48px (top bar 40 + dock ~48)
           const newPos = bounds ? bounds.position : { x: 24, y: 48 };
-          const newSize = bounds ? bounds.size : {
-            width: screenWidth - 48,  // 24px on each side
-            height: screenHeight - 96  // 48px top + 48px bottom
-          };
+          const newSize = bounds
+            ? bounds.size
+            : {
+                width: screenWidth - 48, // 24px on each side
+                height: screenHeight - 96, // 48px top + 48px bottom
+              };
 
           return {
             windows: state.windows.map((w) =>
-              w.id === id ? {
-                ...w,
-                isMaximized: true,
-                snapState: 'maximize',
-                isMinimized: false,
-                restoreBounds: w.restoreBounds || restoreBounds,
-                position: newPos,
-                size: newSize
-              } : w
+              w.id === id
+                ? {
+                    ...w,
+                    isMaximized: true,
+                    snapState: "maximize",
+                    isMinimized: false,
+                    restoreBounds: w.restoreBounds || restoreBounds,
+                    position: newPos,
+                    size: newSize,
+                  }
+                : w,
             ),
             activeWindowId: id,
             nextZIndex: state.nextZIndex + 1,
@@ -217,7 +254,7 @@ export const useWindowStore = create(
 
       snapWindow: (id, snapState, bounds) => {
         set((state) => {
-          const window = state.windows.find(w => w.id === id);
+          const window = state.windows.find((w) => w.id === id);
           if (!window) return state;
 
           // If already in this snap state, just update bounds (optional, but consistent)
@@ -226,20 +263,22 @@ export const useWindowStore = create(
 
           const restoreBounds = window.restoreBounds || {
             position: window.position,
-            size: window.size
+            size: window.size,
           };
 
           return {
             windows: state.windows.map((w) =>
-              w.id === id ? {
-                ...w,
-                isMaximized: snapState === 'maximize',
-                snapState,
-                isMinimized: false,
-                restoreBounds,
-                position: bounds.position,
-                size: bounds.size
-              } : w
+              w.id === id
+                ? {
+                    ...w,
+                    isMaximized: snapState === "maximize",
+                    snapState,
+                    isMinimized: false,
+                    restoreBounds,
+                    position: bounds.position,
+                    size: bounds.size,
+                  }
+                : w,
             ),
             activeWindowId: id,
             nextZIndex: state.nextZIndex + 1,
@@ -264,7 +303,7 @@ export const useWindowStore = create(
               isMinimized: false,
               position: targetPos,
               size: targetSize,
-              restoreBounds: null
+              restoreBounds: null,
             };
           }),
           activeWindowId: id,
@@ -282,7 +321,7 @@ export const useWindowStore = create(
             activeWindowId: id,
             nextZIndex: state.nextZIndex + 1,
             windows: state.windows.map((w) =>
-              w.id === id ? { ...w, zIndex: state.nextZIndex, isMinimized: false } : w
+              w.id === id ? { ...w, zIndex: state.nextZIndex, isMinimized: false } : w,
             ),
           };
         });
@@ -290,24 +329,20 @@ export const useWindowStore = create(
 
       updateWindowPosition: (id, position) => {
         set((state) => ({
-          windows: state.windows.map((w) =>
-            w.id === id ? { ...w, position } : w
-          ),
+          windows: state.windows.map((w) => (w.id === id ? { ...w, position } : w)),
         }));
       },
 
       updateWindowSize: (id, size) => {
         set((state) => ({
-          windows: state.windows.map((w) =>
-            w.id === id ? { ...w, size } : w
-          ),
+          windows: state.windows.map((w) => (w.id === id ? { ...w, size } : w)),
         }));
       },
 
       updateWindowAppState: (id, appState) => {
         set((state) => ({
           windows: state.windows.map((w) =>
-            w.id === id ? { ...w, appState: { ...w.appState, ...appState } } : w
+            w.id === id ? { ...w, appState: { ...w.appState, ...appState } } : w,
           ),
         }));
       },
@@ -317,11 +352,11 @@ export const useWindowStore = create(
       },
     }),
     {
-      name: 'window-storage',
+      name: "window-storage",
       partialize: (state) => ({
         windowHistory: state.windowHistory,
-        dockPosition: state.dockPosition
+        dockPosition: state.dockPosition,
       }),
-    }
-  )
+    },
+  ),
 );

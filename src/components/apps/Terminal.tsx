@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { Terminal as XTerm } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import '@xterm/xterm/css/xterm.css';
-import { cn } from '@/lib/utils';
-import { RefreshCw, Plus, X, ChevronDown, Copy, ClipboardPaste } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback } from "react";
+import { Terminal as XTerm } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
+import "@xterm/xterm/css/xterm.css";
+import { cn } from "@/lib/utils";
+import { RefreshCw, Plus, X, ChevronDown, Copy, ClipboardPaste } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,7 +34,7 @@ interface TerminalProps {
 
 export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
   const [tabs, setTabs] = useState<TerminalTab[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string>('');
+  const [activeTabId, setActiveTabId] = useState<string>("");
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const terminalContainerRef = useRef<HTMLDivElement>(null);
@@ -48,166 +48,171 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
       fitAddon: null,
       ws: null,
     };
-    setTabs(prev => [...prev, newTab]);
+    setTabs((prev) => [...prev, newTab]);
     setActiveTabId(newTab.id);
     return newTab.id;
   }, [tabs.length]);
 
-  const closeTab = useCallback((tabId: string) => {
-    const tab = tabs.find(t => t.id === tabId);
-    if (tab) {
-      tab.ws?.close();
-      tab.terminal?.dispose();
-    }
-    
-    const newTabs = tabs.filter(t => t.id !== tabId);
-    setTabs(newTabs);
-    
-    if (activeTabId === tabId && newTabs.length > 0) {
-      setActiveTabId(newTabs[newTabs.length - 1].id);
-    }
-  }, [tabs, activeTabId]);
-
-  const initializeTerminal = useCallback(async (tabId: string) => {
-    const tab = tabs.find(t => t.id === tabId);
-    if (!tab || tab.terminal || !terminalContainerRef.current) return;
-
-    setIsConnecting(true);
-    setError(null);
-
-    try {
-      // Create terminal
-      const term = new XTerm({
-        cursorBlink: true,
-        fontSize: 14,
-        fontFamily: 'JetBrains Mono, Monaco, Menlo, monospace',
-        theme: {
-          background: '#1a1a2e',
-          foreground: '#e4e4e7',
-          cursor: '#3b82f6',
-          cursorAccent: '#1a1a2e',
-          selectionBackground: '#3b82f640',
-          black: '#16161e',
-          red: '#f7768e',
-          green: '#9ece6a',
-          yellow: '#e0af68',
-          blue: '#7aa2f7',
-          magenta: '#bb9af7',
-          cyan: '#7dcfff',
-          white: '#a9b1d6',
-          brightBlack: '#414868',
-          brightRed: '#f7768e',
-          brightGreen: '#9ece6a',
-          brightYellow: '#e0af68',
-          brightBlue: '#7aa2f7',
-          brightMagenta: '#bb9af7',
-          brightCyan: '#7dcfff',
-          brightWhite: '#c0caf5',
-        },
-        allowProposedApi: true,
-        scrollback: 5000,
-      });
-
-      const fitAddon = new FitAddon();
-      term.loadAddon(fitAddon);
-
-      // Get or create terminal container for this tab
-      const container = document.getElementById(`terminal-${tabId}`);
-      if (container) {
-        term.open(container);
-        fitAddon.fit();
+  const closeTab = useCallback(
+    (tabId: string) => {
+      const tab = tabs.find((t) => t.id === tabId);
+      if (tab) {
+        tab.ws?.close();
+        tab.terminal?.dispose();
       }
 
-      // Connect to WebSocket terminal
-      // Use the API subdomain for WebSocket connection (nginx proxies to backend)
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      // Replace 'nas.' with 'nas-api.' for API endpoint, or use port 3000 for local dev
-      const apiHost = window.location.hostname.replace('nas.', 'nas-api.');
-      const wsHost = window.location.protocol === 'https:' 
-        ? apiHost  // Production: use nas-api.koimsurai.com (nginx proxies to backend)
-        : `${window.location.hostname}:3000`;  // Dev: direct to port 3000
-      const wsUrl = `${protocol}//${wsHost}/api/terminal?cols=${term.cols}&rows=${term.rows}`;
-      
-      // Include credentials cookie for authentication
-      const ws = new WebSocket(wsUrl);
-      
-      ws.onopen = () => {
-        setIsConnecting(false);
-        
-        // Manual data handling for our custom restricted shell
-        // (Not using AttachAddon since our backend sends plain text, not PTY binary)
-        ws.onmessage = (event) => {
-          term.write(event.data);
-        };
+      const newTabs = tabs.filter((t) => t.id !== tabId);
+      setTabs(newTabs);
 
-        term.onData((data) => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(data);
-          }
+      if (activeTabId === tabId && newTabs.length > 0) {
+        setActiveTabId(newTabs[newTabs.length - 1].id);
+      }
+    },
+    [tabs, activeTabId],
+  );
+
+  const initializeTerminal = useCallback(
+    async (tabId: string) => {
+      const tab = tabs.find((t) => t.id === tabId);
+      if (!tab || tab.terminal || !terminalContainerRef.current) return;
+
+      setIsConnecting(true);
+      setError(null);
+
+      try {
+        // Create terminal
+        const term = new XTerm({
+          cursorBlink: true,
+          fontSize: 14,
+          fontFamily: "JetBrains Mono, Monaco, Menlo, monospace",
+          theme: {
+            background: "#1a1a2e",
+            foreground: "#e4e4e7",
+            cursor: "#3b82f6",
+            cursorAccent: "#1a1a2e",
+            selectionBackground: "#3b82f640",
+            black: "#16161e",
+            red: "#f7768e",
+            green: "#9ece6a",
+            yellow: "#e0af68",
+            blue: "#7aa2f7",
+            magenta: "#bb9af7",
+            cyan: "#7dcfff",
+            white: "#a9b1d6",
+            brightBlack: "#414868",
+            brightRed: "#f7768e",
+            brightGreen: "#9ece6a",
+            brightYellow: "#e0af68",
+            brightBlue: "#7aa2f7",
+            brightMagenta: "#bb9af7",
+            brightCyan: "#7dcfff",
+            brightWhite: "#c0caf5",
+          },
+          allowProposedApi: true,
+          scrollback: 5000,
         });
 
-        term.focus();
-      };
+        const fitAddon = new FitAddon();
+        term.loadAddon(fitAddon);
 
-      ws.onerror = () => {
-        setIsConnecting(false);
-        // Fallback to local simulation if WebSocket fails
-        term.writeln('\x1b[33m⚠ WebSocket connection failed. Running in demo mode.\x1b[0m');
-        term.writeln('');
-        term.writeln('\x1b[32mWelcome to Koimsurai NAS Terminal\x1b[0m');
-        term.writeln('\x1b[90m─────────────────────────────────\x1b[0m');
-        term.writeln('');
-        simulateTerminal(term);
-      };
-
-      ws.onclose = () => {
-        if (tab.terminal) {
-          term.writeln('\r\n\x1b[31mConnection closed.\x1b[0m');
+        // Get or create terminal container for this tab
+        const container = document.getElementById(`terminal-${tabId}`);
+        if (container) {
+          term.open(container);
+          fitAddon.fit();
         }
-      };
 
-      // Update tab with terminal instances
-      setTabs(prev => prev.map(t => 
-        t.id === tabId 
-          ? { ...t, terminal: term, fitAddon, ws }
-          : t
-      ));
+        // Connect to WebSocket terminal
+        // Use the API subdomain for WebSocket connection (nginx proxies to backend)
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        // Replace 'nas.' with 'nas-api.' for API endpoint, or use port 3000 for local dev
+        const apiHost = window.location.hostname.replace("nas.", "nas-api.");
+        const wsHost =
+          window.location.protocol === "https:"
+            ? apiHost // Production: use nas-api.koimsurai.com (nginx proxies to backend)
+            : `${window.location.hostname}:3000`; // Dev: direct to port 3000
+        const wsUrl = `${protocol}//${wsHost}/api/terminal?cols=${term.cols}&rows=${term.rows}`;
 
-    } catch (err) {
-      setIsConnecting(false);
-      setError('Failed to initialize terminal');
-      console.error('Terminal init error:', err);
-    }
-  }, [tabs]);
+        // Include credentials cookie for authentication
+        const ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          setIsConnecting(false);
+
+          // Manual data handling for our custom restricted shell
+          // (Not using AttachAddon since our backend sends plain text, not PTY binary)
+          ws.onmessage = (event) => {
+            term.write(event.data);
+          };
+
+          term.onData((data) => {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(data);
+            }
+          });
+
+          term.focus();
+        };
+
+        ws.onerror = () => {
+          setIsConnecting(false);
+          // Fallback to local simulation if WebSocket fails
+          term.writeln("\x1b[33m⚠ WebSocket connection failed. Running in demo mode.\x1b[0m");
+          term.writeln("");
+          term.writeln("\x1b[32mWelcome to Koimsurai NAS Terminal\x1b[0m");
+          term.writeln("\x1b[90m─────────────────────────────────\x1b[0m");
+          term.writeln("");
+          simulateTerminal(term);
+        };
+
+        ws.onclose = () => {
+          if (tab.terminal) {
+            term.writeln("\r\n\x1b[31mConnection closed.\x1b[0m");
+          }
+        };
+
+        // Update tab with terminal instances
+        setTabs((prev) =>
+          prev.map((t) => (t.id === tabId ? { ...t, terminal: term, fitAddon, ws } : t)),
+        );
+      } catch (err) {
+        setIsConnecting(false);
+        setError("Failed to initialize terminal");
+        console.error("Terminal init error:", err);
+      }
+    },
+    [tabs],
+  );
 
   // Simulate terminal for demo purposes
   const simulateTerminal = (term: XTerm) => {
-    let currentLine = '';
-    const prompt = '\x1b[36mnas\x1b[0m:\x1b[34m~\x1b[0m$ ';
-    
+    let currentLine = "";
+    const prompt = "\x1b[36mnas\x1b[0m:\x1b[34m~\x1b[0m$ ";
+
     const commands: Record<string, string> = {
-      'help': 'Available commands: help, ls, pwd, date, whoami, clear, echo, uname',
-      'ls': 'Desktop  Documents  Downloads  Music  Pictures  Videos',
-      'pwd': '/home/user',
-      'date': new Date().toString(),
-      'whoami': 'user',
-      'uname': 'KoimsuraiNAS 1.0.0',
-      'clear': '\x1b[2J\x1b[H',
+      help: "Available commands: help, ls, pwd, date, whoami, clear, echo, uname",
+      ls: "Desktop  Documents  Downloads  Music  Pictures  Videos",
+      pwd: "/home/user",
+      date: new Date().toString(),
+      whoami: "user",
+      uname: "KoimsuraiNAS 1.0.0",
+      clear: "\x1b[2J\x1b[H",
     };
 
     term.write(prompt);
 
     term.onData((data) => {
       const code = data.charCodeAt(0);
-      
-      if (code === 13) { // Enter
-        term.writeln('');
+
+      if (code === 13) {
+        // Enter
+        term.writeln("");
         const cmd = currentLine.trim();
-        
+
         if (cmd) {
-          if (cmd === 'clear') {
-            term.write('\x1b[2J\x1b[H');
-          } else if (cmd.startsWith('echo ')) {
+          if (cmd === "clear") {
+            term.write("\x1b[2J\x1b[H");
+          } else if (cmd.startsWith("echo ")) {
             term.writeln(cmd.substring(5));
           } else if (commands[cmd]) {
             term.writeln(commands[cmd]);
@@ -215,15 +220,17 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
             term.writeln(`\x1b[31mCommand not found: ${cmd}\x1b[0m`);
           }
         }
-        
-        currentLine = '';
+
+        currentLine = "";
         term.write(prompt);
-      } else if (code === 127) { // Backspace
+      } else if (code === 127) {
+        // Backspace
         if (currentLine.length > 0) {
           currentLine = currentLine.slice(0, -1);
-          term.write('\b \b');
+          term.write("\b \b");
         }
-      } else if (code >= 32) { // Printable characters
+      } else if (code >= 32) {
+        // Printable characters
         currentLine += data;
         term.write(data);
       }
@@ -240,7 +247,7 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
   // Initialize terminal when active tab changes
   useEffect(() => {
     if (activeTabId) {
-      const tab = tabs.find(t => t.id === activeTabId);
+      const tab = tabs.find((t) => t.id === activeTabId);
       if (tab && !tab.terminal) {
         // Small delay to ensure DOM is ready
         setTimeout(() => initializeTerminal(activeTabId), 100);
@@ -251,14 +258,14 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
   // Handle resize
   useEffect(() => {
     const handleResize = () => {
-      const activeTab = tabs.find(t => t.id === activeTabId);
+      const activeTab = tabs.find((t) => t.id === activeTabId);
       if (activeTab?.fitAddon && activeTab?.terminal) {
         try {
           activeTab.fitAddon.fit();
           // Send new dimensions to server if connected
           if (activeTab.ws?.readyState === WebSocket.OPEN) {
             const dimensions = { cols: activeTab.terminal.cols, rows: activeTab.terminal.rows };
-            activeTab.ws.send(JSON.stringify({ type: 'resize', ...dimensions }));
+            activeTab.ws.send(JSON.stringify({ type: "resize", ...dimensions }));
           }
         } catch (e) {
           // Ignore fit errors
@@ -279,14 +286,14 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      tabs.forEach(tab => {
+      tabs.forEach((tab) => {
         tab.ws?.close();
         tab.terminal?.dispose();
       });
     };
   }, []);
 
-  const activeTab = tabs.find(t => t.id === activeTabId);
+  const activeTab = tabs.find((t) => t.id === activeTabId);
 
   // 複製選中的文字
   const handleCopy = useCallback(() => {
@@ -307,7 +314,7 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
           activeTab.ws.send(text);
         }
       } catch (e) {
-        console.error('Failed to read clipboard:', e);
+        console.error("Failed to read clipboard:", e);
       }
     }
   }, [activeTab]);
@@ -330,17 +337,15 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
               onClick={() => setActiveTabId(tab.id)}
               className={cn(
                 "group flex items-center gap-1.5 h-7 px-3 rounded-t-md cursor-pointer transition-all duration-150 min-w-0 max-w-[160px]",
-                tab.id === activeTabId
-                  ? "bg-[#1a1a2e]"
-                  : "bg-transparent hover:bg-white/5"
+                tab.id === activeTabId ? "bg-[#1a1a2e]" : "bg-transparent hover:bg-white/5",
               )}
             >
-              <span className={cn(
-                "text-xs truncate",
-                tab.id === activeTabId
-                  ? "text-white font-medium"
-                  : "text-gray-400"
-              )}>
+              <span
+                className={cn(
+                  "text-xs truncate",
+                  tab.id === activeTabId ? "text-white font-medium" : "text-gray-400",
+                )}
+              >
                 {tab.title}
               </span>
               {tabs.length > 1 && (
@@ -351,7 +356,7 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
                   }}
                   className={cn(
                     "shrink-0 p-0.5 rounded hover:bg-white/10 transition-colors",
-                    tab.id === activeTabId ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                    tab.id === activeTabId ? "opacity-100" : "opacity-0 group-hover:opacity-100",
                   )}
                 >
                   <X className="w-3 h-3 text-gray-400" />
@@ -379,11 +384,13 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
                 <Plus className="w-4 h-4 mr-2" />
                 New Terminal
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => {
-                if (activeTab?.terminal) {
-                  activeTab.terminal.clear();
-                }
-              }}>
+              <DropdownMenuItem
+                onClick={() => {
+                  if (activeTab?.terminal) {
+                    activeTab.terminal.clear();
+                  }
+                }}
+              >
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Clear Terminal
               </DropdownMenuItem>
@@ -400,13 +407,10 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
               <div
                 key={tab.id}
                 id={`terminal-${tab.id}`}
-                className={cn(
-                  "absolute inset-0 p-2",
-                  tab.id === activeTabId ? "block" : "hidden"
-                )}
+                className={cn("absolute inset-0 p-2", tab.id === activeTabId ? "block" : "hidden")}
               />
             ))}
-            
+
             {isConnecting && (
               <div className="absolute inset-0 flex items-center justify-center bg-[#1a1a2e]/80 backdrop-blur-sm">
                 <div className="flex flex-col items-center gap-3">
@@ -415,7 +419,7 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
                 </div>
               </div>
             )}
-            
+
             {error && (
               <div className="absolute inset-0 flex items-center justify-center bg-[#1a1a2e]/80 backdrop-blur-sm">
                 <div className="flex flex-col items-center gap-3 text-center px-4">

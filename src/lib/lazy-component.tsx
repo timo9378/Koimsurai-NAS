@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ComponentType, type ReactNode } from 'react';
+import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
 
 /**
  * `next/dynamic` 的等價替代（Vite / 純 SPA 版）。

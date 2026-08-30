@@ -1,6 +1,6 @@
-import { useQuery, useMutation, useQueries } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
-import type { SystemStatus, DockerContainer } from '@/types/api';
+import { useQuery, useMutation, useQueries } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api-client";
+import type { SystemStatus, DockerContainer } from "@/types/api";
 
 export interface ContainerWithStats extends DockerContainer {
   cpu_percent?: number;
@@ -10,9 +10,9 @@ export interface ContainerWithStats extends DockerContainer {
 
 export const useSystemStatus = () => {
   return useQuery({
-    queryKey: ['system', 'status'],
+    queryKey: ["system", "status"],
     queryFn: async () => {
-      const response = await apiClient.get<SystemStatus>('/system/status');
+      const response = await apiClient.get<SystemStatus>("/system/status");
       return response.data;
     },
     retry: false,
@@ -25,33 +25,36 @@ export const useSystemStatus = () => {
 export const useRescan = () => {
   return useMutation({
     mutationFn: async () => {
-      await apiClient.post('/system/rescan');
+      await apiClient.post("/system/rescan");
     },
   });
 };
 
 export const useDockerContainers = () => {
   return useQuery({
-    queryKey: ['docker', 'containers'],
+    queryKey: ["docker", "containers"],
     queryFn: async () => {
       try {
-        const response = await apiClient.get<{ success: boolean; data?: {
-          id: string;
-          names: string[];
-          image: string;
-          state: string;
-          status: string;
-        }[] }>('/docker/containers?all=true');
-        
+        const response = await apiClient.get<{
+          success: boolean;
+          data?: {
+            id: string;
+            names: string[];
+            image: string;
+            state: string;
+            status: string;
+          }[];
+        }>("/docker/containers?all=true");
+
         // Transform backend format to frontend format
         const containers = response.data?.data || [];
-        return containers.map(c => ({
+        return containers.map((c) => ({
           id: c.id,
-          name: c.names?.[0]?.replace(/^\//, '') || 'unknown',
+          name: c.names?.[0]?.replace(/^\//, "") || "unknown",
           image: c.image,
-          status: c.state as 'running' | 'stopped' | 'paused' | 'exited',
-          cpu_usage: '0%',
-          memory_usage: '0 MB',
+          status: c.state as "running" | "stopped" | "paused" | "exited",
+          cpu_usage: "0%",
+          memory_usage: "0 MB",
         }));
       } catch {
         return [];
@@ -66,16 +69,19 @@ export const useDockerContainers = () => {
 // Get stats for a single container
 export const useContainerStats = (containerId: string, enabled: boolean = true) => {
   return useQuery({
-    queryKey: ['docker', 'container', containerId, 'stats'],
+    queryKey: ["docker", "container", containerId, "stats"],
     queryFn: async () => {
       try {
-        const response = await apiClient.get<{ success: boolean; data?: {
-          cpu_percentage: number;
-          memory_usage: number;
-          memory_limit: number;
-          network_rx: number;
-          network_tx: number;
-        } }>(`/docker/containers/${containerId}/stats`);
+        const response = await apiClient.get<{
+          success: boolean;
+          data?: {
+            cpu_percentage: number;
+            memory_usage: number;
+            memory_limit: number;
+            network_rx: number;
+            network_tx: number;
+          };
+        }>(`/docker/containers/${containerId}/stats`);
         return response.data?.data || null;
       } catch {
         return null;
@@ -90,20 +96,23 @@ export const useContainerStats = (containerId: string, enabled: boolean = true) 
 
 // Get stats for all running containers
 export const useAllContainerStats = (containers: DockerContainer[]) => {
-  const runningContainers = containers.filter(c => c.status === 'running');
-  
+  const runningContainers = containers.filter((c) => c.status === "running");
+
   const queries = useQueries({
-    queries: runningContainers.map(container => ({
-      queryKey: ['docker', 'container', container.id, 'stats'],
+    queries: runningContainers.map((container) => ({
+      queryKey: ["docker", "container", container.id, "stats"],
       queryFn: async () => {
         try {
-          const response = await apiClient.get<{ success: boolean; data?: {
-            cpu_percentage: number;
-            memory_usage: number;
-            memory_limit: number;
-            network_rx: number;
-            network_tx: number;
-          } }>(`/docker/containers/${container.id}/stats`);
+          const response = await apiClient.get<{
+            success: boolean;
+            data?: {
+              cpu_percentage: number;
+              memory_usage: number;
+              memory_limit: number;
+              network_rx: number;
+              network_tx: number;
+            };
+          }>(`/docker/containers/${container.id}/stats`);
           return { containerId: container.id, stats: response.data?.data || null };
         } catch {
           return { containerId: container.id, stats: null };
@@ -114,16 +123,19 @@ export const useAllContainerStats = (containers: DockerContainer[]) => {
       staleTime: 10000,
     })),
   });
-  
-  const statsMap = new Map<string, { cpu_percentage: number; memory_usage: number; memory_limit: number }>();
-  queries.forEach(q => {
+
+  const statsMap = new Map<
+    string,
+    { cpu_percentage: number; memory_usage: number; memory_limit: number }
+  >();
+  queries.forEach((q) => {
     if (q.data?.stats) {
       statsMap.set(q.data.containerId, q.data.stats);
     }
   });
-  
+
   return {
     statsMap,
-    isLoading: queries.some(q => q.isLoading),
+    isLoading: queries.some((q) => q.isLoading),
   };
 };

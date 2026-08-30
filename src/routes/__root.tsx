@@ -1,12 +1,12 @@
-import type { QueryClient } from '@tanstack/react-query';
-import { QueryClientProvider } from '@tanstack/react-query';
-import { createRootRouteWithContext, Outlet } from '@tanstack/react-router';
-import { Toaster } from 'sonner';
-import { ThemeProvider } from '@/components/providers/theme-provider';
-import { SocketProvider } from '@/components/providers/socket-provider';
-import { GlobalMiniPlayer } from '@/components/ui/global-mini-player';
-import { ServiceWorkerRegister } from '@/components/pwa/ServiceWorkerRegister';
-import { queryClient } from '@/router';
+import type { QueryClient } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
+import { Toaster } from "sonner";
+import { ThemeProvider } from "@/components/providers/theme-provider";
+import { SocketProvider } from "@/components/providers/socket-provider";
+import { GlobalMiniPlayer } from "@/components/ui/global-mini-player";
+import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
+import { queryClient } from "@/router";
 
 // 原本散在 src/app/layout.tsx 與 src/app/providers.tsx 的 provider 樹，合併於此。
 //

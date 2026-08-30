@@ -1,8 +1,8 @@
-import { useQueryClient } from '@tanstack/react-query';
-import { useUpload, useInitUpload, useUploadChunk } from '../api/useFiles';
-import { useUploadStore } from '@/store/upload-store';
-import { apiClient } from '@/lib/api-client';
-import type { FileInfo, UploadSession } from '@/types/api';
+import { useQueryClient } from "@tanstack/react-query";
+import { useUpload, useInitUpload, useUploadChunk } from "../api/useFiles";
+import { useUploadStore } from "@/store/upload-store";
+import { apiClient } from "@/lib/api-client";
+import type { FileInfo, UploadSession } from "@/types/api";
 
 // Concurrency-limited upload queue utility
 const createUploadQueue = (concurrency: number) => {
@@ -35,8 +35,12 @@ const createUploadQueue = (concurrency: number) => {
         run();
       });
     },
-    get pending() { return queue.length; },
-    get active() { return running; },
+    get pending() {
+      return queue.length;
+    },
+    get active() {
+      return running;
+    },
   };
 };
 
@@ -54,7 +58,7 @@ export const useFileUpload = () => {
     const uploadPromises = files.map((file) => {
       return uploadQueue.add(async () => {
         const taskId = `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-        addTask({ id: taskId, file, path: currentPath, progress: 0, status: 'uploading' });
+        addTask({ id: taskId, file, path: currentPath, progress: 0, status: "uploading" });
 
         try {
           // Use chunked upload for files > 1MB to bypass Next.js body size limits
@@ -63,39 +67,39 @@ export const useFileUpload = () => {
           } else {
             await uploadFile.mutateAsync({
               file,
-              path: currentPath
+              path: currentPath,
             });
-            updateTask(taskId, { progress: 100, status: 'completed' });
+            updateTask(taskId, { progress: 100, status: "completed" });
           }
         } catch (error: any) {
-          if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+          if (error.code === "ERR_NETWORK" || error.message === "Network Error") {
             console.warn(`Network Error for ${file.name}, verifying if upload succeeded...`);
 
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            await queryClient.invalidateQueries({ queryKey: ['files'] });
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+            await queryClient.invalidateQueries({ queryKey: ["files"] });
 
             try {
-              const cleanPath = currentPath.startsWith('/') ? currentPath.slice(1) : currentPath;
-              const endpoint = cleanPath === '' ? '/files' : `/files/${cleanPath}`;
+              const cleanPath = currentPath.startsWith("/") ? currentPath.slice(1) : currentPath;
+              const endpoint = cleanPath === "" ? "/files" : `/files/${cleanPath}`;
               const params = new URLSearchParams();
-              params.append('sort_by', 'name');
-              params.append('_t', Date.now().toString());
+              params.append("sort_by", "name");
+              params.append("_t", Date.now().toString());
 
               const res = await apiClient.get<FileInfo[]>(`${endpoint}?${params.toString()}`);
               const freshFiles = res.data;
 
-              if (freshFiles.some(f => f.name === file.name)) {
+              if (freshFiles.some((f) => f.name === file.name)) {
                 console.log(`File ${file.name} found despite Network Error. Marking as complete.`);
-                updateTask(taskId, { progress: 100, status: 'completed' });
+                updateTask(taskId, { progress: 100, status: "completed" });
                 return; // Skip error logging
               }
             } catch (verifyError) {
-              console.error('Verification failed', verifyError);
+              console.error("Verification failed", verifyError);
             }
           }
 
           console.error(`Failed to upload ${file.name}:`, error);
-          updateTask(taskId, { status: 'error', error: error.message || 'Upload failed' });
+          updateTask(taskId, { status: "error", error: error.message || "Upload failed" });
         }
       });
     });
@@ -104,10 +108,16 @@ export const useFileUpload = () => {
     await Promise.allSettled(uploadPromises);
 
     // 整批結束後只刷新一次檔案列表（先前每檔都 invalidate(['files']) → 數百請求撞 nginx 429）
-    await queryClient.invalidateQueries({ queryKey: ['files'] });
+    await queryClient.invalidateQueries({ queryKey: ["files"] });
   };
 
-  const processChunkedUpload = async (taskId: string, file: File, currentPath: string, resumeUploadId?: string, startOffset: number = 0) => {
+  const processChunkedUpload = async (
+    taskId: string,
+    file: File,
+    currentPath: string,
+    resumeUploadId?: string,
+    startOffset: number = 0,
+  ) => {
     const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
     let upload_id = resumeUploadId;
 
@@ -115,9 +125,14 @@ export const useFileUpload = () => {
       if (!upload_id) {
         try {
           const initResult = await initUpload.mutateAsync({
-            file_path: currentPath === '/' ? '' : currentPath.startsWith('/') ? currentPath.slice(1) : currentPath,
+            file_path:
+              currentPath === "/"
+                ? ""
+                : currentPath.startsWith("/")
+                  ? currentPath.slice(1)
+                  : currentPath,
             file_name: file.name,
-            total_size: file.size
+            total_size: file.size,
           });
 
           // ⚠️ Rust 的 Option<i64> 會序列化成 null（不是省略欄位），
@@ -131,14 +146,13 @@ export const useFileUpload = () => {
           }
 
           updateTask(taskId, { uploadId: upload_id });
-
         } catch (error: any) {
-          // We might want to handle conflict here or let UI handle it. 
+          // We might want to handle conflict here or let UI handle it.
           // For now throwing to be caught by caller if we want UI dialog.
           // But since we abstracted it, we need a way to bubble conflict up?
           // For simplicity, let's treat conflict as error string 'File exists' so UI can react if it observes task state.
           if (error.response?.status === 409 && !error.response?.data?.upload_id) {
-            updateTask(taskId, { status: 'error', error: 'File exists' }); // UI can check this error string
+            updateTask(taskId, { status: "error", error: "File exists" }); // UI can check this error string
             return;
           }
           throw error;
@@ -155,21 +169,20 @@ export const useFileUpload = () => {
 
         await uploadChunk.mutateAsync({
           sessionId: upload_id,
-          chunk
+          chunk,
         });
 
         const progress = Math.round((end / file.size) * 100);
         updateTask(taskId, { progress });
       }
 
-      updateTask(taskId, { status: 'completed' });
-
+      updateTask(taskId, { status: "completed" });
     } catch (error: any) {
       console.error(`Chunk upload failed for ${file.name}:`, error);
       updateTask(taskId, {
-        status: 'error',
-        error: error.message || 'Upload interrupted',
-        uploadId: upload_id
+        status: "error",
+        error: error.message || "Upload interrupted",
+        uploadId: upload_id,
       });
     }
   };
@@ -178,7 +191,7 @@ export const useFileUpload = () => {
     const task = uploadTasks[taskId];
     if (!task?.uploadId) return;
 
-    updateTask(taskId, { status: 'uploading', error: undefined });
+    updateTask(taskId, { status: "uploading", error: undefined });
 
     try {
       const response = await apiClient.get<UploadSession>(`/upload/session/${task.uploadId}`);
@@ -186,13 +199,13 @@ export const useFileUpload = () => {
 
       await processChunkedUpload(taskId, task.file, task.path, task.uploadId, uploadedSize);
     } catch (error: any) {
-      console.error('Failed to resume upload:', error);
-      updateTask(taskId, { status: 'error', error: 'Failed to resume upload' });
+      console.error("Failed to resume upload:", error);
+      updateTask(taskId, { status: "error", error: "Failed to resume upload" });
     }
   };
 
   return {
     handleUploadFiles,
-    resumeUpload
+    resumeUpload,
   };
 };

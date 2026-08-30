@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useEffect, useRef } from 'react';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import '@xterm/xterm/css/xterm.css';
+import { useEffect, useRef } from "react";
+import { Terminal } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
+import "@xterm/xterm/css/xterm.css";
 
 interface TerminalViewProps {
   logs: string;
@@ -23,8 +23,8 @@ export const TerminalView = ({ logs, isLoading }: TerminalViewProps) => {
       fontSize: 12,
       fontFamily: 'Menlo, Monaco, "Courier New", monospace',
       theme: {
-        background: '#1e1e1e',
-        foreground: '#d4d4d4',
+        background: "#1e1e1e",
+        foreground: "#d4d4d4",
       },
       convertEol: true,
     });
@@ -42,10 +42,10 @@ export const TerminalView = ({ logs, isLoading }: TerminalViewProps) => {
       fitAddon.fit();
     };
 
-    window.addEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener("resize", handleResize);
       term.dispose();
     };
   }, []);
@@ -54,19 +54,19 @@ export const TerminalView = ({ logs, isLoading }: TerminalViewProps) => {
     if (!xtermRef.current) return;
 
     xtermRef.current.clear();
-    
+
     if (isLoading) {
-      xtermRef.current.writeln('Loading logs...');
+      xtermRef.current.writeln("Loading logs...");
     } else if (logs) {
       // Split logs by newline and write each line to handle formatting better
-      const lines = logs.split('\n');
-      lines.forEach(line => {
+      const lines = logs.split("\n");
+      lines.forEach((line) => {
         xtermRef.current?.writeln(line);
       });
     } else {
-      xtermRef.current.writeln('No logs available.');
+      xtermRef.current.writeln("No logs available.");
     }
-    
+
     // Scroll to bottom
     xtermRef.current.scrollToBottom();
   }, [logs, isLoading]);

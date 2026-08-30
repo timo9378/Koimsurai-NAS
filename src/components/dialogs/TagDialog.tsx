@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -12,11 +12,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from '@/lib/utils';
-import { X, Plus, Check } from 'lucide-react';
-import type { TagColorName } from '@/hooks/use-tags';
-import { useAddTag, useRemoveTag, TAG_COLORS } from '@/hooks/use-tags';
-import type { FileInfo } from '@/types/api';
+import { cn } from "@/lib/utils";
+import { X, Plus, Check } from "lucide-react";
+import type { TagColorName } from "@/hooks/use-tags";
+import { useAddTag, useRemoveTag, TAG_COLORS } from "@/hooks/use-tags";
+import type { FileInfo } from "@/types/api";
 
 interface TagDialogProps {
   open: boolean;
@@ -25,8 +25,8 @@ interface TagDialogProps {
 }
 
 export function TagDialog({ open, onOpenChange, file }: TagDialogProps) {
-  const [newTagName, setNewTagName] = useState('');
-  const [selectedColor, setSelectedColor] = useState<TagColorName>('blue');
+  const [newTagName, setNewTagName] = useState("");
+  const [selectedColor, setSelectedColor] = useState<TagColorName>("blue");
   const [isCreating, setIsCreating] = useState(false);
 
   const addTag = useAddTag();
@@ -36,40 +36,39 @@ export function TagDialog({ open, onOpenChange, file }: TagDialogProps) {
 
   const handleAddTag = async (tagName: string, color: string) => {
     if (!file) return;
-    
+
     try {
       await addTag.mutateAsync({
-        path: file.path.startsWith('/') ? file.path.slice(1) : file.path,
+        path: file.path.startsWith("/") ? file.path.slice(1) : file.path,
         tagName,
         color,
       });
-      setNewTagName('');
+      setNewTagName("");
       setIsCreating(false);
     } catch (error) {
-      console.error('Failed to add tag:', error);
+      console.error("Failed to add tag:", error);
     }
   };
 
   const handleRemoveTag = async (tagName: string) => {
     if (!file) return;
-    
+
     try {
       await removeTag.mutateAsync({
-        path: file.path.startsWith('/') ? file.path.slice(1) : file.path,
+        path: file.path.startsWith("/") ? file.path.slice(1) : file.path,
         tagName,
       });
     } catch (error) {
-      console.error('Failed to remove tag:', error);
+      console.error("Failed to remove tag:", error);
     }
   };
 
   const handleQuickAddTag = (colorName: TagColorName) => {
     // Check if this color tag already exists
-    const existingTag = existingTags.find(t => 
-      t.name.toLowerCase() === colorName.toLowerCase() ||
-      t.color === TAG_COLORS[colorName]
+    const existingTag = existingTags.find(
+      (t) => t.name.toLowerCase() === colorName.toLowerCase() || t.color === TAG_COLORS[colorName],
     );
-    
+
     if (existingTag) {
       handleRemoveTag(existingTag.name);
     } else {
@@ -78,9 +77,8 @@ export function TagDialog({ open, onOpenChange, file }: TagDialogProps) {
   };
 
   const isTagSelected = (colorName: TagColorName): boolean => {
-    return existingTags.some(t => 
-      t.name.toLowerCase() === colorName.toLowerCase() ||
-      t.color === TAG_COLORS[colorName]
+    return existingTags.some(
+      (t) => t.name.toLowerCase() === colorName.toLowerCase() || t.color === TAG_COLORS[colorName],
     );
   };
 
@@ -107,7 +105,7 @@ export function TagDialog({ open, onOpenChange, file }: TagDialogProps) {
                     "flex items-center gap-2 px-3 py-2 rounded-full text-sm transition-all border",
                     isTagSelected(colorName)
                       ? "bg-blue-500/10 border-blue-500/50 ring-2 ring-offset-2 ring-offset-background ring-blue-500"
-                      : "border-transparent hover:bg-black/5 dark:hover:bg-white/10"
+                      : "border-transparent hover:bg-black/5 dark:hover:bg-white/10",
                   )}
                 >
                   <div
@@ -115,9 +113,7 @@ export function TagDialog({ open, onOpenChange, file }: TagDialogProps) {
                     style={{ backgroundColor: TAG_COLORS[colorName] }}
                   />
                   <span className="capitalize font-medium">{colorName}</span>
-                  {isTagSelected(colorName) && (
-                    <Check className="w-4 h-4 text-blue-500" />
-                  )}
+                  {isTagSelected(colorName) && <Check className="w-4 h-4 text-blue-500" />}
                 </button>
               ))}
             </div>
@@ -173,11 +169,11 @@ export function TagDialog({ open, onOpenChange, file }: TagDialogProps) {
                     placeholder="輸入標籤名稱"
                     className="flex-1"
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && newTagName.trim()) {
+                      if (e.key === "Enter" && newTagName.trim()) {
                         handleAddTag(newTagName.trim(), TAG_COLORS[selectedColor]);
-                      } else if (e.key === 'Escape') {
+                      } else if (e.key === "Escape") {
                         setIsCreating(false);
-                        setNewTagName('');
+                        setNewTagName("");
                       }
                     }}
                     autoFocus
@@ -199,7 +195,7 @@ export function TagDialog({ open, onOpenChange, file }: TagDialogProps) {
                   variant="ghost"
                   onClick={() => {
                     setIsCreating(false);
-                    setNewTagName('');
+                    setNewTagName("");
                   }}
                 >
                   取消

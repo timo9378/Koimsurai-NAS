@@ -11,7 +11,8 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --font-geist-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Noto Sans TC", sans-serif;
+  --font-geist-sans:
+    "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Noto Sans TC", sans-serif;
   --font-geist-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
 }
 

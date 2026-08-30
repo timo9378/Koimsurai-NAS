@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Share2,
   Link2,
@@ -13,14 +13,20 @@ import {
   EyeOff,
   Calendar,
   Infinity as InfinityIcon,
-} from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { cn } from '@/lib/utils';
-import { FileTypeIcon } from '@/lib/file-icons';
+} from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
+import { FileTypeIcon } from "@/lib/file-icons";
 
 interface ShareDialogProps {
   isOpen: boolean;
@@ -36,11 +42,11 @@ interface ShareDialogProps {
 }
 
 const EXPIRY_OPTIONS = [
-  { label: '1 小時', value: 3600, icon: Clock },
-  { label: '24 小時', value: 86400, icon: Clock },
-  { label: '7 天', value: 604800, icon: Calendar },
-  { label: '30 天', value: 2592000, icon: Calendar },
-  { label: '永不過期', value: null, icon: InfinityIcon },
+  { label: "1 小時", value: 3600, icon: Clock },
+  { label: "24 小時", value: 86400, icon: Clock },
+  { label: "7 天", value: 604800, icon: Calendar },
+  { label: "30 天", value: 2592000, icon: Calendar },
+  { label: "永不過期", value: null, icon: InfinityIcon },
 ];
 
 export function ShareDialog({
@@ -51,30 +57,30 @@ export function ShareDialog({
   isDirectory = false,
   onCreateShare,
 }: ShareDialogProps) {
-  const [step, setStep] = useState<'config' | 'result'>('config');
+  const [step, setStep] = useState<"config" | "result">("config");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Config state
   const [enablePassword, setEnablePassword] = useState(false);
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [selectedExpiry, setSelectedExpiry] = useState<number | null>(86400); // 默認 24 小時
-  
+
   // Result state
-  const [shareLink, setShareLink] = useState('');
+  const [shareLink, setShareLink] = useState("");
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   // Reset state when dialog opens
   useEffect(() => {
     if (isOpen) {
-      setStep('config');
+      setStep("config");
       setEnablePassword(false);
-      setPassword('');
+      setPassword("");
       setSelectedExpiry(86400);
       setError(null);
-      setShareLink('');
+      setShareLink("");
       setCopied(false);
     }
   }, [isOpen]);
@@ -92,10 +98,10 @@ export function ShareDialog({
 
       setShareLink(`${window.location.origin}/s/${result.id}`);
       setExpiresAt(result.expires_at || null);
-      setStep('result');
+      setStep("result");
     } catch (err) {
-      setError('建立分享連結失敗，請稍後再試');
-      console.error('Create share error:', err);
+      setError("建立分享連結失敗，請稍後再試");
+      console.error("Create share error:", err);
     } finally {
       setIsLoading(false);
     }
@@ -107,24 +113,24 @@ export function ShareDialog({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Copy failed:', err);
+      console.error("Copy failed:", err);
     }
   };
 
   const formatExpiryDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleString('zh-TW', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+    return date.toLocaleString("zh-TW", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent 
+      <DialogContent
         className="sm:max-w-md bg-gradient-to-b from-zinc-900/95 to-zinc-950/95 backdrop-blur-xl border-zinc-700/50 shadow-2xl overflow-hidden"
         onInteractOutside={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
@@ -142,7 +148,7 @@ export function ShareDialog({
         </DialogHeader>
 
         <AnimatePresence mode="wait">
-          {step === 'config' ? (
+          {step === "config" ? (
             <motion.div
               key="config"
               initial={{ opacity: 0, x: -20 }}
@@ -152,11 +158,7 @@ export function ShareDialog({
             >
               {/* File Info */}
               <div className="flex items-center gap-3 p-3 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
-                <FileTypeIcon
-                  filename={fileName}
-                  isDir={isDirectory}
-                  size="md"
-                />
+                <FileTypeIcon filename={fileName} isDir={isDirectory} size="md" />
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-zinc-200 truncate">{fileName}</p>
                   <p className="text-xs text-zinc-500 truncate">{filePath}</p>
@@ -175,10 +177,10 @@ export function ShareDialog({
                       key={option.label}
                       onClick={() => setSelectedExpiry(option.value)}
                       className={cn(
-                        'flex flex-col items-center gap-1 p-3 rounded-lg border transition-all',
+                        "flex flex-col items-center gap-1 p-3 rounded-lg border transition-all",
                         selectedExpiry === option.value
-                          ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
-                          : 'bg-zinc-800/30 border-zinc-700/50 text-zinc-400 hover:bg-zinc-800/50 hover:border-zinc-600/50'
+                          ? "bg-blue-500/20 border-blue-500/50 text-blue-400"
+                          : "bg-zinc-800/30 border-zinc-700/50 text-zinc-400 hover:bg-zinc-800/50 hover:border-zinc-600/50",
                       )}
                     >
                       {option.value === null ? (
@@ -206,17 +208,17 @@ export function ShareDialog({
                     onClick={(e) => e.stopPropagation()}
                   />
                 </div>
-                
+
                 {enablePassword && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
+                    animate={{ opacity: 1, height: "auto" }}
                     exit={{ opacity: 0, height: 0 }}
                     className="overflow-hidden"
                   >
                     <div className="relative">
                       <Input
-                        type={showPassword ? 'text' : 'password'}
+                        type={showPassword ? "text" : "password"}
                         name={`share-password-${Date.now()}`}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
@@ -236,14 +238,14 @@ export function ShareDialog({
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
                       >
                         {showPassword ? (
-                            <EyeOff className="h-4 w-4" />
-                          ) : (
-                            <Eye className="h-4 w-4" />
-                          )}
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
               </div>
 
               {/* Error Message */}
@@ -274,7 +276,7 @@ export function ShareDialog({
                   {isLoading ? (
                     <motion.div
                       animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Number.POSITIVE_INFINITY, ease: 'linear' }}
+                      transition={{ duration: 1, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
                       className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full"
                     />
                   ) : (
@@ -299,7 +301,7 @@ export function ShareDialog({
                 <motion.div
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
-                  transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+                  transition={{ type: "spring", stiffness: 200, damping: 15 }}
                   className="p-4 rounded-full bg-green-500/20"
                 >
                   <Check className="h-8 w-8 text-green-400" />
@@ -309,9 +311,7 @@ export function ShareDialog({
               <div className="text-center">
                 <h3 className="text-lg font-semibold text-zinc-100">分享連結已建立</h3>
                 <p className="text-sm text-zinc-400 mt-1">
-                  {expiresAt
-                    ? `有效期至 ${formatExpiryDate(expiresAt)}`
-                    : '此連結永不過期'}
+                  {expiresAt ? `有效期至 ${formatExpiryDate(expiresAt)}` : "此連結永不過期"}
                 </p>
               </div>
 
@@ -327,17 +327,11 @@ export function ShareDialog({
                   <Button
                     onClick={handleCopyLink}
                     className={cn(
-                      'shrink-0 transition-colors',
-                      copied
-                        ? 'bg-green-600 hover:bg-green-700'
-                        : 'bg-zinc-700 hover:bg-zinc-600'
+                      "shrink-0 transition-colors",
+                      copied ? "bg-green-600 hover:bg-green-700" : "bg-zinc-700 hover:bg-zinc-600",
                     )}
                   >
-                    {copied ? (
-                      <Check className="h-4 w-4" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
+                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                   </Button>
                 </div>
               </div>
@@ -365,7 +359,7 @@ export function ShareDialog({
               <div className="flex gap-3 pt-2">
                 <Button
                   variant="outline"
-                  onClick={() => setStep('config')}
+                  onClick={() => setStep("config")}
                   className="flex-1 bg-zinc-800/50 border-zinc-700/50 hover:bg-zinc-700/50 text-zinc-300"
                 >
                   重新設定

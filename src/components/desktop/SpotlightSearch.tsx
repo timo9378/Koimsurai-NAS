@@ -1,26 +1,26 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useMemo } from 'react';
-import { Command } from 'cmdk';
-import { 
-  Search, 
-  Folder, 
-  LayoutGrid, 
-  Image as ImageIcon, 
-  Container, 
-  Settings, 
-  Calculator, 
-  Terminal, 
+import { useState, useEffect, useMemo } from "react";
+import { Command } from "cmdk";
+import {
+  Search,
+  Folder,
+  LayoutGrid,
+  Image as ImageIcon,
+  Container,
+  Settings,
+  Calculator,
+  Terminal,
   Activity,
   Trash2,
   Equal,
-} from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { FileTypeIcon } from '@/lib/file-icons';
-import { apiClient } from '@/lib/api-client';
-import type { AppType } from '@/store/window-store';
-import { useWindowStore } from '@/store/window-store';
-import type { FileInfo } from '@/types/api';
+} from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { FileTypeIcon } from "@/lib/file-icons";
+import { apiClient } from "@/lib/api-client";
+import type { AppType } from "@/store/window-store";
+import { useWindowStore } from "@/store/window-store";
+import type { FileInfo } from "@/types/api";
 
 interface SearchResult {
   path: string;
@@ -31,30 +31,75 @@ interface SearchResult {
 
 // App definitions for search
 const APPS = [
-  { id: 'finder', name: 'Finder', icon: Folder, keywords: ['files', 'folders', 'explorer', '檔案', '資料夾'] },
-  { id: 'launchpad', name: 'Launchpad', icon: LayoutGrid, keywords: ['apps', 'applications', '應用程式', '啟動台'] },
-  { id: 'dashboard', name: 'Dashboard', icon: Activity, keywords: ['system', 'monitor', 'cpu', 'memory', 'gpu', '儀表板', '監控'] },
-  { id: 'photos', name: 'Photos', icon: ImageIcon, keywords: ['images', 'pictures', 'gallery', '照片', '圖片'] },
-  { id: 'docker', name: 'Docker Manager', icon: Container, keywords: ['containers', 'docker', '容器'] },
-  { id: 'terminal', name: 'Terminal', icon: Terminal, keywords: ['console', 'shell', 'bash', 'command', '終端機', '命令'] },
-  { id: 'calculator', name: 'Calculator', icon: Calculator, keywords: ['math', 'calc', '計算機', '數學'] },
-  { id: 'settings', name: 'Settings', icon: Settings, keywords: ['preferences', 'config', '設定', '偏好設定'] },
-  { id: 'trash', name: 'Trash', icon: Trash2, keywords: ['delete', 'recycle', 'bin', '垃圾桶', '刪除'] },
+  {
+    id: "finder",
+    name: "Finder",
+    icon: Folder,
+    keywords: ["files", "folders", "explorer", "檔案", "資料夾"],
+  },
+  {
+    id: "launchpad",
+    name: "Launchpad",
+    icon: LayoutGrid,
+    keywords: ["apps", "applications", "應用程式", "啟動台"],
+  },
+  {
+    id: "dashboard",
+    name: "Dashboard",
+    icon: Activity,
+    keywords: ["system", "monitor", "cpu", "memory", "gpu", "儀表板", "監控"],
+  },
+  {
+    id: "photos",
+    name: "Photos",
+    icon: ImageIcon,
+    keywords: ["images", "pictures", "gallery", "照片", "圖片"],
+  },
+  {
+    id: "docker",
+    name: "Docker Manager",
+    icon: Container,
+    keywords: ["containers", "docker", "容器"],
+  },
+  {
+    id: "terminal",
+    name: "Terminal",
+    icon: Terminal,
+    keywords: ["console", "shell", "bash", "command", "終端機", "命令"],
+  },
+  {
+    id: "calculator",
+    name: "Calculator",
+    icon: Calculator,
+    keywords: ["math", "calc", "計算機", "數學"],
+  },
+  {
+    id: "settings",
+    name: "Settings",
+    icon: Settings,
+    keywords: ["preferences", "config", "設定", "偏好設定"],
+  },
+  {
+    id: "trash",
+    name: "Trash",
+    icon: Trash2,
+    keywords: ["delete", "recycle", "bin", "垃圾桶", "刪除"],
+  },
 ];
 
 // Simple math expression evaluator
 const evaluateMath = (expr: string): { result: number; valid: boolean } => {
   try {
     // Only allow safe characters: numbers, operators, parentheses, decimal points
-    const sanitized = expr.replace(/\s/g, '');
+    const sanitized = expr.replace(/\s/g, "");
     if (!/^[\d+\-*/().%^]+$/.test(sanitized)) {
       return { result: 0, valid: false };
     }
     // Replace ^ with ** for exponentiation
-    const jsExpr = sanitized.replace(/\^/g, '**');
+    const jsExpr = sanitized.replace(/\^/g, "**");
     // eslint-disable-next-line no-eval
     const result = Function(`"use strict"; return (${jsExpr})`)();
-    if (typeof result === 'number' && !isNaN(result) && isFinite(result)) {
+    if (typeof result === "number" && !isNaN(result) && isFinite(result)) {
       return { result, valid: true };
     }
     return { result: 0, valid: false };
@@ -63,26 +108,26 @@ const evaluateMath = (expr: string): { result: number; valid: boolean } => {
   }
 };
 
-export const SpotlightSearch = ({ 
-  open, 
-  onOpenChange 
-}: { 
-  open: boolean; 
-  onOpenChange: (open: boolean) => void; 
+export const SpotlightSearch = ({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) => {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const { openWindow } = useWindowStore();
 
   // Reset query when dialog closes
   useEffect(() => {
     if (!open) {
-      setQuery('');
+      setQuery("");
     }
   }, [open]);
 
   // Search Files
   const { data: fileResults, isLoading: isSearching } = useQuery({
-    queryKey: ['search', query],
+    queryKey: ["search", query],
     queryFn: async () => {
       if (!query) return [];
       const res = await apiClient.get<FileInfo[]>(`/search?q=${encodeURIComponent(query)}`);
@@ -94,10 +139,12 @@ export const SpotlightSearch = ({
 
   // Search AI Tags
   const { data: aiResults } = useQuery({
-    queryKey: ['search-ai', query],
+    queryKey: ["search-ai", query],
     queryFn: async () => {
       if (!query) return [];
-      const res = await apiClient.get<SearchResult[]>(`/search/ai-tags?q=${encodeURIComponent(query)}`);
+      const res = await apiClient.get<SearchResult[]>(
+        `/search/ai-tags?q=${encodeURIComponent(query)}`,
+      );
       return res.data;
     },
     enabled: query.length > 1 && open,
@@ -108,9 +155,9 @@ export const SpotlightSearch = ({
   const matchedApps = useMemo(() => {
     if (!query) return APPS;
     const q = query.toLowerCase();
-    return APPS.filter(app => 
-      app.name.toLowerCase().includes(q) ||
-      app.keywords.some(k => k.toLowerCase().includes(q))
+    return APPS.filter(
+      (app) =>
+        app.name.toLowerCase().includes(q) || app.keywords.some((k) => k.toLowerCase().includes(q)),
     );
   }, [query]);
 
@@ -126,38 +173,38 @@ export const SpotlightSearch = ({
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         onOpenChange(!open);
       }
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         onOpenChange(false);
       }
     };
 
-    document.addEventListener('keydown', down);
-    return () => document.removeEventListener('keydown', down);
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
   }, [open, onOpenChange]);
 
   const handleFileSelect = (file: FileInfo) => {
     onOpenChange(false);
-    
+
     if (file.is_dir) {
       // Open folder in Finder
-      openWindow('finder', 'Finder', { navigateTo: file.path });
+      openWindow("finder", "Finder", { navigateTo: file.path });
     } else {
       // Determine file type and open appropriately
-      const ext = file.name.split('.').pop()?.toLowerCase() || '';
-      const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
-      const videoExts = ['mp4', 'webm', 'mkv', 'avi', 'mov'];
-      const audioExts = ['mp3', 'wav', 'flac', 'aac', 'ogg'];
-      
+      const ext = file.name.split(".").pop()?.toLowerCase() || "";
+      const imageExts = ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"];
+      const videoExts = ["mp4", "webm", "mkv", "avi", "mov"];
+      const audioExts = ["mp3", "wav", "flac", "aac", "ogg"];
+
       if (imageExts.includes(ext) || videoExts.includes(ext) || audioExts.includes(ext)) {
-        openWindow('preview', file.name, { file });
+        openWindow("preview", file.name, { file });
       } else {
         // Open containing folder
-        const parentPath = file.path.substring(0, file.path.lastIndexOf('/')) || '/';
-        openWindow('finder', 'Finder', { navigateTo: parentPath });
+        const parentPath = file.path.substring(0, file.path.lastIndexOf("/")) || "/";
+        openWindow("finder", "Finder", { navigateTo: parentPath });
       }
     }
   };
@@ -183,7 +230,7 @@ export const SpotlightSearch = ({
     >
       <div className="flex items-center border-b border-white/10 px-4">
         <Search className="w-5 h-5 text-muted-foreground mr-2" />
-        <Command.Input 
+        <Command.Input
           value={query}
           onValueChange={setQuery}
           placeholder="Search files, apps, or AI tags (e.g. 'cat', 'beach')..."
@@ -194,10 +241,10 @@ export const SpotlightSearch = ({
           <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
         )}
       </div>
-      
+
       <Command.List className="max-h-[400px] overflow-y-auto p-2">
         <Command.Empty className="py-6 text-center text-muted-foreground">
-          {query ? 'No results found.' : 'Start typing to search...'}
+          {query ? "No results found." : "Start typing to search..."}
         </Command.Empty>
 
         {/* Math Result */}
@@ -212,7 +259,9 @@ export const SpotlightSearch = ({
               </div>
               <div className="flex flex-col">
                 <span className="text-lg font-semibold">{mathResult}</span>
-                <span className="text-xs text-muted-foreground">{query} = {mathResult} (Click to copy)</span>
+                <span className="text-xs text-muted-foreground">
+                  {query} = {mathResult} (Click to copy)
+                </span>
               </div>
             </Command.Item>
           </Command.Group>
@@ -250,7 +299,12 @@ export const SpotlightSearch = ({
                 onSelect={() => handleFileSelect(file)}
                 className="flex items-center gap-3 px-3 py-2 rounded-lg aria-selected:bg-blue-500/20 cursor-pointer"
               >
-                <FileTypeIcon filename={file.name} isDir={file.is_dir} mimeType={file.mime_type ?? undefined} size="sm" />
+                <FileTypeIcon
+                  filename={file.name}
+                  isDir={file.is_dir}
+                  mimeType={file.mime_type ?? undefined}
+                  size="sm"
+                />
                 <div className="flex flex-col min-w-0">
                   <span className="text-sm font-medium truncate">{file.name}</span>
                   <span className="text-xs text-muted-foreground truncate">{file.path}</span>
@@ -267,10 +321,22 @@ export const SpotlightSearch = ({
               <Command.Item
                 key={item.path}
                 value={`ai-${item.path}`}
-                onSelect={() => handleFileSelect({ path: item.path, name: item.name, is_dir: false, size: 0, modified: '', mime_type: null, metadata: null, tags: [], is_starred: false })}
+                onSelect={() =>
+                  handleFileSelect({
+                    path: item.path,
+                    name: item.name,
+                    is_dir: false,
+                    size: 0,
+                    modified: "",
+                    mime_type: null,
+                    metadata: null,
+                    tags: [],
+                    is_starred: false,
+                  })
+                }
                 className="flex items-center gap-3 px-3 py-2 rounded-lg aria-selected:bg-purple-500/20 cursor-pointer"
               >
-                <FileTypeIcon filename={item.name || ''} isDir={false} size="sm" />
+                <FileTypeIcon filename={item.name || ""} isDir={false} size="sm" />
                 <div className="flex flex-col min-w-0">
                   <span className="text-sm font-medium truncate">{item.name}</span>
                   <span className="text-xs text-muted-foreground">

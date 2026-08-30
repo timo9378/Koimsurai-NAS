@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { createFileRoute } from '@tanstack/react-router';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload,
   Lock,
@@ -14,12 +14,12 @@ import {
   Loader2,
   ChevronDown,
   ChevronRight,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -36,7 +36,15 @@ interface UploadLinkInfo {
   created_at: string;
 }
 
-type PageStatus = 'loading' | 'ready' | 'password_required' | 'expired' | 'not_found' | 'error' | 'uploading' | 'success';
+type PageStatus =
+  | "loading"
+  | "ready"
+  | "password_required"
+  | "expired"
+  | "not_found"
+  | "error"
+  | "uploading"
+  | "success";
 
 /** A logical group — one folder, or one individual file */
 interface UploadGroup {
@@ -47,7 +55,7 @@ interface UploadGroup {
   totalSize: number;
   fileCount: number;
   // upload progress
-  status: 'pending' | 'uploading' | 'done' | 'error';
+  status: "pending" | "uploading" | "done" | "error";
   uploadedCount: number;
   failedCount: number;
 }
@@ -60,17 +68,20 @@ let groupIdCounter = 0;
 const nextGroupId = () => `g-${++groupIdCounter}`;
 
 function formatFileSize(bytes: number) {
-  if (bytes === 0) return '0 Bytes';
+  if (bytes === 0) return "0 Bytes";
   const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleString('zh-TW', {
-    year: 'numeric', month: 'short', day: 'numeric',
-    hour: '2-digit', minute: '2-digit',
+  return new Date(dateStr).toLocaleString("zh-TW", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
@@ -79,9 +90,7 @@ async function readAllDirectoryEntries(reader: any): Promise<any[]> {
   const all: any[] = [];
   let batch: any[];
   do {
-    batch = await new Promise<any[]>((resolve, reject) =>
-      reader.readEntries(resolve, reject)
-    );
+    batch = await new Promise<any[]>((resolve, reject) => reader.readEntries(resolve, reject));
     all.push(...batch);
   } while (batch.length > 0);
   return all;
@@ -90,12 +99,10 @@ async function readAllDirectoryEntries(reader: any): Promise<any[]> {
 /** Recursively collect files from a FileSystemEntry tree */
 async function collectFilesFromEntry(
   entry: any,
-  basePath: string
+  basePath: string,
 ): Promise<{ file: File; relativePath: string }[]> {
   if (entry.isFile) {
-    const file = await new Promise<File>((resolve, reject) =>
-      entry.file(resolve, reject)
-    );
+    const file = await new Promise<File>((resolve, reject) => entry.file(resolve, reject));
     const relativePath = basePath ? `${basePath}/${entry.name}` : entry.name;
     return [{ file, relativePath }];
   }
@@ -116,28 +123,40 @@ async function collectFilesFromEntry(
 function groupByTopFolder(entries: { file: File; relativePath: string }[]): UploadGroup[] {
   const map = new Map<string, { file: File; relativePath: string }[]>();
   for (const e of entries) {
-    const slash = e.relativePath.indexOf('/');
-    const folder = slash > 0 ? e.relativePath.slice(0, slash) : '__root__';
+    const slash = e.relativePath.indexOf("/");
+    const folder = slash > 0 ? e.relativePath.slice(0, slash) : "__root__";
     if (!map.has(folder)) map.set(folder, []);
     map.get(folder)!.push(e);
   }
   const groups: UploadGroup[] = [];
   for (const [folder, files] of map) {
     const totalSize = files.reduce((s, f) => s + f.file.size, 0);
-    if (folder === '__root__') {
+    if (folder === "__root__") {
       // Top-level files — each as individual group
       for (const f of files) {
         groups.push({
-          id: nextGroupId(), name: f.file.name, isFolder: false,
-          files: [f], totalSize: f.file.size, fileCount: 1,
-          status: 'pending', uploadedCount: 0, failedCount: 0,
+          id: nextGroupId(),
+          name: f.file.name,
+          isFolder: false,
+          files: [f],
+          totalSize: f.file.size,
+          fileCount: 1,
+          status: "pending",
+          uploadedCount: 0,
+          failedCount: 0,
         });
       }
     } else {
       groups.push({
-        id: nextGroupId(), name: folder, isFolder: true,
-        files, totalSize, fileCount: files.length,
-        status: 'pending', uploadedCount: 0, failedCount: 0,
+        id: nextGroupId(),
+        name: folder,
+        isFolder: true,
+        files,
+        totalSize,
+        fileCount: files.length,
+        status: "pending",
+        uploadedCount: 0,
+        failedCount: 0,
       });
     }
   }
@@ -151,9 +170,9 @@ function groupByTopFolder(entries: { file: File; relativePath: string }[]): Uplo
 function UploadPage() {
   const { id: uploadId } = Route.useParams();
 
-  const [status, setStatus] = useState<PageStatus>('loading');
+  const [status, setStatus] = useState<PageStatus>("loading");
   const [uploadInfo, setUploadInfo] = useState<UploadLinkInfo | null>(null);
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [folderMode, setFolderMode] = useState(false);
@@ -172,38 +191,58 @@ function UploadPage() {
   const totalSize = groups.reduce((s, g) => s + g.totalSize, 0);
 
   /* ---- Fetch upload link info ---- */
-  useEffect(() => { fetchUploadInfo(); }, [uploadId]);
+  useEffect(() => {
+    fetchUploadInfo();
+  }, [uploadId]);
 
   const fetchUploadInfo = async () => {
     try {
       const response = await fetch(`/api/upload-link/${uploadId}/info`);
-      if (response.status === 404) { setStatus('not_found'); setError('此上傳連結不存在或已被刪除'); return; }
-      if (response.status === 410) { setStatus('expired'); setError('此上傳連結已過期'); return; }
-      if (!response.ok) { setError('無法載入上傳連結資訊'); setStatus('error'); return; }
+      if (response.status === 404) {
+        setStatus("not_found");
+        setError("此上傳連結不存在或已被刪除");
+        return;
+      }
+      if (response.status === 410) {
+        setStatus("expired");
+        setError("此上傳連結已過期");
+        return;
+      }
+      if (!response.ok) {
+        setError("無法載入上傳連結資訊");
+        setStatus("error");
+        return;
+      }
       const data: UploadLinkInfo = await response.json();
       setUploadInfo(data);
-      setStatus(data.is_password_protected ? 'password_required' : 'ready');
+      setStatus(data.is_password_protected ? "password_required" : "ready");
     } catch {
-      setError('載入上傳連結資訊時發生錯誤');
-      setStatus('error');
+      setError("載入上傳連結資訊時發生錯誤");
+      setStatus("error");
     }
   };
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password) setStatus('ready');
+    if (password) setStatus("ready");
   };
 
   /* ---- Drag & Drop ---- */
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault(); e.stopPropagation(); setIsDragging(true);
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
   }, []);
   const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault(); e.stopPropagation(); setIsDragging(false);
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
   }, []);
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault(); e.stopPropagation(); setIsDragging(false);
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
 
     const items = e.dataTransfer.items;
     if (!items || items.length === 0) return;
@@ -231,27 +270,37 @@ function UploadPage() {
         const newGroups: UploadGroup[] = [];
         for (const entry of topEntries) {
           if (entry.isDirectory) {
-            const files = await collectFilesFromEntry(entry, '');
+            const files = await collectFilesFromEntry(entry, "");
             // files already have relativePaths like "folderName/sub/file.txt"
             // Group under the top entry name
             const totalSize = files.reduce((s, f) => s + f.file.size, 0);
             newGroups.push({
-              id: nextGroupId(), name: entry.name, isFolder: true,
-              files, totalSize, fileCount: files.length,
-              status: 'pending', uploadedCount: 0, failedCount: 0,
+              id: nextGroupId(),
+              name: entry.name,
+              isFolder: true,
+              files,
+              totalSize,
+              fileCount: files.length,
+              status: "pending",
+              uploadedCount: 0,
+              failedCount: 0,
             });
           } else {
-            const file = await new Promise<File>((resolve, reject) =>
-              entry.file(resolve, reject)
-            );
+            const file = await new Promise<File>((resolve, reject) => entry.file(resolve, reject));
             newGroups.push({
-              id: nextGroupId(), name: file.name, isFolder: false,
-              files: [{ file, relativePath: file.name }], totalSize: file.size, fileCount: 1,
-              status: 'pending', uploadedCount: 0, failedCount: 0,
+              id: nextGroupId(),
+              name: file.name,
+              isFolder: false,
+              files: [{ file, relativePath: file.name }],
+              totalSize: file.size,
+              fileCount: 1,
+              status: "pending",
+              uploadedCount: 0,
+              failedCount: 0,
             });
           }
         }
-        setGroups(prev => [...prev, ...newGroups]);
+        setGroups((prev) => [...prev, ...newGroups]);
       } finally {
         setIsScanning(false);
       }
@@ -260,9 +309,7 @@ function UploadPage() {
       const droppedFiles: File[] = [];
       for (const entry of topEntries) {
         if (entry.isFile) {
-          const file = await new Promise<File>((resolve, reject) =>
-            entry.file(resolve, reject)
-          );
+          const file = await new Promise<File>((resolve, reject) => entry.file(resolve, reject));
           droppedFiles.push(file);
         }
       }
@@ -276,49 +323,55 @@ function UploadPage() {
     if (!selectedFiles || selectedFiles.length === 0) return;
 
     const filesArray = Array.from(selectedFiles);
-    const hasRelativePaths = filesArray.some(f => (f as any).webkitRelativePath);
+    const hasRelativePaths = filesArray.some((f) => (f as any).webkitRelativePath);
 
     if (hasRelativePaths) {
       // Folder selection via <input webkitdirectory>
-      const entries = filesArray.map(f => ({
+      const entries = filesArray.map((f) => ({
         file: f,
         relativePath: ((f as any).webkitRelativePath || f.name) as string,
       }));
       const folderGroups = groupByTopFolder(entries);
-      setGroups(prev => [...prev, ...folderGroups]);
+      setGroups((prev) => [...prev, ...folderGroups]);
     } else {
       addIndividualFiles(filesArray);
     }
-    e.target.value = '';
+    e.target.value = "";
   };
 
   const addIndividualFiles = (newFiles: File[]) => {
     let filtered = newFiles;
     if (uploadInfo?.max_file_size) {
-      const oversized = filtered.filter(f => f.size > uploadInfo.max_file_size!);
+      const oversized = filtered.filter((f) => f.size > uploadInfo.max_file_size!);
       if (oversized.length > 0) {
         setError(`部分檔案超過大小限制 (${formatFileSize(uploadInfo.max_file_size)})`);
-        filtered = filtered.filter(f => f.size <= uploadInfo.max_file_size!);
+        filtered = filtered.filter((f) => f.size <= uploadInfo.max_file_size!);
       }
     }
-    const newGroups: UploadGroup[] = filtered.map(file => ({
-      id: nextGroupId(), name: file.name, isFolder: false,
-      files: [{ file }], totalSize: file.size, fileCount: 1,
-      status: 'pending', uploadedCount: 0, failedCount: 0,
+    const newGroups: UploadGroup[] = filtered.map((file) => ({
+      id: nextGroupId(),
+      name: file.name,
+      isFolder: false,
+      files: [{ file }],
+      totalSize: file.size,
+      fileCount: 1,
+      status: "pending",
+      uploadedCount: 0,
+      failedCount: 0,
     }));
-    setGroups(prev => [...prev, ...newGroups]);
+    setGroups((prev) => [...prev, ...newGroups]);
     if (filtered.length > 0) setError(null);
   };
 
   const removeGroup = (id: string) => {
-    setGroups(prev => prev.filter(g => g.id !== id));
+    setGroups((prev) => prev.filter((g) => g.id !== id));
   };
 
   /* ---- Upload ---- */
   const uploadAll = async () => {
     if (groups.length === 0) return;
     abortRef.current = false;
-    setStatus('uploading');
+    setStatus("uploading");
     setUploadProgress({ done: 0, failed: 0, total: totalFileCount });
 
     const url = uploadInfo?.is_password_protected
@@ -330,11 +383,11 @@ function UploadPage() {
 
     for (let gi = 0; gi < groups.length; gi++) {
       const group = groups[gi];
-      if (group.status !== 'pending') continue;
+      if (group.status !== "pending") continue;
       if (abortRef.current) break;
 
       // Mark group as uploading
-      setGroups(prev => prev.map(g => g.id === group.id ? { ...g, status: 'uploading' } : g));
+      setGroups((prev) => prev.map((g) => (g.id === group.id ? { ...g, status: "uploading" } : g)));
 
       let groupDone = 0;
       let groupFailed = 0;
@@ -347,13 +400,13 @@ function UploadPage() {
         const formData = new FormData();
         for (const entry of batch) {
           if (entry.relativePath) {
-            formData.append('relative_path', entry.relativePath);
+            formData.append("relative_path", entry.relativePath);
           }
-          formData.append('file', entry.file);
+          formData.append("file", entry.file);
         }
 
         try {
-          const resp = await fetch(url, { method: 'POST', body: formData });
+          const resp = await fetch(url, { method: "POST", body: formData });
           if (resp.ok) {
             groupDone += batch.length;
             globalDone += batch.length;
@@ -367,26 +420,24 @@ function UploadPage() {
         }
 
         // Update group progress
-        setGroups(prev => prev.map(g =>
-          g.id === group.id
-            ? { ...g, uploadedCount: groupDone, failedCount: groupFailed }
-            : g
-        ));
+        setGroups((prev) =>
+          prev.map((g) =>
+            g.id === group.id ? { ...g, uploadedCount: groupDone, failedCount: groupFailed } : g,
+          ),
+        );
         setUploadProgress({ done: globalDone, failed: globalFailed, total: totalFileCount });
       }
 
       // Mark group final status
-      const finalStatus = groupFailed === group.fileCount ? 'error' : 'done';
-      setGroups(prev => prev.map(g =>
-        g.id === group.id ? { ...g, status: finalStatus } : g
-      ));
+      const finalStatus = groupFailed === group.fileCount ? "error" : "done";
+      setGroups((prev) => prev.map((g) => (g.id === group.id ? { ...g, status: finalStatus } : g)));
     }
 
     if (globalDone > 0) {
-      setStatus('success');
+      setStatus("success");
     } else {
-      setError('所有檔案上傳失敗，請稍後再試');
-      setStatus('ready');
+      setError("所有檔案上傳失敗，請稍後再試");
+      setStatus("ready");
     }
   };
 
@@ -395,12 +446,12 @@ function UploadPage() {
   /* ================================================================ */
 
   // Loading state
-  if (status === 'loading') {
+  if (status === "loading") {
     return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-purple-950/20 to-zinc-900 flex items-center justify-center p-4">
         <motion.div
           animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
           className="h-8 w-8 border-2 border-purple-500/30 border-t-purple-500 rounded-full"
         />
       </div>
@@ -408,7 +459,7 @@ function UploadPage() {
   }
 
   // Error states
-  if (status === 'not_found' || status === 'expired' || status === 'error') {
+  if (status === "not_found" || status === "expired" || status === "error") {
     return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-purple-950/20 to-zinc-900 flex items-center justify-center p-4">
         <Card className="w-full max-w-md bg-zinc-900/90 backdrop-blur-xl border-zinc-700/50">
@@ -419,9 +470,9 @@ function UploadPage() {
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-zinc-100">
-                  {status === 'not_found' && '連結不存在'}
-                  {status === 'expired' && '連結已過期'}
-                  {status === 'error' && '發生錯誤'}
+                  {status === "not_found" && "連結不存在"}
+                  {status === "expired" && "連結已過期"}
+                  {status === "error" && "發生錯誤"}
                 </h2>
                 <p className="text-sm text-zinc-400 mt-1">{error}</p>
               </div>
@@ -433,7 +484,7 @@ function UploadPage() {
   }
 
   // Password required
-  if (status === 'password_required') {
+  if (status === "password_required") {
     return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-purple-950/20 to-zinc-900 flex items-center justify-center p-4">
         <Card className="w-full max-w-md bg-zinc-900/90 backdrop-blur-xl border-zinc-700/50">
@@ -455,7 +506,11 @@ function UploadPage() {
                 placeholder="請輸入密碼..."
                 className="bg-zinc-800/50 border-zinc-700/50 text-zinc-100"
               />
-              <Button type="submit" disabled={!password} className="w-full bg-purple-600 hover:bg-purple-700">
+              <Button
+                type="submit"
+                disabled={!password}
+                className="w-full bg-purple-600 hover:bg-purple-700"
+              >
                 確認
               </Button>
             </form>
@@ -466,7 +521,7 @@ function UploadPage() {
   }
 
   // Success state
-  if (status === 'success') {
+  if (status === "success") {
     return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-purple-950/20 to-zinc-900 flex items-center justify-center p-4">
         <Card className="w-full max-w-md bg-zinc-900/90 backdrop-blur-xl border-zinc-700/50">
@@ -475,7 +530,7 @@ function UploadPage() {
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
-                transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+                transition={{ type: "spring", stiffness: 200, damping: 15 }}
                 className="p-4 rounded-full bg-green-500/20"
               >
                 <Check className="h-8 w-8 text-green-400" />
@@ -491,7 +546,7 @@ function UploadPage() {
                 onClick={() => {
                   setGroups([]);
                   setUploadProgress({ done: 0, failed: 0, total: 0 });
-                  setStatus('ready');
+                  setStatus("ready");
                 }}
                 className="bg-purple-600 hover:bg-purple-700"
               >
@@ -505,12 +560,13 @@ function UploadPage() {
   }
 
   // ---- Ready / Uploading state ----
-  const pendingGroups = groups.filter(g => g.status === 'pending');
+  const pendingGroups = groups.filter((g) => g.status === "pending");
   const pendingFileCount = pendingGroups.reduce((s, g) => s + g.fileCount, 0);
-  const isUploading = status === 'uploading';
-  const overallPct = uploadProgress.total > 0
-    ? Math.round(((uploadProgress.done + uploadProgress.failed) / uploadProgress.total) * 100)
-    : 0;
+  const isUploading = status === "uploading";
+  const overallPct =
+    uploadProgress.total > 0
+      ? Math.round(((uploadProgress.done + uploadProgress.failed) / uploadProgress.total) * 100)
+      : 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-purple-950/20 to-zinc-900 flex items-center justify-center p-4">
@@ -527,7 +583,7 @@ function UploadPage() {
               <CardDescription>
                 {uploadInfo?.expires_at
                   ? `有效期至 ${formatDate(uploadInfo.expires_at)}`
-                  : '此連結永不過期'}
+                  : "此連結永不過期"}
               </CardDescription>
             </div>
           </div>
@@ -545,7 +601,9 @@ function UploadPage() {
               {uploadInfo.max_files && (
                 <div className="flex items-center gap-1.5">
                   <Upload className="h-4 w-4" />
-                  <span>檔案數量: {uploadInfo.uploaded_count + totalFileCount} / {uploadInfo.max_files}</span>
+                  <span>
+                    檔案數量: {uploadInfo.uploaded_count + totalFileCount} / {uploadInfo.max_files}
+                  </span>
                 </div>
               )}
             </div>
@@ -557,10 +615,10 @@ function UploadPage() {
               <button
                 onClick={() => setFolderMode(false)}
                 className={cn(
-                  'flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all',
+                  "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
                   !folderMode
-                    ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50'
-                    : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-700/30'
+                    ? "bg-purple-500/20 text-purple-400 border border-purple-500/50"
+                    : "text-zinc-400 hover:text-zinc-300 hover:bg-zinc-700/30",
                 )}
               >
                 <File className="h-4 w-4" />
@@ -569,10 +627,10 @@ function UploadPage() {
               <button
                 onClick={() => setFolderMode(true)}
                 className={cn(
-                  'flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all',
+                  "flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all",
                   folderMode
-                    ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50'
-                    : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-700/30'
+                    ? "bg-purple-500/20 text-purple-400 border border-purple-500/50"
+                    : "text-zinc-400 hover:text-zinc-300 hover:bg-zinc-700/30",
                 )}
               >
                 <FolderUp className="h-4 w-4" />
@@ -588,18 +646,30 @@ function UploadPage() {
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               className={cn(
-                'border-2 border-dashed rounded-xl p-8 text-center transition-all',
+                "border-2 border-dashed rounded-xl p-8 text-center transition-all",
                 isDragging
-                  ? 'border-purple-500 bg-purple-500/10'
-                  : 'border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800/30'
+                  ? "border-purple-500 bg-purple-500/10"
+                  : "border-zinc-700 hover:border-zinc-600 hover:bg-zinc-800/30",
               )}
             >
-              <input type="file" id="file-input" multiple onChange={handleFileSelect} className="hidden" />
               <input
-                type="file" id="folder-input" onChange={handleFileSelect} className="hidden"
-                {...({ webkitdirectory: '', directory: '' } as any)}
+                type="file"
+                id="file-input"
+                multiple
+                onChange={handleFileSelect}
+                className="hidden"
               />
-              <label htmlFor={folderMode ? 'folder-input' : 'file-input'} className="cursor-pointer">
+              <input
+                type="file"
+                id="folder-input"
+                onChange={handleFileSelect}
+                className="hidden"
+                {...({ webkitdirectory: "", directory: "" } as any)}
+              />
+              <label
+                htmlFor={folderMode ? "folder-input" : "file-input"}
+                className="cursor-pointer"
+              >
                 {isScanning ? (
                   <>
                     <Loader2 className="h-12 w-12 mx-auto mb-4 text-purple-400 animate-spin" />
@@ -607,17 +677,19 @@ function UploadPage() {
                   </>
                 ) : (
                   <>
-                    <CloudUpload className={cn(
-                      'h-12 w-12 mx-auto mb-4 transition-colors',
-                      isDragging ? 'text-purple-400' : 'text-zinc-500'
-                    )} />
+                    <CloudUpload
+                      className={cn(
+                        "h-12 w-12 mx-auto mb-4 transition-colors",
+                        isDragging ? "text-purple-400" : "text-zinc-500",
+                      )}
+                    />
                     <p className="text-zinc-300 font-medium">
                       {folderMode
-                        ? '拖放資料夾到此處，或點擊選擇資料夾'
-                        : '拖放檔案到此處，或點擊選擇檔案'}
+                        ? "拖放資料夾到此處，或點擊選擇資料夾"
+                        : "拖放檔案到此處，或點擊選擇檔案"}
                     </p>
                     <p className="text-sm text-zinc-500 mt-1">
-                      {folderMode ? '將保留資料夾結構' : '支援多檔案上傳'}
+                      {folderMode ? "將保留資料夾結構" : "支援多檔案上傳"}
                     </p>
                   </>
                 )}
@@ -644,7 +716,9 @@ function UploadPage() {
             <div className="space-y-2">
               {/* Summary bar */}
               <div className="flex items-center justify-between text-sm text-zinc-400 px-1">
-                <span>{groups.length} 個項目 · {totalFileCount} 個檔案 · {formatFileSize(totalSize)}</span>
+                <span>
+                  {groups.length} 個項目 · {totalFileCount} 個檔案 · {formatFileSize(totalSize)}
+                </span>
                 {!isUploading && groups.length > 0 && (
                   <button
                     onClick={() => setGroups([])}
@@ -666,19 +740,25 @@ function UploadPage() {
                       {/* Icon */}
                       {group.isFolder ? (
                         <button
-                          onClick={() => setExpandedGroup(expandedGroup === group.id ? null : group.id)}
+                          onClick={() =>
+                            setExpandedGroup(expandedGroup === group.id ? null : group.id)
+                          }
                           className="shrink-0 text-zinc-400 hover:text-zinc-200"
                         >
-                          {expandedGroup === group.id
-                            ? <ChevronDown className="h-4 w-4" />
-                            : <ChevronRight className="h-4 w-4" />}
+                          {expandedGroup === group.id ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
                         </button>
                       ) : (
                         <span className="shrink-0 w-4" />
                       )}
-                      {group.isFolder
-                        ? <Folder className="h-5 w-5 text-blue-400 shrink-0" />
-                        : <File className="h-5 w-5 text-zinc-400 shrink-0" />}
+                      {group.isFolder ? (
+                        <Folder className="h-5 w-5 text-blue-400 shrink-0" />
+                      ) : (
+                        <File className="h-5 w-5 text-zinc-400 shrink-0" />
+                      )}
 
                       {/* Name & info */}
                       <div className="flex-1 min-w-0">
@@ -686,20 +766,27 @@ function UploadPage() {
                         <p className="text-xs text-zinc-500">
                           {group.isFolder && `${group.fileCount} 個檔案 · `}
                           {formatFileSize(group.totalSize)}
-                          {group.status === 'uploading' && ` · ${group.uploadedCount}/${group.fileCount} 已上傳`}
-                          {group.status === 'done' && group.failedCount > 0 && ` · ${group.failedCount} 個失敗`}
+                          {group.status === "uploading" &&
+                            ` · ${group.uploadedCount}/${group.fileCount} 已上傳`}
+                          {group.status === "done" &&
+                            group.failedCount > 0 &&
+                            ` · ${group.failedCount} 個失敗`}
                         </p>
                         {/* Progress bar for uploading groups */}
-                        {group.status === 'uploading' && (
+                        {group.status === "uploading" && (
                           <Progress
-                            value={group.fileCount > 0 ? (group.uploadedCount / group.fileCount) * 100 : 0}
+                            value={
+                              group.fileCount > 0
+                                ? (group.uploadedCount / group.fileCount) * 100
+                                : 0
+                            }
                             className="h-1 mt-1.5"
                           />
                         )}
                       </div>
 
                       {/* Status / actions */}
-                      {group.status === 'pending' && !isUploading && (
+                      {group.status === "pending" && !isUploading && (
                         <button
                           onClick={() => removeGroup(group.id)}
                           className="p-1 rounded hover:bg-zinc-700/50 text-zinc-500 hover:text-zinc-300 shrink-0"
@@ -707,13 +794,13 @@ function UploadPage() {
                           <X className="h-4 w-4" />
                         </button>
                       )}
-                      {group.status === 'uploading' && (
+                      {group.status === "uploading" && (
                         <Loader2 className="h-4 w-4 text-purple-400 animate-spin shrink-0" />
                       )}
-                      {group.status === 'done' && (
+                      {group.status === "done" && (
                         <Check className="h-4 w-4 text-green-400 shrink-0" />
                       )}
-                      {group.status === 'error' && (
+                      {group.status === "error" && (
                         <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
                       )}
                     </div>
@@ -722,7 +809,10 @@ function UploadPage() {
                     {group.isFolder && expandedGroup === group.id && (
                       <div className="border-t border-zinc-700/30 px-3 py-2 max-h-48 overflow-y-auto">
                         {group.files.slice(0, 50).map((f, i) => (
-                          <div key={i} className="flex items-center gap-2 py-0.5 text-xs text-zinc-500">
+                          <div
+                            key={i}
+                            className="flex items-center gap-2 py-0.5 text-xs text-zinc-500"
+                          >
                             <File className="h-3 w-3 shrink-0" />
                             <span className="truncate">{f.relativePath}</span>
                             <span className="shrink-0 ml-auto">{formatFileSize(f.file.size)}</span>
@@ -750,7 +840,8 @@ function UploadPage() {
                   <div className="flex items-center justify-between text-sm mb-1">
                     <span className="text-zinc-300">正在上傳...</span>
                     <span className="text-zinc-400">
-                      {uploadProgress.done + uploadProgress.failed} / {uploadProgress.total} · {overallPct}%
+                      {uploadProgress.done + uploadProgress.failed} / {uploadProgress.total} ·{" "}
+                      {overallPct}%
                     </span>
                   </div>
                   <Progress value={overallPct} className="h-2" />
@@ -772,6 +863,6 @@ function UploadPage() {
   );
 }
 
-export const Route = createFileRoute('/u/$id')({
+export const Route = createFileRoute("/u/$id")({
   component: UploadPage,
 });

@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import React, { useEffect, useRef, useState } from 'react';
-import { cn } from '@/lib/utils';
-import type { FileInfo } from '@/types/api';
-import { FileTypeIcon } from '@/lib/file-icons';
+import React, { useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
+import type { FileInfo } from "@/types/api";
+import { FileTypeIcon } from "@/lib/file-icons";
 
 interface DraggableDesktopIconProps {
   file: FileInfo;
@@ -84,8 +84,7 @@ export const DraggableDesktopIcon = ({
 
     const handleMouseMove = (e: MouseEvent) => {
       const distance = Math.sqrt(
-        Math.pow(e.clientX - mouseDownPos.x, 2) +
-        Math.pow(e.clientY - mouseDownPos.y, 2)
+        Math.pow(e.clientX - mouseDownPos.x, 2) + Math.pow(e.clientY - mouseDownPos.y, 2),
       );
 
       // Only start dragging if we've moved past the threshold
@@ -125,12 +124,12 @@ export const DraggableDesktopIcon = ({
       setHasDragStarted(false);
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
     };
   }, [mouseDownPos, hasDragStarted, isDragging, dragOffset, onPositionChange]);
 
@@ -144,12 +143,12 @@ export const DraggableDesktopIcon = ({
       className={cn(
         "absolute flex flex-col items-center gap-1 p-2 rounded hover:bg-white/10 w-[100px] cursor-pointer transition-all group",
         isSelected && "bg-blue-500/30 border border-blue-500/50 hover:bg-blue-500/40",
-        isDragging && "opacity-70 z-50 shadow-2xl scale-110"
+        isDragging && "opacity-70 z-50 shadow-2xl scale-110",
       )}
       style={{
         left: isDragging ? `${dragPosition.x}px` : `${gridX}px`,
         top: isDragging ? `${dragPosition.y}px` : `${gridY}px`,
-        transition: isDragging ? 'none' : 'all 0.3s ease-out',
+        transition: isDragging ? "none" : "all 0.3s ease-out",
       }}
       onMouseDown={handleMouseDown}
       onClick={(e) => {
@@ -176,10 +175,10 @@ export const DraggableDesktopIcon = ({
           value={renameValue}
           onChange={(e) => onRenameChange(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
+            if (e.key === "Enter") {
               e.preventDefault();
               onRenameSubmit();
-            } else if (e.key === 'Escape') {
+            } else if (e.key === "Escape") {
               e.preventDefault();
               onRenameCancel();
             }
@@ -189,10 +188,12 @@ export const DraggableDesktopIcon = ({
           onClick={(e) => e.stopPropagation()}
         />
       ) : (
-        <span className={cn(
-          "text-xs text-center text-white font-medium px-1.5 py-0.5 rounded shadow-sm line-clamp-2 break-all",
-          isSelected ? "bg-blue-500" : "bg-black/40 group-hover:bg-black/60"
-        )}>
+        <span
+          className={cn(
+            "text-xs text-center text-white font-medium px-1.5 py-0.5 rounded shadow-sm line-clamp-2 break-all",
+            isSelected ? "bg-blue-500" : "bg-black/40 group-hover:bg-black/60",
+          )}
+        >
           {file.name}
         </span>
       )}

@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Download, 
-  Lock, 
-  Clock, 
-  Shield, 
+import React, { useState, useEffect } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Download,
+  Lock,
+  Clock,
+  Shield,
   Eye,
   EyeOff,
   AlertCircle,
@@ -13,12 +13,12 @@ import {
   Loader2,
   Share2,
   HardDrive,
-  FolderArchive
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { FileTypeIcon } from '@/lib/file-icons';
+  FolderArchive,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FileTypeIcon } from "@/lib/file-icons";
 
 interface ShareInfo {
   id: string;
@@ -31,24 +31,24 @@ interface ShareInfo {
   created_at: string;
 }
 
-type ShareStatus = 'loading' | 'ready' | 'password_required' | 'expired' | 'not_found' | 'error';
+type ShareStatus = "loading" | "ready" | "password_required" | "expired" | "not_found" | "error";
 
 function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 Bytes';
+  if (bytes === 0) return "0 Bytes";
   const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
-  return date.toLocaleDateString('zh-TW', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+  return date.toLocaleDateString("zh-TW", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
@@ -56,13 +56,13 @@ function getTimeRemaining(expiresAt: string): string {
   const now = new Date();
   const expiry = new Date(expiresAt);
   const diff = expiry.getTime() - now.getTime();
-  
-  if (diff <= 0) return '已過期';
-  
+
+  if (diff <= 0) return "已過期";
+
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
   const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-  
+
   if (days > 0) return `${days} 天 ${hours} 小時後過期`;
   if (hours > 0) return `${hours} 小時 ${minutes} 分鐘後過期`;
   return `${minutes} 分鐘後過期`;
@@ -72,10 +72,10 @@ function SharePage() {
   // Route.useParams() 是型別安全的：$id 由檔名推導，不需要 `as string`。
   const { id: shareId } = Route.useParams();
   const navigate = useNavigate();
-  
-  const [status, setStatus] = useState<ShareStatus>('loading');
+
+  const [status, setStatus] = useState<ShareStatus>("loading");
   const [shareInfo, setShareInfo] = useState<ShareInfo | null>(null);
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
@@ -87,66 +87,66 @@ function SharePage() {
 
   const fetchShareInfo = async () => {
     try {
-      setStatus('loading');
+      setStatus("loading");
       const response = await fetch(`/api/share/${shareId}/info`);
-      
+
       if (response.status === 404) {
-        setStatus('not_found');
+        setStatus("not_found");
         return;
       }
-      
+
       if (response.status === 410) {
-        setStatus('expired');
+        setStatus("expired");
         return;
       }
-      
+
       if (!response.ok) {
-        setStatus('error');
-        setError('無法載入分享連結資訊');
+        setStatus("error");
+        setError("無法載入分享連結資訊");
         return;
       }
-      
+
       const data = await response.json();
       setShareInfo(data);
-      
+
       if (data.is_password_protected) {
-        setStatus('password_required');
+        setStatus("password_required");
       } else {
-        setStatus('ready');
+        setStatus("ready");
       }
     } catch (err) {
-      console.error('Fetch share info error:', err);
-      setStatus('error');
-      setError('網路錯誤，請稍後再試');
+      console.error("Fetch share info error:", err);
+      setStatus("error");
+      setError("網路錯誤，請稍後再試");
     }
   };
 
   const handleDownload = async () => {
     if (!shareInfo) return;
-    
+
     setIsDownloading(true);
     setError(null);
-    
+
     try {
-      const url = password 
+      const url = password
         ? `/api/share/${shareId}/download?pwd=${encodeURIComponent(password)}`
         : `/api/share/${shareId}/download`;
-      
+
       // Use native browser download — reliable for all file sizes
       // The backend validates password/expiry and returns proper Content-Disposition
-      const downloadName = shareInfo.is_directory 
-        ? `${shareInfo.file_name}.zip` 
+      const downloadName = shareInfo.is_directory
+        ? `${shareInfo.file_name}.zip`
         : shareInfo.file_name;
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = downloadName;
-      a.style.display = 'none';
+      a.style.display = "none";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
     } catch (err) {
-      console.error('Download error:', err);
-      setError('下載過程中發生錯誤');
+      console.error("Download error:", err);
+      setError("下載過程中發生錯誤");
     } finally {
       setIsDownloading(false);
       setDownloadProgress(0);
@@ -156,25 +156,26 @@ function SharePage() {
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (password.trim()) {
-      setStatus('ready');
+      setStatus("ready");
     }
   };
 
   return (
-    <div 
+    <div
       className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center"
-      style={{ 
-        backgroundImage: 'url(https://images.unsplash.com/photo-1506905925346-21bda4d32df4?q=80&w=2070&auto=format&fit=crop)',
+      style={{
+        backgroundImage:
+          "url(https://images.unsplash.com/photo-1506905925346-21bda4d32df4?q=80&w=2070&auto=format&fit=crop)",
       }}
     >
       {/* Backdrop blur overlay */}
       <div className="absolute inset-0 bg-black/40 backdrop-blur-xl" />
-      
+
       {/* Content */}
       <motion.div
         initial={{ opacity: 0, y: 20, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.5, ease: 'easeOut' }}
+        transition={{ duration: 0.5, ease: "easeOut" }}
         className="relative z-10 w-full max-w-md"
       >
         <Card className="bg-white/10 dark:bg-black/20 backdrop-blur-2xl border-white/20 shadow-2xl">
@@ -183,26 +184,22 @@ function SharePage() {
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+              transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
               className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg"
             >
               <HardDrive className="w-8 h-8 text-white" />
             </motion.div>
           </div>
-          
+
           <CardHeader className="text-center pb-2">
-            <CardTitle className="text-white text-xl font-medium">
-              Koimsurai NAS
-            </CardTitle>
-            <CardDescription className="text-white/60">
-              安全檔案分享
-            </CardDescription>
+            <CardTitle className="text-white text-xl font-medium">Koimsurai NAS</CardTitle>
+            <CardDescription className="text-white/60">安全檔案分享</CardDescription>
           </CardHeader>
-          
+
           <CardContent className="space-y-6 pb-8">
             <AnimatePresence mode="wait">
               {/* Loading State */}
-              {status === 'loading' && (
+              {status === "loading" && (
                 <motion.div
                   key="loading"
                   initial={{ opacity: 0 }}
@@ -214,9 +211,9 @@ function SharePage() {
                   <p className="text-white/60 text-sm">載入中...</p>
                 </motion.div>
               )}
-              
+
               {/* Not Found State */}
-              {status === 'not_found' && (
+              {status === "not_found" && (
                 <motion.div
                   key="not_found"
                   initial={{ opacity: 0 }}
@@ -234,15 +231,15 @@ function SharePage() {
                   <Button
                     variant="outline"
                     className="mt-4 bg-white/10 border-white/20 text-white hover:bg-white/20"
-                    onClick={() => navigate({ to: '/' })}
+                    onClick={() => navigate({ to: "/" })}
                   >
                     返回首頁
                   </Button>
                 </motion.div>
               )}
-              
+
               {/* Expired State */}
-              {status === 'expired' && (
+              {status === "expired" && (
                 <motion.div
                   key="expired"
                   initial={{ opacity: 0 }}
@@ -260,15 +257,15 @@ function SharePage() {
                   <Button
                     variant="outline"
                     className="mt-4 bg-white/10 border-white/20 text-white hover:bg-white/20"
-                    onClick={() => navigate({ to: '/' })}
+                    onClick={() => navigate({ to: "/" })}
                   >
                     返回首頁
                   </Button>
                 </motion.div>
               )}
-              
+
               {/* Error State */}
-              {status === 'error' && (
+              {status === "error" && (
                 <motion.div
                   key="error"
                   initial={{ opacity: 0 }}
@@ -281,7 +278,7 @@ function SharePage() {
                   </div>
                   <div className="text-center">
                     <h3 className="text-white font-medium text-lg">發生錯誤</h3>
-                    <p className="text-white/60 text-sm mt-1">{error || '無法載入分享連結'}</p>
+                    <p className="text-white/60 text-sm mt-1">{error || "無法載入分享連結"}</p>
                   </div>
                   <Button
                     variant="outline"
@@ -292,9 +289,9 @@ function SharePage() {
                   </Button>
                 </motion.div>
               )}
-              
+
               {/* Password Required State */}
-              {status === 'password_required' && shareInfo && (
+              {status === "password_required" && shareInfo && (
                 <motion.div
                   key="password"
                   initial={{ opacity: 0 }}
@@ -308,9 +305,9 @@ function SharePage() {
                       {shareInfo.is_directory ? (
                         <FolderArchive className="w-10 h-10 text-blue-400 opacity-80" />
                       ) : (
-                        <FileTypeIcon 
-                          filename={shareInfo.file_name} 
-                          isDir={false} 
+                        <FileTypeIcon
+                          filename={shareInfo.file_name}
+                          isDir={false}
                           mimeType={shareInfo.mime_type ?? undefined}
                           size="xl"
                           className="opacity-80"
@@ -320,13 +317,15 @@ function SharePage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-white font-medium truncate">{shareInfo.file_name}</p>
                       <p className="text-white/50 text-sm">
-                        {shareInfo.is_directory ? '資料夾' : formatFileSize(shareInfo.file_size)}
-                        {shareInfo.is_directory && shareInfo.file_size > 0 && ` · ${formatFileSize(shareInfo.file_size)}`}
+                        {shareInfo.is_directory ? "資料夾" : formatFileSize(shareInfo.file_size)}
+                        {shareInfo.is_directory &&
+                          shareInfo.file_size > 0 &&
+                          ` · ${formatFileSize(shareInfo.file_size)}`}
                       </p>
                     </div>
                     <Lock className="w-5 h-5 text-yellow-400 flex-shrink-0" />
                   </div>
-                  
+
                   {/* Password Form */}
                   <form onSubmit={handlePasswordSubmit} className="space-y-4">
                     <div className="space-y-2">
@@ -336,7 +335,7 @@ function SharePage() {
                       </label>
                       <div className="relative">
                         <Input
-                          type={showPassword ? 'text' : 'password'}
+                          type={showPassword ? "text" : "password"}
                           placeholder="輸入密碼"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
@@ -347,11 +346,15 @@ function SharePage() {
                           onClick={() => setShowPassword(!showPassword)}
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/60"
                         >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          {showPassword ? (
+                            <EyeOff className="w-4 h-4" />
+                          ) : (
+                            <Eye className="w-4 h-4" />
+                          )}
                         </button>
                       </div>
                     </div>
-                    
+
                     <Button
                       type="submit"
                       disabled={!password.trim()}
@@ -362,9 +365,9 @@ function SharePage() {
                   </form>
                 </motion.div>
               )}
-              
+
               {/* Ready State */}
-              {status === 'ready' && shareInfo && (
+              {status === "ready" && shareInfo && (
                 <motion.div
                   key="ready"
                   initial={{ opacity: 0 }}
@@ -379,9 +382,9 @@ function SharePage() {
                         {shareInfo.is_directory ? (
                           <FolderArchive className="w-12 h-12 text-blue-400 opacity-80" />
                         ) : (
-                          <FileTypeIcon 
-                            filename={shareInfo.file_name} 
-                            isDir={false} 
+                          <FileTypeIcon
+                            filename={shareInfo.file_name}
+                            isDir={false}
                             mimeType={shareInfo.mime_type ?? undefined}
                             size="xl"
                             className="opacity-80"
@@ -389,14 +392,18 @@ function SharePage() {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-white font-medium truncate text-lg">{shareInfo.file_name}</p>
+                        <p className="text-white font-medium truncate text-lg">
+                          {shareInfo.file_name}
+                        </p>
                         <p className="text-white/50 text-sm">
-                          {shareInfo.is_directory ? '資料夾' : formatFileSize(shareInfo.file_size)}
-                          {shareInfo.is_directory && shareInfo.file_size > 0 && ` · ${formatFileSize(shareInfo.file_size)}`}
+                          {shareInfo.is_directory ? "資料夾" : formatFileSize(shareInfo.file_size)}
+                          {shareInfo.is_directory &&
+                            shareInfo.file_size > 0 &&
+                            ` · ${formatFileSize(shareInfo.file_size)}`}
                         </p>
                       </div>
                     </div>
-                    
+
                     {/* File Info */}
                     <div className="pt-4 border-t border-white/10 space-y-2">
                       <div className="flex items-center gap-2 text-white/50 text-sm">
@@ -406,9 +413,9 @@ function SharePage() {
                       <div className="flex items-center gap-2 text-white/50 text-sm">
                         <Clock className="w-4 h-4" />
                         <span>
-                          {shareInfo.expires_at 
+                          {shareInfo.expires_at
                             ? getTimeRemaining(shareInfo.expires_at)
-                            : '永不過期'}
+                            : "永不過期"}
                         </span>
                       </div>
                       {shareInfo.is_password_protected && (
@@ -419,7 +426,7 @@ function SharePage() {
                       )}
                     </div>
                   </div>
-                  
+
                   {/* Error Message */}
                   {error && (
                     <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/20 border border-red-500/30">
@@ -427,7 +434,7 @@ function SharePage() {
                       <span className="text-red-300 text-sm">{error}</span>
                     </div>
                   )}
-                  
+
                   {/* Download Button */}
                   <Button
                     onClick={handleDownload}
@@ -437,16 +444,18 @@ function SharePage() {
                     {isDownloading ? (
                       <div className="flex items-center gap-2">
                         <Loader2 className="w-5 h-5 animate-spin" />
-                        <span>下載中... {downloadProgress > 0 ? `${downloadProgress.toFixed(0)}%` : ''}</span>
+                        <span>
+                          下載中... {downloadProgress > 0 ? `${downloadProgress.toFixed(0)}%` : ""}
+                        </span>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
                         <Download className="w-5 h-5" />
-                        <span>{shareInfo.is_directory ? '下載資料夾 (ZIP)' : '下載檔案'}</span>
+                        <span>{shareInfo.is_directory ? "下載資料夾 (ZIP)" : "下載檔案"}</span>
                       </div>
                     )}
                   </Button>
-                  
+
                   {/* Download Progress Bar */}
                   {isDownloading && downloadProgress > 0 && (
                     <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
@@ -463,7 +472,7 @@ function SharePage() {
             </AnimatePresence>
           </CardContent>
         </Card>
-        
+
         {/* Footer */}
         <motion.p
           initial={{ opacity: 0 }}
@@ -478,6 +487,6 @@ function SharePage() {
   );
 }
 
-export const Route = createFileRoute('/s/$id')({
+export const Route = createFileRoute("/s/$id")({
   component: SharePage,
 });

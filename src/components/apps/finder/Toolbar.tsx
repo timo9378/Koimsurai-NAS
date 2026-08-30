@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -13,17 +13,16 @@ import {
   FolderUp,
   Folder,
   Home,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useFiles } from '@/features/files/api/useFiles';
-import { MOVE_MIME } from '@/lib/dnd';
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useFiles } from "@/features/files/api/useFiles";
+import { MOVE_MIME } from "@/lib/dnd";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
 
 interface BreadcrumbItemProps {
   name: string;
@@ -34,7 +33,14 @@ interface BreadcrumbItemProps {
   onMoveToPath?: (sourceNames: string[], destPath: string) => void;
 }
 
-const BreadcrumbItem = ({ name, path, parentPath, isLast, onNavigate, onMoveToPath }: BreadcrumbItemProps) => {
+const BreadcrumbItem = ({
+  name,
+  path,
+  parentPath,
+  isLast,
+  onNavigate,
+  onMoveToPath,
+}: BreadcrumbItemProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isDropTarget, setIsDropTarget] = useState(false);
 
@@ -43,7 +49,7 @@ const BreadcrumbItem = ({ name, path, parentPath, isLast, onNavigate, onMoveToPa
   const handleDragOver = (e: React.DragEvent) => {
     if (!canDrop || !e.dataTransfer.types.includes(MOVE_MIME)) return;
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    e.dataTransfer.dropEffect = "move";
     setIsDropTarget(true);
   };
   const handleDrop = (e: React.DragEvent) => {
@@ -57,11 +63,11 @@ const BreadcrumbItem = ({ name, path, parentPath, isLast, onNavigate, onMoveToPa
       // ignore malformed payload
     }
   };
-  
+
   // Fetch sibling folders (folders in the parent directory)
   // Only fetch when not the last item, or when dropdown is open
   const { data: parentFiles = [] } = useFiles({ path: parentPath });
-  const siblingFolders = parentFiles.filter(f => f.is_dir && f.name !== name);
+  const siblingFolders = parentFiles.filter((f) => f.is_dir && f.name !== name);
 
   // For the last breadcrumb, don't show dropdown arrow (no siblings to show)
   // This also prevents the scroll issue
@@ -77,7 +83,7 @@ const BreadcrumbItem = ({ name, path, parentPath, isLast, onNavigate, onMoveToPa
         className={cn(
           "hover:bg-black/5 dark:hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors text-sm truncate max-w-[150px]",
           isLast ? "font-medium" : "",
-          isDropTarget && "ring-2 ring-blue-500 bg-blue-500/20"
+          isDropTarget && "ring-2 ring-blue-500 bg-blue-500/20",
         )}
       >
         {name}
@@ -85,24 +91,26 @@ const BreadcrumbItem = ({ name, path, parentPath, isLast, onNavigate, onMoveToPa
       {showDropdown && (
         <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
           <DropdownMenuTrigger asChild>
-            <button 
+            <button
               className="p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
               onClick={(e) => e.stopPropagation()}
             >
-              <ChevronDown className={cn(
-                "w-3 h-3 text-gray-400 transition-transform",
-                isOpen && "rotate-180"
-              )} />
+              <ChevronDown
+                className={cn("w-3 h-3 text-gray-400 transition-transform", isOpen && "rotate-180")}
+              />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto min-w-[160px]" sideOffset={4}>
-            {siblingFolders.map(folder => (
+          <DropdownMenuContent
+            align="start"
+            className="max-h-64 overflow-y-auto min-w-[160px]"
+            sideOffset={4}
+          >
+            {siblingFolders.map((folder) => (
               <DropdownMenuItem
                 key={folder.name}
                 onClick={() => {
-                  const siblingPath = parentPath === '/' 
-                    ? `/${folder.name}` 
-                    : `${parentPath}/${folder.name}`;
+                  const siblingPath =
+                    parentPath === "/" ? `/${folder.name}` : `${parentPath}/${folder.name}`;
                   onNavigate(siblingPath);
                   setIsOpen(false);
                 }}
@@ -126,14 +134,14 @@ interface BreadcrumbsProps {
 }
 
 const Breadcrumbs = ({ path, onNavigate, onMoveToPath }: BreadcrumbsProps) => {
-  const parts = path.split('/').filter(Boolean);
+  const parts = path.split("/").filter(Boolean);
   const [isRootOpen, setIsRootOpen] = useState(false);
   const [isHomeDropTarget, setIsHomeDropTarget] = useState(false);
 
   const handleHomeDragOver = (e: React.DragEvent) => {
     if (!onMoveToPath || !e.dataTransfer.types.includes(MOVE_MIME)) return;
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    e.dataTransfer.dropEffect = "move";
     setIsHomeDropTarget(true);
   };
   const handleHomeDrop = (e: React.DragEvent) => {
@@ -142,28 +150,28 @@ const Breadcrumbs = ({ path, onNavigate, onMoveToPath }: BreadcrumbsProps) => {
     setIsHomeDropTarget(false);
     try {
       const names = JSON.parse(e.dataTransfer.getData(MOVE_MIME)) as string[];
-      if (names.length > 0) onMoveToPath(names, '/');
+      if (names.length > 0) onMoveToPath(names, "/");
     } catch {
       // ignore malformed payload
     }
   };
-  
+
   // Fetch root folders for the dropdown
-  const { data: rootFiles = [] } = useFiles({ path: '/' });
-  const rootFolders = rootFiles.filter(f => f.is_dir);
+  const { data: rootFiles = [] } = useFiles({ path: "/" });
+  const rootFolders = rootFiles.filter((f) => f.is_dir);
 
   return (
     <div className="flex items-center gap-0.5 text-sm text-gray-600 dark:text-gray-300 overflow-hidden min-w-0">
       {/* Home/Root */}
       <div className="flex items-center shrink-0">
         <button
-          onClick={() => onNavigate('/')}
+          onClick={() => onNavigate("/")}
           onDragOver={handleHomeDragOver}
           onDragLeave={() => setIsHomeDropTarget(false)}
           onDrop={handleHomeDrop}
           className={cn(
             "flex items-center gap-1 hover:bg-black/5 dark:hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors",
-            isHomeDropTarget && "ring-2 ring-blue-500 bg-blue-500/20"
+            isHomeDropTarget && "ring-2 ring-blue-500 bg-blue-500/20",
           )}
         >
           <Home className="w-4 h-4" />
@@ -172,18 +180,20 @@ const Breadcrumbs = ({ path, onNavigate, onMoveToPath }: BreadcrumbsProps) => {
         {rootFolders.length > 0 && (
           <DropdownMenu open={isRootOpen} onOpenChange={setIsRootOpen}>
             <DropdownMenuTrigger asChild>
-              <button 
+              <button
                 className="p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
                 onClick={(e) => e.stopPropagation()}
               >
-                <ChevronDown className={cn(
-                  "w-3 h-3 text-gray-400 transition-transform",
-                  isRootOpen && "rotate-180"
-                )} />
+                <ChevronDown
+                  className={cn(
+                    "w-3 h-3 text-gray-400 transition-transform",
+                    isRootOpen && "rotate-180",
+                  )}
+                />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto min-w-[160px]">
-              {rootFolders.map(folder => (
+              {rootFolders.map((folder) => (
                 <DropdownMenuItem
                   key={folder.name}
                   onClick={() => {
@@ -200,13 +210,13 @@ const Breadcrumbs = ({ path, onNavigate, onMoveToPath }: BreadcrumbsProps) => {
           </DropdownMenu>
         )}
       </div>
-      
+
       {/* Path segments */}
       {parts.map((part, index) => {
-        const currentPath = '/' + parts.slice(0, index + 1).join('/');
-        const parentPath = index === 0 ? '/' : '/' + parts.slice(0, index).join('/');
+        const currentPath = "/" + parts.slice(0, index + 1).join("/");
+        const parentPath = index === 0 ? "/" : "/" + parts.slice(0, index).join("/");
         const isLast = index === parts.length - 1;
-        
+
         return (
           <React.Fragment key={currentPath}>
             <span className="text-gray-400 shrink-0">/</span>
@@ -228,7 +238,7 @@ const Breadcrumbs = ({ path, onNavigate, onMoveToPath }: BreadcrumbsProps) => {
 interface ToolbarProps {
   currentPath: string;
   isTrashMode: boolean;
-  viewMode: 'grid' | 'list';
+  viewMode: "grid" | "list";
   historyIndex: number;
   historyLength: number;
   searchQuery: string;
@@ -238,7 +248,7 @@ interface ToolbarProps {
   onEmptyTrash: () => void;
   onUploadClick: () => void;
   onCreateUploadLink?: () => void;
-  onViewModeChange: (mode: 'grid' | 'list') => void;
+  onViewModeChange: (mode: "grid" | "list") => void;
   onSearchChange: (query: string) => void;
   onMoveToPath?: (sourceNames: string[], destPath: string) => void;
 }
@@ -290,7 +300,9 @@ export const Toolbar = ({
               className="group flex items-center gap-2 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 rounded-lg transition-all duration-200"
             >
               <Trash2 className="w-3.5 h-3.5 text-red-600 dark:text-red-400 group-hover:scale-110 transition-transform" />
-              <span className="text-xs font-medium text-red-600 dark:text-red-400">Empty Trash</span>
+              <span className="text-xs font-medium text-red-600 dark:text-red-400">
+                Empty Trash
+              </span>
             </button>
           </div>
         ) : (
@@ -321,19 +333,23 @@ export const Toolbar = ({
         )}
         <div className="flex bg-black/5 dark:bg-white/10 rounded-md p-0.5">
           <button
-            onClick={() => onViewModeChange('grid')}
+            onClick={() => onViewModeChange("grid")}
             className={cn(
               "p-1 rounded transition-all duration-200",
-              viewMode === 'grid' ? "bg-white dark:bg-gray-700 shadow-sm" : "hover:bg-black/5 dark:hover:bg-white/5"
+              viewMode === "grid"
+                ? "bg-white dark:bg-gray-700 shadow-sm"
+                : "hover:bg-black/5 dark:hover:bg-white/5",
             )}
           >
             <LayoutGrid className="w-4 h-4 text-gray-600 dark:text-gray-300" />
           </button>
           <button
-            onClick={() => onViewModeChange('list')}
+            onClick={() => onViewModeChange("list")}
             className={cn(
               "p-1 rounded transition-all duration-200",
-              viewMode === 'list' ? "bg-white dark:bg-gray-700 shadow-sm" : "hover:bg-black/5 dark:hover:bg-white/5"
+              viewMode === "list"
+                ? "bg-white dark:bg-gray-700 shadow-sm"
+                : "hover:bg-black/5 dark:hover:bg-white/5",
             )}
           >
             <ListIcon className="w-4 h-4 text-gray-600 dark:text-gray-300" />

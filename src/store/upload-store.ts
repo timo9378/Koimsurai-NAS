@@ -1,11 +1,11 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
 export interface UploadTask {
   id: string;
   file: File;
   path: string;
   progress: number;
-  status: 'uploading' | 'completed' | 'error';
+  status: "uploading" | "completed" | "error";
   uploadId?: string;
   error?: string;
 }
@@ -50,17 +50,15 @@ export const useUploadStore = create<UploadStore>((set) => ({
       return { tasks: newTasks };
     }),
 
-  toggleExpanded: () =>
-    set((state) => ({ isExpanded: !state.isExpanded })),
+  toggleExpanded: () => set((state) => ({ isExpanded: !state.isExpanded })),
 
-  setExpanded: (expanded) =>
-    set({ isExpanded: expanded }),
+  setExpanded: (expanded) => set({ isExpanded: expanded }),
 
   clearCompleted: () =>
     set((state) => {
       const newTasks = { ...state.tasks };
       Object.keys(newTasks).forEach((key) => {
-        if (newTasks[key].status === 'completed') {
+        if (newTasks[key].status === "completed") {
           delete newTasks[key];
         }
       });

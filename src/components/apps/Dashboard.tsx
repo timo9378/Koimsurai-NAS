@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   AreaChart,
   Area,
@@ -9,24 +9,43 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-} from 'recharts';
-import { Cpu, HardDrive, Activity, Thermometer, Monitor, Loader2, LayoutGrid, AlertTriangle, BatteryCharging, Zap } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useSystemStatus } from '@/features/system/api/useSystem';
+} from "recharts";
+import {
+  Cpu,
+  HardDrive,
+  Activity,
+  Thermometer,
+  Monitor,
+  Loader2,
+  LayoutGrid,
+  AlertTriangle,
+  BatteryCharging,
+  Zap,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useSystemStatus } from "@/features/system/api/useSystem";
 
-type TabType = 'overview' | 'cpu' | 'memory' | 'gpu' | 'storage';
+type TabType = "overview" | "cpu" | "memory" | "gpu" | "storage";
 
 const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
-  { id: 'overview', label: 'Overview', icon: LayoutGrid },
-  { id: 'cpu', label: 'CPU', icon: Cpu },
-  { id: 'memory', label: 'Memory', icon: Activity },
-  { id: 'gpu', label: 'GPU', icon: Monitor },
-  { id: 'storage', label: 'Storage', icon: HardDrive },
+  { id: "overview", label: "Overview", icon: LayoutGrid },
+  { id: "cpu", label: "CPU", icon: Cpu },
+  { id: "memory", label: "Memory", icon: Activity },
+  { id: "gpu", label: "GPU", icon: Monitor },
+  { id: "storage", label: "Storage", icon: HardDrive },
 ];
 
 // GPU Icon SVG component
 const GpuIcon = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <rect x="4" y="4" width="16" height="16" rx="2" />
     <rect x="9" y="9" width="6" height="6" />
     <line x1="9" y1="1" x2="9" y2="4" />
@@ -42,23 +61,30 @@ const GpuIcon = ({ className }: { className?: string }) => (
 
 export const Dashboard = () => {
   const { data: systemStatus } = useSystemStatus();
-  const [history, setHistory] = useState<{ time: string; cpu: number; ram: number; gpu?: number }[]>([]);
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [history, setHistory] = useState<
+    { time: string; cpu: number; ram: number; gpu?: number }[]
+  >([]);
+  const [activeTab, setActiveTab] = useState<TabType>("overview");
 
   // Update history when new data arrives
   useEffect(() => {
     if (systemStatus) {
       const now = new Date();
-      const timeStr = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const timeStr = now.toLocaleTimeString("en-US", {
+        hour12: false,
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
       const newData = {
         time: timeStr,
         cpu: systemStatus.cpu_usage ?? 0,
         ram: (systemStatus.used_memory / systemStatus.total_memory) * 100,
-        gpu: systemStatus.gpu?.utilization ?? undefined
+        gpu: systemStatus.gpu?.utilization ?? undefined,
       };
 
       const timer = setTimeout(() => {
-        setHistory(prev => {
+        setHistory((prev) => {
           if (prev.length > 0 && prev[prev.length - 1].time === timeStr) {
             return prev;
           }
@@ -73,14 +99,19 @@ export const Dashboard = () => {
 
       return () => clearTimeout(timer);
     }
-  }, [systemStatus?.cpu_usage, systemStatus?.used_memory, systemStatus?.total_memory, systemStatus?.gpu?.utilization]);
+  }, [
+    systemStatus?.cpu_usage,
+    systemStatus?.used_memory,
+    systemStatus?.total_memory,
+    systemStatus?.gpu?.utilization,
+  ]);
 
   const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 B';
+    if (bytes === 0) return "0 B";
     const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const sizes = ["B", "KB", "MB", "GB", "TB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
   };
 
   const getProgressColor = (percentage: number) => {
@@ -90,18 +121,27 @@ export const Dashboard = () => {
   };
 
   const getDiskDisplayName = (disk: { name: string; mount_point: string; disk_type: string }) => {
-    if (disk.mount_point === '/') {
-      return { name: 'System', subtitle: disk.disk_type };
+    if (disk.mount_point === "/") {
+      return { name: "System", subtitle: disk.disk_type };
     }
-    const parts = disk.mount_point.split('/').filter(Boolean);
+    const parts = disk.mount_point.split("/").filter(Boolean);
     const name = parts[parts.length - 1] || disk.name;
     return { name, subtitle: disk.disk_type };
   };
 
   // Calculate totals for overview
-  const memoryPercent = systemStatus ? (systemStatus.used_memory / systemStatus.total_memory) * 100 : 0;
-  const swapPercent = systemStatus && systemStatus.total_swap > 0 ? (systemStatus.used_swap / systemStatus.total_swap) * 100 : 0;
-  const totalDiskUsed = systemStatus?.disks?.reduce((acc, disk) => acc + (disk.total_space - disk.available_space), 0) || 0;
+  const memoryPercent = systemStatus
+    ? (systemStatus.used_memory / systemStatus.total_memory) * 100
+    : 0;
+  const swapPercent =
+    systemStatus && systemStatus.total_swap > 0
+      ? (systemStatus.used_swap / systemStatus.total_swap) * 100
+      : 0;
+  const totalDiskUsed =
+    systemStatus?.disks?.reduce(
+      (acc, disk) => acc + (disk.total_space - disk.available_space),
+      0,
+    ) || 0;
   const totalDiskSize = systemStatus?.disks?.reduce((acc, disk) => acc + disk.total_space, 0) || 0;
   const diskPercent = totalDiskSize > 0 ? (totalDiskUsed / totalDiskSize) * 100 : 0;
 
@@ -119,10 +159,14 @@ export const Dashboard = () => {
             </div>
             <div className="space-y-1 text-sm">
               {(systemStatus?.cpu_usage || 0) > 90 && (
-                <div className="text-red-500 dark:text-red-300">• System CPU usage is critical ({(systemStatus?.cpu_usage ?? 0).toFixed(1)}%)</div>
+                <div className="text-red-500 dark:text-red-300">
+                  • System CPU usage is critical ({(systemStatus?.cpu_usage ?? 0).toFixed(1)}%)
+                </div>
               )}
               {memoryPercent > 90 && (
-                <div className="text-red-500 dark:text-red-300">• System memory usage is critical ({memoryPercent.toFixed(1)}%)</div>
+                <div className="text-red-500 dark:text-red-300">
+                  • System memory usage is critical ({memoryPercent.toFixed(1)}%)
+                </div>
               )}
             </div>
           </div>
@@ -136,12 +180,19 @@ export const Dashboard = () => {
               <Cpu className="w-4 h-4 text-blue-500 dark:text-blue-400" />
               <span className="text-xs text-gray-500 dark:text-zinc-400">CPU</span>
             </div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">{(systemStatus?.cpu_usage ?? 0).toFixed(1)}%</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              {(systemStatus?.cpu_usage ?? 0).toFixed(1)}%
+            </div>
             {systemStatus?.cpu_temp && (
-              <div className="text-xs text-orange-500 dark:text-orange-400 mt-1">{systemStatus.cpu_temp.toFixed(0)}°C</div>
+              <div className="text-xs text-orange-500 dark:text-orange-400 mt-1">
+                {systemStatus.cpu_temp.toFixed(0)}°C
+              </div>
             )}
             <div className="h-1.5 bg-gray-200 dark:bg-white/10 rounded-full mt-2 overflow-hidden">
-              <div className="h-full bg-blue-500 transition-all" style={{ width: `${systemStatus?.cpu_usage || 0}%` }} />
+              <div
+                className="h-full bg-blue-500 transition-all"
+                style={{ width: `${systemStatus?.cpu_usage || 0}%` }}
+              />
             </div>
           </div>
 
@@ -155,22 +206,31 @@ export const Dashboard = () => {
                   <BatteryCharging className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                 )}
                 <span className="text-xs text-gray-500 dark:text-zinc-400">UPS</span>
-                <span className={cn(
-                  "ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-medium",
-                  systemStatus.ups.online
-                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                    : "bg-amber-500/15 text-amber-600 dark:text-amber-400"
-                )}>
-                  {systemStatus.ups.online ? '市電' : '電池'}
+                <span
+                  className={cn(
+                    "ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-medium",
+                    systemStatus.ups.online
+                      ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                      : "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+                  )}
+                >
+                  {systemStatus.ups.online ? "市電" : "電池"}
                 </span>
               </div>
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">{systemStatus.ups.battery_charge?.toFixed(0) ?? '--'}%</div>
+              <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                {systemStatus.ups.battery_charge?.toFixed(0) ?? "--"}%
+              </div>
               <div className="text-xs text-gray-500 dark:text-zinc-500 mt-1">
-                剩 {Math.round((systemStatus.ups.battery_runtime ?? 0) / 60)} 分 · 負載 {systemStatus.ups.ups_load?.toFixed(0) ?? '--'}% · {systemStatus.ups.input_voltage?.toFixed(0) ?? '--'}V
+                剩 {Math.round((systemStatus.ups.battery_runtime ?? 0) / 60)} 分 · 負載{" "}
+                {systemStatus.ups.ups_load?.toFixed(0) ?? "--"}% ·{" "}
+                {systemStatus.ups.input_voltage?.toFixed(0) ?? "--"}V
               </div>
               <div className="h-1.5 bg-gray-200 dark:bg-white/10 rounded-full mt-2 overflow-hidden">
                 <div
-                  className={cn("h-full transition-all", systemStatus.ups.online ? "bg-emerald-500" : "bg-amber-500")}
+                  className={cn(
+                    "h-full transition-all",
+                    systemStatus.ups.online ? "bg-emerald-500" : "bg-amber-500",
+                  )}
                   style={{ width: `${systemStatus.ups.battery_charge ?? 0}%` }}
                 />
               </div>
@@ -183,10 +243,18 @@ export const Dashboard = () => {
               <Activity className="w-4 h-4 text-purple-500 dark:text-purple-400" />
               <span className="text-xs text-gray-500 dark:text-zinc-400">Memory</span>
             </div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">{memoryPercent.toFixed(1)}%</div>
-            <div className="text-xs text-gray-500 dark:text-zinc-500 mt-1">{formatBytes(systemStatus?.used_memory || 0)} / {formatBytes(systemStatus?.total_memory || 0)}</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              {memoryPercent.toFixed(1)}%
+            </div>
+            <div className="text-xs text-gray-500 dark:text-zinc-500 mt-1">
+              {formatBytes(systemStatus?.used_memory || 0)} /{" "}
+              {formatBytes(systemStatus?.total_memory || 0)}
+            </div>
             <div className="h-1.5 bg-gray-200 dark:bg-white/10 rounded-full mt-2 overflow-hidden">
-              <div className="h-full bg-purple-500 transition-all" style={{ width: `${memoryPercent}%` }} />
+              <div
+                className="h-full bg-purple-500 transition-all"
+                style={{ width: `${memoryPercent}%` }}
+              />
             </div>
           </div>
 
@@ -196,10 +264,18 @@ export const Dashboard = () => {
               <HardDrive className="w-4 h-4 text-cyan-500 dark:text-cyan-400" />
               <span className="text-xs text-gray-500 dark:text-zinc-400">Swap</span>
             </div>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">{swapPercent.toFixed(1)}%</div>
-            <div className="text-xs text-gray-500 dark:text-zinc-500 mt-1">{formatBytes(systemStatus?.used_swap || 0)} / {formatBytes(systemStatus?.total_swap || 0)}</div>
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              {swapPercent.toFixed(1)}%
+            </div>
+            <div className="text-xs text-gray-500 dark:text-zinc-500 mt-1">
+              {formatBytes(systemStatus?.used_swap || 0)} /{" "}
+              {formatBytes(systemStatus?.total_swap || 0)}
+            </div>
             <div className="h-1.5 bg-gray-200 dark:bg-white/10 rounded-full mt-2 overflow-hidden">
-              <div className="h-full bg-cyan-500 transition-all" style={{ width: `${swapPercent}%` }} />
+              <div
+                className="h-full bg-cyan-500 transition-all"
+                style={{ width: `${swapPercent}%` }}
+              />
             </div>
           </div>
 
@@ -210,10 +286,17 @@ export const Dashboard = () => {
                 <GpuIcon className="w-4 h-4 text-green-500 dark:text-green-400" />
                 <span className="text-xs text-gray-500 dark:text-zinc-400">GPU</span>
               </div>
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">{systemStatus.gpu.utilization}%</div>
-              <div className="text-xs text-orange-500 dark:text-orange-400 mt-1">{systemStatus.gpu.temperature}°C • {formatBytes(systemStatus.gpu.memory_used)}</div>
+              <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                {systemStatus.gpu.utilization}%
+              </div>
+              <div className="text-xs text-orange-500 dark:text-orange-400 mt-1">
+                {systemStatus.gpu.temperature}°C • {formatBytes(systemStatus.gpu.memory_used)}
+              </div>
               <div className="h-1.5 bg-gray-200 dark:bg-white/10 rounded-full mt-2 overflow-hidden">
-                <div className="h-full bg-green-500 transition-all" style={{ width: `${systemStatus.gpu.utilization}%` }} />
+                <div
+                  className="h-full bg-green-500 transition-all"
+                  style={{ width: `${systemStatus.gpu.utilization}%` }}
+                />
               </div>
             </div>
           ) : (
@@ -222,10 +305,17 @@ export const Dashboard = () => {
                 <HardDrive className="w-4 h-4 text-orange-500 dark:text-orange-400" />
                 <span className="text-xs text-gray-500 dark:text-zinc-400">Storage</span>
               </div>
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">{diskPercent.toFixed(1)}%</div>
-              <div className="text-xs text-gray-500 dark:text-zinc-500 mt-1">{formatBytes(totalDiskUsed)} / {formatBytes(totalDiskSize)}</div>
+              <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                {diskPercent.toFixed(1)}%
+              </div>
+              <div className="text-xs text-gray-500 dark:text-zinc-500 mt-1">
+                {formatBytes(totalDiskUsed)} / {formatBytes(totalDiskSize)}
+              </div>
               <div className="h-1.5 bg-gray-200 dark:bg-white/10 rounded-full mt-2 overflow-hidden">
-                <div className="h-full bg-orange-500 transition-all" style={{ width: `${diskPercent}%` }} />
+                <div
+                  className="h-full bg-orange-500 transition-all"
+                  style={{ width: `${diskPercent}%` }}
+                />
               </div>
             </div>
           )}
@@ -238,7 +328,9 @@ export const Dashboard = () => {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Activity className="w-4 h-4 text-blue-500 dark:text-blue-400" />
-                <span className="text-sm font-medium text-gray-900 dark:text-white">Top Processes</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                  Top Processes
+                </span>
               </div>
               <span className="text-xs text-gray-500 dark:text-zinc-400">by CPU usage</span>
             </div>
@@ -259,22 +351,41 @@ export const Dashboard = () => {
                 </div>
               ) : (
                 topProcesses.slice(0, 12).map((proc, i) => (
-                  <div 
-                    key={`${proc.pid}-${i}`} 
+                  <div
+                    key={`${proc.pid}-${i}`}
                     className={cn(
                       "grid grid-cols-12 gap-2 text-xs px-2 py-1.5 rounded-lg",
-                      (proc.cpu_usage ?? 0) > 50 ? "bg-red-50 dark:bg-red-500/10" : (proc.cpu_usage ?? 0) > 20 ? "bg-orange-50 dark:bg-orange-500/10" : "bg-gray-50 dark:bg-white/5"
+                      (proc.cpu_usage ?? 0) > 50
+                        ? "bg-red-50 dark:bg-red-500/10"
+                        : (proc.cpu_usage ?? 0) > 20
+                          ? "bg-orange-50 dark:bg-orange-500/10"
+                          : "bg-gray-50 dark:bg-white/5",
                     )}
                   >
-                    <div className="col-span-5 text-gray-900 dark:text-white truncate" title={proc.name}>{proc.name}</div>
-                    <div className="col-span-2 text-right text-gray-500 dark:text-zinc-400">{proc.pid}</div>
-                    <div className={cn(
-                      "col-span-2 text-right font-medium",
-                      (proc.cpu_usage ?? 0) > 50 ? "text-red-500 dark:text-red-400" : (proc.cpu_usage ?? 0) > 20 ? "text-orange-500 dark:text-orange-400" : "text-gray-900 dark:text-white"
-                    )}>
+                    <div
+                      className="col-span-5 text-gray-900 dark:text-white truncate"
+                      title={proc.name}
+                    >
+                      {proc.name}
+                    </div>
+                    <div className="col-span-2 text-right text-gray-500 dark:text-zinc-400">
+                      {proc.pid}
+                    </div>
+                    <div
+                      className={cn(
+                        "col-span-2 text-right font-medium",
+                        (proc.cpu_usage ?? 0) > 50
+                          ? "text-red-500 dark:text-red-400"
+                          : (proc.cpu_usage ?? 0) > 20
+                            ? "text-orange-500 dark:text-orange-400"
+                            : "text-gray-900 dark:text-white",
+                      )}
+                    >
                       {(proc.cpu_usage ?? 0).toFixed(1)}%
                     </div>
-                    <div className="col-span-3 text-right text-gray-600 dark:text-zinc-300">{formatBytes(proc.memory_bytes)}</div>
+                    <div className="col-span-3 text-right text-gray-600 dark:text-zinc-300">
+                      {formatBytes(proc.memory_bytes)}
+                    </div>
                   </div>
                 ))
               )}
@@ -286,9 +397,13 @@ export const Dashboard = () => {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <HardDrive className="w-4 h-4 text-orange-500 dark:text-orange-400" />
-                <span className="text-sm font-medium text-gray-900 dark:text-white">Storage Devices</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                  Storage Devices
+                </span>
               </div>
-              <span className="text-xs text-gray-500 dark:text-zinc-400">{systemStatus?.disks?.length || 0} disks</span>
+              <span className="text-xs text-gray-500 dark:text-zinc-400">
+                {systemStatus?.disks?.length || 0} disks
+              </span>
             </div>
 
             <div className="flex-1 overflow-auto custom-scrollbar space-y-3">
@@ -300,16 +415,30 @@ export const Dashboard = () => {
                   <div key={i} className="bg-white dark:bg-white/5 rounded-lg p-3">
                     <div className="flex justify-between items-center mb-2">
                       <div>
-                        <div className="text-sm text-gray-900 dark:text-white font-medium">{display.name}</div>
-                        <div className="text-[10px] text-gray-500 dark:text-zinc-500">{display.subtitle} • {disk.mount_point}</div>
+                        <div className="text-sm text-gray-900 dark:text-white font-medium">
+                          {display.name}
+                        </div>
+                        <div className="text-[10px] text-gray-500 dark:text-zinc-500">
+                          {display.subtitle} • {disk.mount_point}
+                        </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm text-gray-900 dark:text-white">{formatBytes(disk.available_space)} free</div>
-                        <div className="text-[10px] text-gray-500 dark:text-zinc-500">of {formatBytes(disk.total_space)}</div>
+                        <div className="text-sm text-gray-900 dark:text-white">
+                          {formatBytes(disk.available_space)} free
+                        </div>
+                        <div className="text-[10px] text-gray-500 dark:text-zinc-500">
+                          of {formatBytes(disk.total_space)}
+                        </div>
                       </div>
                     </div>
                     <div className="h-2 bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
-                      <div className={cn("h-full rounded-full bg-gradient-to-r transition-all", getProgressColor(percent))} style={{ width: `${percent}%` }} />
+                      <div
+                        className={cn(
+                          "h-full rounded-full bg-gradient-to-r transition-all",
+                          getProgressColor(percent),
+                        )}
+                        style={{ width: `${percent}%` }}
+                      />
                     </div>
                   </div>
                 );
@@ -320,7 +449,9 @@ export const Dashboard = () => {
 
         {/* Real-time Chart */}
         <div className="bg-gray-100 dark:bg-white/5 rounded-xl p-4 mt-4">
-          <div className="text-sm font-medium text-gray-900 dark:text-white mb-3">Resource History</div>
+          <div className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+            Resource History
+          </div>
           <div className="h-[120px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={history}>
@@ -334,12 +465,53 @@ export const Dashboard = () => {
                     <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.15)" vertical={false} />
-                <XAxis dataKey="time" stroke="rgba(128,128,128,0.5)" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
-                <YAxis stroke="rgba(128,128,128,0.5)" domain={[0, 100]} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
-                <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', fontSize: 12 }} />
-                <Area type="monotone" dataKey="cpu" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorCpuOverview)" name="CPU" />
-                <Area type="monotone" dataKey="ram" stroke="#8b5cf6" strokeWidth={2} fillOpacity={1} fill="url(#colorRamOverview)" name="RAM" />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="rgba(128,128,128,0.15)"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="time"
+                  stroke="rgba(128,128,128,0.5)"
+                  tick={{ fontSize: 10 }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  stroke="rgba(128,128,128,0.5)"
+                  domain={[0, 100]}
+                  tick={{ fontSize: 10 }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v) => `${v}%`}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "rgba(0,0,0,0.8)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    borderRadius: "8px",
+                    color: "#fff",
+                    fontSize: 12,
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="cpu"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#colorCpuOverview)"
+                  name="CPU"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="ram"
+                  stroke="#8b5cf6"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#colorRamOverview)"
+                  name="RAM"
+                />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -368,7 +540,7 @@ export const Dashboard = () => {
           <div>
             <div className="text-sm text-gray-500 dark:text-zinc-400">CPU Usage</div>
             <div className="text-3xl font-bold text-gray-900 dark:text-white">
-              {systemStatus ? `${(systemStatus.cpu_usage ?? 0).toFixed(1)}%` : '--'}
+              {systemStatus ? `${(systemStatus.cpu_usage ?? 0).toFixed(1)}%` : "--"}
             </div>
           </div>
         </div>
@@ -389,10 +561,37 @@ export const Dashboard = () => {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.1)" vertical={false} />
-            <XAxis dataKey="time" stroke="rgba(128,128,128,0.5)" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
-            <YAxis stroke="rgba(128,128,128,0.5)" domain={['dataMin - 5', 'dataMax + 10']} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={(value) => `${Math.round(value)}%`} />
-            <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: '#fff' }} />
-            <Area type="monotone" dataKey="cpu" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorCpu)" />
+            <XAxis
+              dataKey="time"
+              stroke="rgba(128,128,128,0.5)"
+              tick={{ fontSize: 12 }}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              stroke="rgba(128,128,128,0.5)"
+              domain={["dataMin - 5", "dataMax + 10"]}
+              tick={{ fontSize: 12 }}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(value) => `${Math.round(value)}%`}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "rgba(0,0,0,0.8)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: "12px",
+                color: "#fff",
+              }}
+            />
+            <Area
+              type="monotone"
+              dataKey="cpu"
+              stroke="#3b82f6"
+              strokeWidth={3}
+              fillOpacity={1}
+              fill="url(#colorCpu)"
+            />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -409,7 +608,9 @@ export const Dashboard = () => {
           <div>
             <div className="text-sm text-gray-500 dark:text-zinc-400">Memory Usage</div>
             <div className="text-3xl font-bold text-gray-900 dark:text-white">
-              {systemStatus ? `${((systemStatus.used_memory / systemStatus.total_memory) * 100).toFixed(1)}%` : '--'}
+              {systemStatus
+                ? `${((systemStatus.used_memory / systemStatus.total_memory) * 100).toFixed(1)}%`
+                : "--"}
             </div>
           </div>
         </div>
@@ -429,10 +630,37 @@ export const Dashboard = () => {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.1)" vertical={false} />
-            <XAxis dataKey="time" stroke="rgba(128,128,128,0.5)" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
-            <YAxis stroke="rgba(128,128,128,0.5)" domain={['dataMin - 5', 'dataMax + 10']} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={(value) => `${Math.round(value)}%`} />
-            <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: '#fff' }} />
-            <Area type="monotone" dataKey="ram" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorRam)" />
+            <XAxis
+              dataKey="time"
+              stroke="rgba(128,128,128,0.5)"
+              tick={{ fontSize: 12 }}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              stroke="rgba(128,128,128,0.5)"
+              domain={["dataMin - 5", "dataMax + 10"]}
+              tick={{ fontSize: 12 }}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(value) => `${Math.round(value)}%`}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "rgba(0,0,0,0.8)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: "12px",
+                color: "#fff",
+              }}
+            />
+            <Area
+              type="monotone"
+              dataKey="ram"
+              stroke="#8b5cf6"
+              strokeWidth={3}
+              fillOpacity={1}
+              fill="url(#colorRam)"
+            />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -461,7 +689,9 @@ export const Dashboard = () => {
             </div>
             <div>
               <div className="text-sm text-gray-500 dark:text-zinc-400">{gpu.name}</div>
-              <div className="text-3xl font-bold text-gray-900 dark:text-white">{gpu.utilization}%</div>
+              <div className="text-3xl font-bold text-gray-900 dark:text-white">
+                {gpu.utilization}%
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2 text-orange-500 dark:text-orange-400">
@@ -479,11 +709,42 @@ export const Dashboard = () => {
                   <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.1)" vertical={false} />
-              <XAxis dataKey="time" stroke="rgba(128,128,128,0.5)" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
-              <YAxis stroke="rgba(128,128,128,0.5)" domain={['dataMin - 5', 'dataMax + 10']} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} tickFormatter={(value) => `${Math.round(value)}%`} />
-              <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', color: '#fff' }} />
-              <Area type="monotone" dataKey="gpu" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorGpu)" />
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="rgba(128,128,128,0.1)"
+                vertical={false}
+              />
+              <XAxis
+                dataKey="time"
+                stroke="rgba(128,128,128,0.5)"
+                tick={{ fontSize: 12 }}
+                tickLine={false}
+                axisLine={false}
+              />
+              <YAxis
+                stroke="rgba(128,128,128,0.5)"
+                domain={["dataMin - 5", "dataMax + 10"]}
+                tick={{ fontSize: 12 }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(value) => `${Math.round(value)}%`}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "rgba(0,0,0,0.8)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: "12px",
+                  color: "#fff",
+                }}
+              />
+              <Area
+                type="monotone"
+                dataKey="gpu"
+                stroke="#10b981"
+                strokeWidth={3}
+                fillOpacity={1}
+                fill="url(#colorGpu)"
+              />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -492,10 +753,15 @@ export const Dashboard = () => {
         <div className="bg-gray-100 dark:bg-white/5 rounded-xl p-4">
           <div className="flex justify-between mb-2">
             <span className="text-sm text-gray-500 dark:text-zinc-400">VRAM</span>
-            <span className="text-sm text-gray-900 dark:text-white">{formatBytes(gpu.memory_used)} / {formatBytes(gpu.memory_total)}</span>
+            <span className="text-sm text-gray-900 dark:text-white">
+              {formatBytes(gpu.memory_used)} / {formatBytes(gpu.memory_total)}
+            </span>
           </div>
           <div className="h-2 bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
-            <div className={cn("h-full rounded-full bg-gradient-to-r", getProgressColor(vramPercent))} style={{ width: `${vramPercent}%` }} />
+            <div
+              className={cn("h-full rounded-full bg-gradient-to-r", getProgressColor(vramPercent))}
+              style={{ width: `${vramPercent}%` }}
+            />
           </div>
         </div>
       </div>
@@ -522,12 +788,23 @@ export const Dashboard = () => {
                   <div className="text-xs text-gray-500 dark:text-zinc-500">{display.subtitle}</div>
                 </div>
                 <div className="text-right">
-                  <span className="text-xl font-bold text-gray-900 dark:text-white">{formatBytes(disk.available_space)}</span>
-                  <span className="text-gray-500 dark:text-zinc-400 text-sm"> / {formatBytes(disk.total_space)}</span>
+                  <span className="text-xl font-bold text-gray-900 dark:text-white">
+                    {formatBytes(disk.available_space)}
+                  </span>
+                  <span className="text-gray-500 dark:text-zinc-400 text-sm">
+                    {" "}
+                    / {formatBytes(disk.total_space)}
+                  </span>
                 </div>
               </div>
               <div className="h-3 bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
-                <div className={cn("h-full rounded-full bg-gradient-to-r transition-all", getProgressColor(percentage))} style={{ width: `${percentage}%` }} />
+                <div
+                  className={cn(
+                    "h-full rounded-full bg-gradient-to-r transition-all",
+                    getProgressColor(percentage),
+                  )}
+                  style={{ width: `${percentage}%` }}
+                />
               </div>
             </div>
           );
@@ -538,11 +815,16 @@ export const Dashboard = () => {
 
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'overview': return renderOverviewTab();
-      case 'cpu': return renderCpuTab();
-      case 'memory': return renderMemoryTab();
-      case 'gpu': return renderGpuTab();
-      case 'storage': return renderStorageTab();
+      case "overview":
+        return renderOverviewTab();
+      case "cpu":
+        return renderCpuTab();
+      case "memory":
+        return renderMemoryTab();
+      case "gpu":
+        return renderGpuTab();
+      case "storage":
+        return renderStorageTab();
     }
   };
 
@@ -560,7 +842,7 @@ export const Dashboard = () => {
                 "flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-all",
                 activeTab === tab.id
                   ? "text-gray-900 dark:text-white bg-white/60 dark:bg-white/10 border-b-2 border-blue-500"
-                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
+                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5",
               )}
             >
               <Icon className="w-4 h-4" />
@@ -571,9 +853,7 @@ export const Dashboard = () => {
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 p-6 overflow-hidden">
-        {renderTabContent()}
-      </div>
+      <div className="flex-1 p-6 overflow-hidden">{renderTabContent()}</div>
     </div>
   );
 };

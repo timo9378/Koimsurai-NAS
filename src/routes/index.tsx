@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react';
-import { createFileRoute } from '@tanstack/react-router';
-import { Loader2 } from 'lucide-react';
-import { DesktopLayout } from '@/components/desktop/DesktopLayout';
-import { Dock } from '@/components/desktop/Dock';
-import { MobileLayout } from '@/components/mobile/MobileLayout';
-import { LoginScreen } from '@/components/auth/LoginScreen';
-import { useCheckAuth } from '@/features/auth/api/useAuth';
-import { useIsMobile } from '@/hooks/useIsMobile';
+import { useEffect, useState } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { Loader2 } from "lucide-react";
+import { DesktopLayout } from "@/components/desktop/DesktopLayout";
+import { Dock } from "@/components/desktop/Dock";
+import { MobileLayout } from "@/components/mobile/MobileLayout";
+import { LoginScreen } from "@/components/auth/LoginScreen";
+import { useCheckAuth } from "@/features/auth/api/useAuth";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
@@ -50,6 +50,6 @@ function Home() {
   );
 }
 
-export const Route = createFileRoute('/')({
+export const Route = createFileRoute("/")({
   component: Home,
 });

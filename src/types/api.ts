@@ -3,7 +3,7 @@
 // 絕大多數型別**由 Rust 產生**（`pnpm export:types` → `packages/api-types/index.ts`），
 // 這裡只是轉出去，讓既有的 17 個 `from '@/types/api'` 匯入不必全部改寫。
 // 此前這個檔是 225 行手寫、靠人工與 Rust 同步 —— 換掉的理由見下面那段。
-export * from '@koimsurai/nas-api-types';
+export * from "@koimsurai/nas-api-types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 以下是**後端沒有對應型別**的殘留，逐一標明狀態。
@@ -34,7 +34,7 @@ export interface DockerContainer {
   id: string;
   name: string;
   image: string;
-  status: 'running' | 'stopped' | 'paused' | 'exited';
+  status: "running" | "stopped" | "paused" | "exited";
   cpu_usage: string;
   memory_usage: string;
 }
@@ -53,9 +53,7 @@ export interface TagRequest {
  * 這份保留只是為了不動既有呼叫端；差別在 `requires_2fa` 產生版是 `boolean`、
  * 這裡是字面量 `true`。新程式碼請用 `LoginResponse`。
  */
-export type LoginResult =
-  | Record<string, never>
-  | { requires_2fa: true; temp_token: string };
+export type LoginResult = Record<string, never> | { requires_2fa: true; temp_token: string };
 
 /** 後端沒有這個型別（認證走 cookie，不回 token body）。確認無人使用後即可刪。 */
 export interface AuthResponse {

@@ -1,11 +1,17 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
-import { useFiles, useCreateFolder, useRename, useBatchDelete, useDelete } from '@/features/files/api/useFiles';
-import { useWindowStore } from '@/store/window-store';
-import { useQueryClient } from '@tanstack/react-query';
-import type { FileInfo } from '@/types/api';
-import { DraggableDesktopIcon } from './DraggableDesktopIcon';
+import React, { useEffect, useState } from "react";
+import {
+  useFiles,
+  useCreateFolder,
+  useRename,
+  useBatchDelete,
+  useDelete,
+} from "@/features/files/api/useFiles";
+import { useWindowStore } from "@/store/window-store";
+import { useQueryClient } from "@tanstack/react-query";
+import type { FileInfo } from "@/types/api";
+import { DraggableDesktopIcon } from "./DraggableDesktopIcon";
 
 // Type for storing icon positions
 interface IconPosition {
@@ -16,15 +22,15 @@ interface IconPosition {
 // Default positions will be calculated based on order
 
 export const DesktopIcons = () => {
-  const { data: files, refetch } = useFiles({ path: '/Desktop' });
+  const { data: files, refetch } = useFiles({ path: "/Desktop" });
   const createFolder = useCreateFolder();
   const renameFile = useRename();
   const { openWindow, windows, updateWindowAppState, focusWindow } = useWindowStore();
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState('');
-  const [newFolderName] = useState('新資料夾');
+  const [renameValue, setRenameValue] = useState("");
+  const [newFolderName] = useState("新資料夾");
 
   // State for icon positions
   const [iconPositions, setIconPositions] = useState<Map<string, IconPosition>>(new Map());
@@ -34,13 +40,13 @@ export const DesktopIcons = () => {
 
   // Load positions from localStorage on mount
   useEffect(() => {
-    const saved = localStorage.getItem('desktop-icon-positions');
+    const saved = localStorage.getItem("desktop-icon-positions");
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         setIconPositions(new Map(Object.entries(parsed)));
       } catch (e) {
-        console.error('Failed to load icon positions', e);
+        console.error("Failed to load icon positions", e);
       }
     }
   }, []);
@@ -49,7 +55,7 @@ export const DesktopIcons = () => {
   useEffect(() => {
     if (iconPositions.size > 0) {
       const obj = Object.fromEntries(iconPositions);
-      localStorage.setItem('desktop-icon-positions', JSON.stringify(obj));
+      localStorage.setItem("desktop-icon-positions", JSON.stringify(obj));
     }
   }, [iconPositions]);
 
@@ -83,7 +89,7 @@ export const DesktopIcons = () => {
   // Watch for new folder to appear in files list, then enter rename mode
   useEffect(() => {
     if (pendingRenameFolder && files) {
-      const newFolder = files.find(f => f.name === pendingRenameFolder);
+      const newFolder = files.find((f) => f.name === pendingRenameFolder);
       if (newFolder) {
         setRenamingFile(newFolder.path);
         setRenameValue(newFolder.name);
@@ -104,7 +110,7 @@ export const DesktopIcons = () => {
         let name = newFolderName;
         let counter = 1;
 
-        while (currentFiles.some(f => f.name === name)) {
+        while (currentFiles.some((f) => f.name === name)) {
           name = `${newFolderName}${counter}`;
           counter++;
         }
@@ -116,7 +122,7 @@ export const DesktopIcons = () => {
 
         while (!created && attempts < maxAttempts) {
           try {
-            await createFolder.mutateAsync({ path: 'Desktop', name });
+            await createFolder.mutateAsync({ path: "Desktop", name });
             created = true;
           } catch (error: any) {
             if (error?.response?.status === 409) {
@@ -131,32 +137,32 @@ export const DesktopIcons = () => {
         }
 
         if (!created) {
-          throw new Error('無法創建資料夾,請稍後再試');
+          throw new Error("無法創建資料夾,請稍後再試");
         }
 
         // Wait a bit for the mutation's onSuccess to complete
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
         // Trigger refetch to get the new folder and wait for it
         const { data: updatedFiles } = await refetch();
-        
+
         // Only set pending rename after we've confirmed the folder exists
-        if (updatedFiles?.some(f => f.name === name)) {
+        if (updatedFiles?.some((f) => f.name === name)) {
           setPendingRenameFolder(name);
         } else {
           // If folder doesn't appear yet, try one more refetch
-          await new Promise(resolve => setTimeout(resolve, 200));
+          await new Promise((resolve) => setTimeout(resolve, 200));
           await refetch();
           setPendingRenameFolder(name);
         }
       } catch (error) {
-        console.error('Failed to create folder:', error);
-        alert('建立資料夾失敗');
+        console.error("Failed to create folder:", error);
+        alert("建立資料夾失敗");
       }
     };
 
-    window.addEventListener('desktop-create-folder', handleCreateFolder);
-    return () => window.removeEventListener('desktop-create-folder', handleCreateFolder);
+    window.addEventListener("desktop-create-folder", handleCreateFolder);
+    return () => window.removeEventListener("desktop-create-folder", handleCreateFolder);
   }, [createFolder, refetch, newFolderName]);
 
   // Listen for delete event (e.g. from context menu or keyboard)
@@ -174,25 +180,29 @@ export const DesktopIcons = () => {
           }
           setSelectedFiles(new Set());
         } catch (error) {
-          console.error('Delete failed:', error);
-          alert('刪除失敗');
+          console.error("Delete failed:", error);
+          alert("刪除失敗");
         }
       }
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedFiles.size > 0 && !renamingFile) {
+      if (
+        (e.key === "Delete" || e.key === "Backspace") &&
+        selectedFiles.size > 0 &&
+        !renamingFile
+      ) {
         handleDelete();
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
     // We can also listen to a custom event if needed for context menu delete
-    window.addEventListener('desktop-delete-selected', handleDelete);
+    window.addEventListener("desktop-delete-selected", handleDelete);
 
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('desktop-delete-selected', handleDelete);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("desktop-delete-selected", handleDelete);
     };
   }, [selectedFiles, batchDelete, deleteFile, renamingFile]);
 
@@ -204,11 +214,9 @@ export const DesktopIcons = () => {
     // BUT 'useFiles' might just return empty array if empty.
     // Better strategy: Check root first? Or just try to create on mount if we catch an error?
     // Let's rely on the fact that if useFiles returns error (404), we try to create.
-
     // Actually, useFiles logic:
     // queryFn: ... apiClient.get ...
     // If it fails, error will be populated.
-
     // Note: React Query doesn't automatically trigger creation.
     // We can use a side effect here.
   }, [files]);
@@ -216,14 +224,14 @@ export const DesktopIcons = () => {
   // Actually, we can just try to create it once on mount if we want to be sure.
   // But that might spam 409 Conflict.
   // Let's check root files list?
-  const { data: rootFiles } = useFiles({ path: '/' });
+  const { data: rootFiles } = useFiles({ path: "/" });
   const [hasCheckedDesktop, setHasCheckedDesktop] = useState(false);
 
   useEffect(() => {
     if (rootFiles && !hasCheckedDesktop) {
-      const hasDesktop = rootFiles.some(f => f.name === 'Desktop' && f.is_dir);
+      const hasDesktop = rootFiles.some((f) => f.name === "Desktop" && f.is_dir);
       if (!hasDesktop) {
-        createFolder.mutate({ path: '/', name: 'Desktop' });
+        createFolder.mutate({ path: "/", name: "Desktop" });
       }
       setHasCheckedDesktop(true);
     }
@@ -249,17 +257,17 @@ export const DesktopIcons = () => {
 
     if (file.is_dir) {
       // Windows-style: Reuse existing Finder window if available
-      const existingFinder = windows.find(w => w.appType === 'finder' && !w.isMinimized);
+      const existingFinder = windows.find((w) => w.appType === "finder" && !w.isMinimized);
       if (existingFinder) {
         // Navigate in existing window
         updateWindowAppState(existingFinder.id, { navigateTo: file.path });
         focusWindow(existingFinder.id);
       } else {
         // Open new Finder window
-        openWindow('finder', file.name, { initialPath: file.path });
+        openWindow("finder", file.name, { initialPath: file.path });
       }
     } else {
-      openWindow('preview', file.name, { file });
+      openWindow("preview", file.name, { file });
     }
   };
 
@@ -269,7 +277,7 @@ export const DesktopIcons = () => {
       return;
     }
 
-    const file = files?.find(f => f.path === renamingFile);
+    const file = files?.find((f) => f.path === renamingFile);
 
     if (!file || renameValue === file.name) {
       setRenamingFile(null);
@@ -279,13 +287,13 @@ export const DesktopIcons = () => {
     try {
       await renameFile.mutateAsync({
         path: renamingFile,
-        newName: renameValue
+        newName: renameValue,
       });
-      await queryClient.invalidateQueries({ queryKey: ['files', '/Desktop'] });
+      await queryClient.invalidateQueries({ queryKey: ["files", "/Desktop"] });
       setRenamingFile(null);
     } catch (error) {
-      console.error('Rename failed:', error);
-      alert('重新命名失敗');
+      console.error("Rename failed:", error);
+      alert("重新命名失敗");
       setRenamingFile(null);
     }
   };
@@ -293,7 +301,9 @@ export const DesktopIcons = () => {
   // Handle selection box
   useEffect(() => {
     const handleSelectionChange = (e: Event) => {
-      const customEvent = e as CustomEvent<{ rect: { left: number; top: number; width: number; height: number } }>;
+      const customEvent = e as CustomEvent<{
+        rect: { left: number; top: number; width: number; height: number };
+      }>;
       const { rect } = customEvent.detail;
       // Calculate right and bottom from rect dimensions
       const rectRight = rect.left + rect.width;
@@ -305,12 +315,17 @@ export const DesktopIcons = () => {
       const icons = document.querySelectorAll('[data-context-type="desktop-icon"]');
       icons.forEach((icon) => {
         const iconRect = icon.getBoundingClientRect();
-        const path = icon.getAttribute('data-context-id');
+        const path = icon.getAttribute("data-context-id");
 
-        if (path && !(rect.left > iconRect.right ||
-          rectRight < iconRect.left ||
-          rect.top > iconRect.bottom ||
-          rectBottom < iconRect.top)) {
+        if (
+          path &&
+          !(
+            rect.left > iconRect.right ||
+            rectRight < iconRect.left ||
+            rect.top > iconRect.bottom ||
+            rectBottom < iconRect.top
+          )
+        ) {
           newSelected.add(path);
         }
       });
@@ -322,12 +337,12 @@ export const DesktopIcons = () => {
       // Optional: Finalize selection logic if needed
     };
 
-    window.addEventListener('desktop-selection-change', handleSelectionChange);
-    window.addEventListener('desktop-selection-end', handleSelectionEnd);
+    window.addEventListener("desktop-selection-change", handleSelectionChange);
+    window.addEventListener("desktop-selection-end", handleSelectionEnd);
 
     return () => {
-      window.removeEventListener('desktop-selection-change', handleSelectionChange);
-      window.removeEventListener('desktop-selection-end', handleSelectionEnd);
+      window.removeEventListener("desktop-selection-change", handleSelectionChange);
+      window.removeEventListener("desktop-selection-end", handleSelectionEnd);
     };
   }, [files]);
 
@@ -348,8 +363,8 @@ export const DesktopIcons = () => {
       }
     };
 
-    window.addEventListener('click', handleClickOutside);
-    return () => window.removeEventListener('click', handleClickOutside);
+    window.addEventListener("click", handleClickOutside);
+    return () => window.removeEventListener("click", handleClickOutside);
   }, []);
 
   if (!files) return null;

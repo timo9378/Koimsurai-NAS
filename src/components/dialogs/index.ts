@@ -1,3 +1,3 @@
-export { ShareDialog } from './ShareDialog';
-export { UploadLinkDialog } from './UploadLinkDialog';
-export { TagDialog } from './TagDialog';
+export { ShareDialog } from "./ShareDialog";
+export { UploadLinkDialog } from "./UploadLinkDialog";
+export { TagDialog } from "./TagDialog";

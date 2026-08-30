@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import React, { useRef, useState } from 'react';
-import type { MotionValue} from 'framer-motion';
-import { motion, useMotionValue, useSpring, useTransform, AnimatePresence } from 'framer-motion';
+import React, { useRef, useState } from "react";
+import type { MotionValue } from "framer-motion";
+import { motion, useMotionValue, useSpring, useTransform, AnimatePresence } from "framer-motion";
 import {
   Folder,
   LayoutGrid,
@@ -16,13 +16,13 @@ import {
   X,
   ArrowLeft,
   ArrowRight,
-  ArrowDown
-} from 'lucide-react';
-import type { AppType, WindowState } from '@/store/window-store';
-import { useWindowStore } from '@/store/window-store';
-import { cn } from '@/lib/utils';
-import * as Tooltip from '@radix-ui/react-tooltip';
-import * as Popover from '@radix-ui/react-popover';
+  ArrowDown,
+} from "lucide-react";
+import type { AppType, WindowState } from "@/store/window-store";
+import { useWindowStore } from "@/store/window-store";
+import { cn } from "@/lib/utils";
+import * as Tooltip from "@radix-ui/react-tooltip";
+import * as Popover from "@radix-ui/react-popover";
 
 interface DockItemProps {
   mouseX: MotionValue;
@@ -40,11 +40,11 @@ interface DockItemProps {
 const DockPreview = ({
   windows,
   onClose,
-  onFocus
+  onFocus,
 }: {
-  windows: WindowState[],
-  onClose: (id: string) => void,
-  onFocus: (id: string) => void
+  windows: WindowState[];
+  onClose: (id: string) => void;
+  onFocus: (id: string) => void;
 }) => {
   return (
     <motion.div
@@ -72,10 +72,14 @@ const DockPreview = ({
 
           {/* Content Preview Placeholder */}
           <div className="p-2 flex items-center justify-center h-[calc(100%-16px)] overflow-hidden">
-            {window.appType === 'preview' && window.props?.url ? (
+            {window.appType === "preview" && window.props?.url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={window.props.url} alt="preview" className="w-full h-full object-contain opacity-80" />
-            ) : window.appType === 'finder' && window.appState?.currentPath ? (
+              <img
+                src={window.props.url}
+                alt="preview"
+                className="w-full h-full object-contain opacity-80"
+              />
+            ) : window.appType === "finder" && window.appState?.currentPath ? (
               <div className="flex flex-col items-center justify-center gap-1">
                 <Folder className="w-6 h-6 text-blue-400/80" />
                 <span className="text-[8px] text-white/60 truncate max-w-full px-1">
@@ -112,30 +116,30 @@ const DockSettings = () => {
         <div className="text-sm font-semibold mb-3">Dock Position</div>
         <div className="grid grid-cols-3 gap-2">
           <button
-            onClick={() => setDockPosition('left')}
+            onClick={() => setDockPosition("left")}
             className={cn(
               "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all hover:bg-white/10",
-              dockPosition === 'left' ? "border-blue-500 bg-blue-500/20" : "border-white/20"
+              dockPosition === "left" ? "border-blue-500 bg-blue-500/20" : "border-white/20",
             )}
           >
             <ArrowLeft className="w-5 h-5" />
             <span className="text-xs">Left</span>
           </button>
           <button
-            onClick={() => setDockPosition('bottom')}
+            onClick={() => setDockPosition("bottom")}
             className={cn(
               "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all hover:bg-white/10",
-              dockPosition === 'bottom' ? "border-blue-500 bg-blue-500/20" : "border-white/20"
+              dockPosition === "bottom" ? "border-blue-500 bg-blue-500/20" : "border-white/20",
             )}
           >
             <ArrowDown className="w-5 h-5" />
             <span className="text-xs">Bottom</span>
           </button>
           <button
-            onClick={() => setDockPosition('right')}
+            onClick={() => setDockPosition("right")}
             className={cn(
               "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all hover:bg-white/10",
-              dockPosition === 'right' ? "border-blue-500 bg-blue-500/20" : "border-white/20"
+              dockPosition === "right" ? "border-blue-500 bg-blue-500/20" : "border-white/20",
             )}
           >
             <ArrowRight className="w-5 h-5" />
@@ -147,7 +151,18 @@ const DockSettings = () => {
   );
 };
 
-const DockItem = ({ mouseX, icon: Icon, label, appType, isOpen, windows, onClick, onRightClick, onCloseWindow, onFocusWindow }: DockItemProps) => {
+const DockItem = ({
+  mouseX,
+  icon: Icon,
+  label,
+  appType,
+  isOpen,
+  windows,
+  onClick,
+  onRightClick,
+  onCloseWindow,
+  onFocusWindow,
+}: DockItemProps) => {
   const ref = useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = useState(false);
 
@@ -159,7 +174,7 @@ const DockItem = ({ mouseX, icon: Icon, label, appType, isOpen, windows, onClick
   const widthSync = useTransform(distance, [-150, 0, 150], [40, 80, 40]);
   const width = useSpring(widthSync, { mass: 0.1, stiffness: 150, damping: 12 });
 
-  const appWindows = windows.filter(w => w.appType === appType);
+  const appWindows = windows.filter((w) => w.appType === appType);
 
   return (
     <div
@@ -169,11 +184,7 @@ const DockItem = ({ mouseX, icon: Icon, label, appType, isOpen, windows, onClick
     >
       <AnimatePresence>
         {isHovered && appWindows.length > 0 && (
-          <DockPreview
-            windows={appWindows}
-            onClose={onCloseWindow}
-            onFocus={onFocusWindow}
-          />
+          <DockPreview windows={appWindows} onClose={onCloseWindow} onFocus={onFocusWindow} />
         )}
       </AnimatePresence>
 
@@ -225,21 +236,21 @@ export const Dock = () => {
   const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   // Check if any window is maximized (and not minimized)
-  const isAnyMaximized = windows.some(w => w.isMaximized && !w.isMinimized);
+  const isAnyMaximized = windows.some((w) => w.isMaximized && !w.isMinimized);
 
   const apps = [
-    { id: 'finder', label: 'Finder', icon: Folder, type: 'finder' as AppType },
-    { id: 'launchpad', label: 'Launchpad', icon: LayoutGrid, type: 'launchpad' as AppType },
-    { id: 'dashboard', label: 'Dashboard', icon: Activity, type: 'dashboard' as AppType },
-    { id: 'photos', label: 'Photos', icon: ImageIcon, type: 'photos' as AppType },
-    { id: 'docker', label: 'Docker', icon: Container, type: 'docker' as AppType },
-    { id: 'terminal', label: 'Terminal', icon: Terminal, type: 'terminal' as AppType },
-    { id: 'calculator', label: 'Calculator', icon: Calculator, type: 'calculator' as AppType },
+    { id: "finder", label: "Finder", icon: Folder, type: "finder" as AppType },
+    { id: "launchpad", label: "Launchpad", icon: LayoutGrid, type: "launchpad" as AppType },
+    { id: "dashboard", label: "Dashboard", icon: Activity, type: "dashboard" as AppType },
+    { id: "photos", label: "Photos", icon: ImageIcon, type: "photos" as AppType },
+    { id: "docker", label: "Docker", icon: Container, type: "docker" as AppType },
+    { id: "terminal", label: "Terminal", icon: Terminal, type: "terminal" as AppType },
+    { id: "calculator", label: "Calculator", icon: Calculator, type: "calculator" as AppType },
   ];
 
   const settingsApps = [
-    { id: 'settings', label: 'Settings', icon: Settings, type: 'settings' as AppType },
-    { id: 'trash', label: 'Trash', icon: Trash2, type: 'trash' as AppType },
+    { id: "settings", label: "Settings", icon: Settings, type: "settings" as AppType },
+    { id: "trash", label: "Trash", icon: Trash2, type: "trash" as AppType },
   ];
 
   const handleMouseMove = (e: MouseEvent) => {
@@ -250,27 +261,24 @@ export const Dock = () => {
 
     let isInDockArea = false;
 
-    if (dockPosition === 'bottom') {
-      isInDockArea = (
+    if (dockPosition === "bottom") {
+      isInDockArea =
         e.clientY >= dockRect.top - buffer &&
         e.clientY <= window.innerHeight &&
         e.clientX >= dockRect.left &&
-        e.clientX <= dockRect.right
-      );
-    } else if (dockPosition === 'left') {
-      isInDockArea = (
+        e.clientX <= dockRect.right;
+    } else if (dockPosition === "left") {
+      isInDockArea =
         e.clientX >= 0 &&
         e.clientX <= dockRect.right + buffer &&
         e.clientY >= dockRect.top &&
-        e.clientY <= dockRect.bottom
-      );
-    } else if (dockPosition === 'right') {
-      isInDockArea = (
+        e.clientY <= dockRect.bottom;
+    } else if (dockPosition === "right") {
+      isInDockArea =
         e.clientX >= dockRect.left - buffer &&
         e.clientX <= window.innerWidth &&
         e.clientY >= dockRect.top &&
-        e.clientY <= dockRect.bottom
-      );
+        e.clientY <= dockRect.bottom;
     }
 
     if (!isInDockArea && isDockHovered) {
@@ -286,9 +294,9 @@ export const Dock = () => {
 
   React.useEffect(() => {
     if (isAnyMaximized) {
-      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener("mousemove", handleMouseMove);
       return () => {
-        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener("mousemove", handleMouseMove);
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
       };
     }
@@ -298,29 +306,29 @@ export const Dock = () => {
     const baseClass = "fixed z-50 transition-all duration-300 ease-in-out";
     const hideOffset = "120px";
 
-    if (dockPosition === 'left') {
+    if (dockPosition === "left") {
       return cn(
         baseClass,
         "top-1/2 -translate-y-1/2",
-        isAnyMaximized && !isDockHovered ? `left-[-${hideOffset}]` : "left-4"
+        isAnyMaximized && !isDockHovered ? `left-[-${hideOffset}]` : "left-4",
       );
-    } else if (dockPosition === 'right') {
+    } else if (dockPosition === "right") {
       return cn(
         baseClass,
         "top-1/2 -translate-y-1/2",
-        isAnyMaximized && !isDockHovered ? `right-[-${hideOffset}]` : "right-4"
+        isAnyMaximized && !isDockHovered ? `right-[-${hideOffset}]` : "right-4",
       );
     } else {
       return cn(
         baseClass,
         "left-1/2 -translate-x-1/2",
-        isAnyMaximized && !isDockHovered ? "bottom-[-100px]" : "bottom-4"
+        isAnyMaximized && !isDockHovered ? "bottom-[-100px]" : "bottom-4",
       );
     }
   };
 
   const getDockContainerClasses = () => {
-    if (dockPosition === 'left' || dockPosition === 'right') {
+    if (dockPosition === "left" || dockPosition === "right") {
       return "flex-col w-16 py-4 px-3";
     }
     return "h-16 pb-3 px-4";
@@ -330,24 +338,36 @@ export const Dock = () => {
     const zoneClass = "fixed z-40 transition-all";
     const activeSize = isAnyMaximized ? "6" : "0";
 
-    if (dockPosition === 'left') {
+    if (dockPosition === "left") {
       return (
         <div
-          className={cn(zoneClass, `left-0 top-0 h-full w-${activeSize}`, !isAnyMaximized && "pointer-events-none")}
+          className={cn(
+            zoneClass,
+            `left-0 top-0 h-full w-${activeSize}`,
+            !isAnyMaximized && "pointer-events-none",
+          )}
           onMouseEnter={() => setIsDockHovered(true)}
         />
       );
-    } else if (dockPosition === 'right') {
+    } else if (dockPosition === "right") {
       return (
         <div
-          className={cn(zoneClass, `right-0 top-0 h-full w-${activeSize}`, !isAnyMaximized && "pointer-events-none")}
+          className={cn(
+            zoneClass,
+            `right-0 top-0 h-full w-${activeSize}`,
+            !isAnyMaximized && "pointer-events-none",
+          )}
           onMouseEnter={() => setIsDockHovered(true)}
         />
       );
     } else {
       return (
         <div
-          className={cn(zoneClass, `bottom-0 left-0 w-full h-${activeSize}`, !isAnyMaximized && "pointer-events-none")}
+          className={cn(
+            zoneClass,
+            `bottom-0 left-0 w-full h-${activeSize}`,
+            !isAnyMaximized && "pointer-events-none",
+          )}
           onMouseEnter={() => setIsDockHovered(true)}
         />
       );
@@ -370,11 +390,11 @@ export const Dock = () => {
           if (!rect) return;
 
           let shouldHide = false;
-          if (dockPosition === 'bottom') {
+          if (dockPosition === "bottom") {
             shouldHide = e.clientY > rect.bottom;
-          } else if (dockPosition === 'left') {
+          } else if (dockPosition === "left") {
             shouldHide = e.clientX > rect.right;
-          } else if (dockPosition === 'right') {
+          } else if (dockPosition === "right") {
             shouldHide = e.clientX < rect.left;
           }
 
@@ -387,16 +407,16 @@ export const Dock = () => {
         }}
       >
         <motion.div
-          onMouseMove={(e) => mouseX.set(dockPosition === 'bottom' ? e.pageX : e.pageY)}
+          onMouseMove={(e) => mouseX.set(dockPosition === "bottom" ? e.pageX : e.pageY)}
           onMouseLeave={() => mouseX.set(Infinity)}
           className={cn(
             "flex items-end gap-4 rounded-2xl bg-white/10 dark:bg-black/20 border border-white/20 dark:border-white/10 backdrop-blur-xl shadow-2xl",
-            getDockContainerClasses()
+            getDockContainerClasses(),
           )}
         >
           {apps.map((app) => {
-            const appWindows = windows.filter(w => w.appType === app.type);
-            const multiInstanceApps = ['finder', 'terminal', 'preview', 'photos'];
+            const appWindows = windows.filter((w) => w.appType === app.type);
+            const multiInstanceApps = ["finder", "terminal", "preview", "photos"];
             const canMultiInstance = multiInstanceApps.includes(app.type);
 
             return (
@@ -413,7 +433,7 @@ export const Dock = () => {
                   if (appWindows.length > 0) {
                     // Find the frontmost (highest zIndex) window of this type
                     const frontWindow = appWindows.reduce((prev, curr) =>
-                      prev.zIndex > curr.zIndex ? prev : curr
+                      prev.zIndex > curr.zIndex ? prev : curr,
                     );
                     focusWindow(frontWindow.id);
                   } else {
@@ -433,14 +453,16 @@ export const Dock = () => {
           })}
 
           {/* Separator */}
-          <div className={cn(
-            "bg-white/20",
-            dockPosition === 'bottom' ? "w-[1px] h-12" : "h-[1px] w-12"
-          )} />
+          <div
+            className={cn(
+              "bg-white/20",
+              dockPosition === "bottom" ? "w-[1px] h-12" : "h-[1px] w-12",
+            )}
+          />
 
           {/* Settings Apps with Popover for Settings */}
-          {settingsApps.map((app) => (
-            app.id === 'settings' ? (
+          {settingsApps.map((app) =>
+            app.id === "settings" ? (
               <Popover.Root key={app.id} open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
                 <Popover.Trigger asChild>
                   <div>
@@ -449,7 +471,7 @@ export const Dock = () => {
                       icon={app.icon}
                       label={app.label}
                       appType={app.type}
-                      isOpen={windows.some(w => w.appType === app.type)}
+                      isOpen={windows.some((w) => w.appType === app.type)}
                       windows={windows}
                       onClick={() => setIsSettingsOpen(true)}
                       onRightClick={() => setIsSettingsOpen(true)}
@@ -460,7 +482,9 @@ export const Dock = () => {
                 </Popover.Trigger>
                 <Popover.Portal>
                   <Popover.Content
-                    side={dockPosition === 'bottom' ? 'top' : dockPosition === 'left' ? 'right' : 'left'}
+                    side={
+                      dockPosition === "bottom" ? "top" : dockPosition === "left" ? "right" : "left"
+                    }
                     align="center"
                     sideOffset={10}
                     className="z-[60]"
@@ -476,13 +500,13 @@ export const Dock = () => {
                 icon={app.icon}
                 label={app.label}
                 appType={app.type}
-                isOpen={windows.some(w => w.appType === app.type)}
+                isOpen={windows.some((w) => w.appType === app.type)}
                 windows={windows}
                 onClick={() => {
-                  const appWindows = windows.filter(w => w.appType === app.type);
+                  const appWindows = windows.filter((w) => w.appType === app.type);
                   if (appWindows.length > 0) {
                     const frontWindow = appWindows.reduce((prev, curr) =>
-                      prev.zIndex > curr.zIndex ? prev : curr
+                      prev.zIndex > curr.zIndex ? prev : curr,
                     );
                     focusWindow(frontWindow.id);
                   } else {
@@ -493,8 +517,8 @@ export const Dock = () => {
                 onCloseWindow={closeWindow}
                 onFocusWindow={focusWindow}
               />
-            )
-          ))}
+            ),
+          )}
         </motion.div>
       </div>
     </>

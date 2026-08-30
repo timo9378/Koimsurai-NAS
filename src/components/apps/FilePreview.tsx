@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import type { FileInfo } from '@/types/api';
-import { File, Download, Loader2 } from 'lucide-react';
-import Editor from '@monaco-editor/react';
-import { apiClient } from '@/lib/api-client';
-import { useQuery } from '@tanstack/react-query';
-import { useWindowStore } from '@/store/window-store';
-import { VideoPlayer } from '@/components/ui/video-player';
-import { AudioPlayer } from '@/components/ui/audio-player';
+import type { FileInfo } from "@/types/api";
+import { File, Download, Loader2 } from "lucide-react";
+import Editor from "@monaco-editor/react";
+import { apiClient } from "@/lib/api-client";
+import { useQuery } from "@tanstack/react-query";
+import { useWindowStore } from "@/store/window-store";
+import { VideoPlayer } from "@/components/ui/video-player";
+import { AudioPlayer } from "@/components/ui/audio-player";
 
 interface FilePreviewProps {
   file: FileInfo;
@@ -16,32 +16,36 @@ interface FilePreviewProps {
 }
 
 const formatBytes = (bytes: number) => {
-  if (bytes === 0) return '0 B';
+  if (bytes === 0) return "0 B";
   const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 };
 
 export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
   const { updateWindowSize } = useWindowStore();
-  const isImage = file.mime_type?.startsWith('image/');
-  const isVideo = file.mime_type?.startsWith('video/');
-  const isAudio = file.mime_type?.startsWith('audio/') ||
-    !!(/\.(mp3|wav|flac|aac|ogg|m4a|wma|opus)$/i.exec(file.name));
-  const isPdf = file.mime_type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-  const isOffice = !!(/\.(docx?|xlsx?|pptx?)$/i.exec(file.name));
-  const isText = file.mime_type?.startsWith('text/') ||
-    !!(/\.(txt|json|md|ts|tsx|js|jsx|css|html|xml|yaml|yml|toml|ini|cfg|conf|sh|bash|zsh|py|rb|rs|go|java|c|cpp|h|hpp|sql|log|env|gitignore|dockerignore|editorconfig|prettierrc|eslintrc)$/i.exec(file.name));
+  const isImage = file.mime_type?.startsWith("image/");
+  const isVideo = file.mime_type?.startsWith("video/");
+  const isAudio =
+    file.mime_type?.startsWith("audio/") ||
+    !!/\.(mp3|wav|flac|aac|ogg|m4a|wma|opus)$/i.exec(file.name);
+  const isPdf = file.mime_type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  const isOffice = !!/\.(docx?|xlsx?|pptx?)$/i.exec(file.name);
+  const isText =
+    file.mime_type?.startsWith("text/") ||
+    !!/\.(txt|json|md|ts|tsx|js|jsx|css|html|xml|yaml|yml|toml|ini|cfg|conf|sh|bash|zsh|py|rb|rs|go|java|c|cpp|h|hpp|sql|log|env|gitignore|dockerignore|editorconfig|prettierrc|eslintrc)$/i.exec(
+      file.name,
+    );
 
   // Construct URLs with proper encoding
   // We use the /api/download endpoint which maps to the backend's download_file handler
   // This handler supports Range requests for video streaming and serves file content
 
   // Remove leading slash for the API call as per useFiles.ts pattern
-  const cleanPath = file.path.startsWith('/') ? file.path.slice(1) : file.path;
+  const cleanPath = file.path.startsWith("/") ? file.path.slice(1) : file.path;
   // Encode each path segment separately to handle special characters (e.g. Chinese, spaces)
-  const encodedPath = cleanPath.split('/').map(encodeURIComponent).join('/');
+  const encodedPath = cleanPath.split("/").map(encodeURIComponent).join("/");
 
   // The download endpoint: /download/{encoded_path} (without /api prefix since apiClient adds it)
   const apiPath = `/download/${encodedPath}`;
@@ -54,19 +58,23 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
   const videoUrl = fileUrl;
 
   // Fetch text content
-  const { data: textContent, isLoading: isTextLoading, error: textError } = useQuery({
-    queryKey: ['file-content', file.path],
+  const {
+    data: textContent,
+    isLoading: isTextLoading,
+    error: textError,
+  } = useQuery({
+    queryKey: ["file-content", file.path],
     queryFn: async () => {
       if (!isText) return null;
       // For text, we need to fetch the raw content
       // Use responseType: 'text' to get the raw text and transformResponse to prevent JSON parsing
       // Use apiPath (without /api prefix) since apiClient already has baseURL: '/api'
-      const res = await apiClient.get(apiPath, { 
-        responseType: 'text',
+      const res = await apiClient.get(apiPath, {
+        responseType: "text",
         transformResponse: [(data) => data], // Prevent automatic JSON parsing
       });
       // Ensure we return a string
-      return typeof res.data === 'string' ? res.data : String(res.data ?? '');
+      return typeof res.data === "string" ? res.data : String(res.data ?? "");
     },
     enabled: isText,
     retry: 1,
@@ -134,8 +142,8 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
             }}
             onError={(e) => {
               // Fallback or error handling
-              console.error('Image load failed', e);
-              e.currentTarget.style.display = 'none';
+              console.error("Image load failed", e);
+              e.currentTarget.style.display = "none";
             }}
           />
         ) : isVideo ? (
@@ -143,16 +151,16 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
             <VideoPlayer
               src={videoUrl}
               title={file.name}
-              onError={(e) => console.error('Video playback error:', e)}
+              onError={(e) => console.error("Video playback error:", e)}
             />
           </div>
         ) : isAudio ? (
           <div className="w-full max-w-md mx-auto h-full flex items-center justify-center">
             <AudioPlayer
               src={fileUrl}
-              title={file.name.replace(/\.[^/.]+$/, '')}
+              title={file.name.replace(/\.[^/.]+$/, "")}
               windowId={windowId}
-              onError={(e) => console.error('Audio playback error:', e)}
+              onError={(e) => console.error("Audio playback error:", e)}
             />
           </div>
         ) : isText ? (
@@ -162,7 +170,9 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
             <div className="flex flex-col items-center gap-4 text-gray-500">
               <File className="w-24 h-24 opacity-20" />
               <div className="text-center">
-                <p className="text-lg font-medium text-gray-900 dark:text-white">無法載入檔案內容</p>
+                <p className="text-lg font-medium text-gray-900 dark:text-white">
+                  無法載入檔案內容
+                </p>
                 <p className="text-sm">請嘗試下載檔案後開啟</p>
               </div>
             </div>
@@ -170,8 +180,8 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
             <div className="w-full h-full border border-gray-200 dark:border-white/10 rounded-lg overflow-hidden shadow-sm">
               <Editor
                 height="100%"
-                defaultLanguage={file.name.split('.').pop() || 'plaintext'}
-                value={textContent ?? ''}
+                defaultLanguage={file.name.split(".").pop() || "plaintext"}
+                value={textContent ?? ""}
                 theme="vs-dark"
                 options={{
                   readOnly: false,
@@ -179,7 +189,7 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
                   fontSize: 14,
                   scrollBeyondLastLine: false,
                   padding: { top: 16, bottom: 16 },
-                  wordWrap: 'on',
+                  wordWrap: "on",
                 }}
               />
             </div>
@@ -205,7 +215,9 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
           <div className="flex flex-col items-center gap-4 text-gray-500">
             <File className="w-24 h-24 opacity-20" />
             <div className="text-center">
-              <p className="text-lg font-medium text-gray-900 dark:text-white">Preview not available</p>
+              <p className="text-lg font-medium text-gray-900 dark:text-white">
+                Preview not available
+              </p>
               <p className="text-sm">Try downloading the file to view it.</p>
             </div>
           </div>

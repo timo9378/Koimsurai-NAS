@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   Search,
   LogOut,
@@ -13,9 +13,9 @@ import {
   Moon,
   Sun,
   Box,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useTheme } from 'next-themes';
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useTheme } from "next-themes";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,21 +23,17 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import { useLogout } from '@/features/auth/api/useAuth';
-import { useSystemStatus, useRescan, useDockerContainers } from '@/features/system/api/useSystem';
-import { SpotlightSearch } from './SpotlightSearch';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
-import type { AppType } from '@/store/window-store';
-import { useWindowStore } from '@/store/window-store';
+} from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useLogout } from "@/features/auth/api/useAuth";
+import { useSystemStatus, useRescan, useDockerContainers } from "@/features/system/api/useSystem";
+import { SpotlightSearch } from "./SpotlightSearch";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api-client";
+import type { AppType } from "@/store/window-store";
+import { useWindowStore } from "@/store/window-store";
 
-import { useTransferStore, formatSpeed } from '@/store/transfer-store';
+import { useTransferStore, formatSpeed } from "@/store/transfer-store";
 
 const ControlCenter = () => {
   const { data: systemStatus } = useSystemStatus();
@@ -45,18 +41,23 @@ const ControlCenter = () => {
   const { data: containers = [] } = useDockerContainers();
   const openWindow = useWindowStore((state) => state.openWindow);
 
-  const usedMemoryPercent = systemStatus 
-    ? Math.round((systemStatus.used_memory / systemStatus.total_memory) * 100) 
+  const usedMemoryPercent = systemStatus
+    ? Math.round((systemStatus.used_memory / systemStatus.total_memory) * 100)
     : 0;
-  
+
   const containerList = Array.isArray(containers) ? containers : [];
-  const runningContainers = containerList.filter(c => c.status === 'running');
+  const runningContainers = containerList.filter((c) => c.status === "running");
   const totalContainers = containerList.length;
-  
+
   // Calculate total disk usage from disks array
-  const totalDiskUsed = systemStatus?.disks?.reduce((acc, disk) => acc + (disk.total_space - disk.available_space), 0) || 0;
+  const totalDiskUsed =
+    systemStatus?.disks?.reduce(
+      (acc, disk) => acc + (disk.total_space - disk.available_space),
+      0,
+    ) || 0;
   const totalDiskSize = systemStatus?.disks?.reduce((acc, disk) => acc + disk.total_space, 0) || 0;
-  const diskUsagePercent = totalDiskSize > 0 ? Math.round((totalDiskUsed / totalDiskSize) * 100) : 0;
+  const diskUsagePercent =
+    totalDiskSize > 0 ? Math.round((totalDiskUsed / totalDiskSize) * 100) : 0;
 
   return (
     <div className="w-80 p-4 space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar">
@@ -74,7 +75,7 @@ const ControlCenter = () => {
             <span className="text-muted-foreground">CPU</span>
             <span className="font-medium">{systemStatus?.cpu_usage?.toFixed(1) || 0}%</span>
           </div>
-          
+
           {/* RAM */}
           <div className="flex justify-between text-xs">
             <span className="text-muted-foreground">RAM</span>
@@ -99,7 +100,7 @@ const ControlCenter = () => {
 
       {/* Docker Containers - Click to open Docker app */}
       <button
-        onClick={() => openWindow('docker', 'Docker')}
+        onClick={() => openWindow("docker", "Docker")}
         className="w-full bg-black/20 dark:bg-white/10 rounded-xl p-4 hover:bg-black/30 dark:hover:bg-white/15 transition-colors text-left"
       >
         <div className="flex items-center gap-3">
@@ -125,7 +126,7 @@ const ControlCenter = () => {
             className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-xs font-medium transition-colors"
           >
             <RefreshCw className={cn("w-3 h-3", rescanMutation.isPending && "animate-spin")} />
-            {rescanMutation.isPending ? 'Scanning...' : 'Rescan Files'}
+            {rescanMutation.isPending ? "Scanning..." : "Rescan Files"}
           </button>
         </div>
       </div>
@@ -142,15 +143,19 @@ const ControlCenterPopover = () => {
           <Sliders className="w-4 h-4" />
         </div>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0 mr-2 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-white/20" align="end" sideOffset={8}>
+      <PopoverContent
+        className="w-auto p-0 mr-2 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-white/20"
+        align="end"
+        sideOffset={8}
+      >
         {open && <ControlCenter />}
       </PopoverContent>
     </Popover>
   );
 };
 
-import { formatDistanceToNow } from 'date-fns';
-import { X } from 'lucide-react';
+import { formatDistanceToNow } from "date-fns";
+import { X } from "lucide-react";
 
 interface AuditLog {
   id: number;
@@ -167,7 +172,7 @@ const parseAuditLogDate = (value: string): Date => {
   // Backend may return "YYYY-MM-DD HH:mm:ss" (SQLite UTC without timezone).
   // Force UTC interpretation to avoid local timezone offset errors (e.g. 8 hours ago).
   if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) {
-    return new Date(value.replace(' ', 'T') + 'Z');
+    return new Date(value.replace(" ", "T") + "Z");
   }
 
   return new Date(value);
@@ -175,34 +180,47 @@ const parseAuditLogDate = (value: string): Date => {
 
 // Map action types to display info
 const getActionInfo = (action: string) => {
-  const actionMap: Record<string, { icon: React.ComponentType<{ className?: string }>; color: string; label: string }> = {
-    'create_file': { icon: Activity, color: 'bg-green-500/20 text-green-600', label: 'Create File' },
-    'delete_file': { icon: Activity, color: 'bg-red-500/20 text-red-600', label: 'Delete File' },
-    'upload_file': { icon: Activity, color: 'bg-blue-500/20 text-blue-600', label: 'Upload File' },
-    'create_folder': { icon: Activity, color: 'bg-purple-500/20 text-purple-600', label: 'Create Folder' },
-    'rename_file': { icon: Activity, color: 'bg-yellow-500/20 text-yellow-600', label: 'Rename' },
-    'move_file': { icon: Activity, color: 'bg-orange-500/20 text-orange-600', label: 'Move' },
+  const actionMap: Record<
+    string,
+    { icon: React.ComponentType<{ className?: string }>; color: string; label: string }
+  > = {
+    create_file: { icon: Activity, color: "bg-green-500/20 text-green-600", label: "Create File" },
+    delete_file: { icon: Activity, color: "bg-red-500/20 text-red-600", label: "Delete File" },
+    upload_file: { icon: Activity, color: "bg-blue-500/20 text-blue-600", label: "Upload File" },
+    create_folder: {
+      icon: Activity,
+      color: "bg-purple-500/20 text-purple-600",
+      label: "Create Folder",
+    },
+    rename_file: { icon: Activity, color: "bg-yellow-500/20 text-yellow-600", label: "Rename" },
+    move_file: { icon: Activity, color: "bg-orange-500/20 text-orange-600", label: "Move" },
   };
-  return actionMap[action] || { icon: Activity, color: 'bg-blue-500/20 text-blue-600', label: action.replace(/_/g, ' ') };
+  return (
+    actionMap[action] || {
+      icon: Activity,
+      color: "bg-blue-500/20 text-blue-600",
+      label: action.replace(/_/g, " "),
+    }
+  );
 };
 
 const NotificationCenter = () => {
   const queryClient = useQueryClient();
-  
+
   const { data: logs } = useQuery({
-    queryKey: ['audit-logs'],
+    queryKey: ["audit-logs"],
     queryFn: async () => {
-      const res = await apiClient.get<AuditLog[]>('/audit/logs');
+      const res = await apiClient.get<AuditLog[]>("/audit/logs");
       return res.data;
     },
   });
 
   const clearAllMutation = useMutation({
     mutationFn: async () => {
-      await apiClient.delete('/audit/logs');
+      await apiClient.delete("/audit/logs");
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
+      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
     },
   });
 
@@ -211,7 +229,7 @@ const NotificationCenter = () => {
       await apiClient.delete(`/audit/logs/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
+      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
     },
   });
 
@@ -232,31 +250,29 @@ const NotificationCenter = () => {
     <div className="w-80 p-4">
       <div className="flex items-center justify-between mb-4">
         <span className="font-semibold">Notifications</span>
-        <button 
+        <button
           onClick={handleClearAll}
           disabled={notifications.length === 0 || clearAllMutation.isPending}
           className={cn(
             "text-xs transition-colors",
-            notifications.length === 0 
-              ? "text-muted-foreground cursor-not-allowed" 
-              : "text-blue-500 hover:text-blue-600 cursor-pointer"
+            notifications.length === 0
+              ? "text-muted-foreground cursor-not-allowed"
+              : "text-blue-500 hover:text-blue-600 cursor-pointer",
           )}
         >
-          {clearAllMutation.isPending ? 'Clearing...' : 'Clear All'}
+          {clearAllMutation.isPending ? "Clearing..." : "Clear All"}
         </button>
       </div>
       <div className="space-y-2 max-h-[400px] overflow-y-auto">
         {notifications.length === 0 ? (
-          <div className="text-center text-muted-foreground py-8 text-sm">
-            No new notifications
-          </div>
+          <div className="text-center text-muted-foreground py-8 text-sm">No new notifications</div>
         ) : (
           notifications.map((log) => {
             const actionInfo = getActionInfo(log.action);
             const IconComponent = actionInfo.icon;
             return (
-              <div 
-                key={log.id} 
+              <div
+                key={log.id}
                 className="bg-black/5 dark:bg-white/5 rounded-lg p-3 border border-black/5 dark:border-white/5 group hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
               >
                 <div className="flex items-start gap-3">
@@ -265,10 +281,14 @@ const NotificationCenter = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start gap-2">
-                      <span className="text-sm font-medium capitalize truncate">{actionInfo.label}</span>
+                      <span className="text-sm font-medium capitalize truncate">
+                        {actionInfo.label}
+                      </span>
                       <div className="flex items-center gap-1 shrink-0">
                         <span className="text-[10px] text-muted-foreground">
-                          {formatDistanceToNow(parseAuditLogDate(log.created_at), { addSuffix: true })}
+                          {formatDistanceToNow(parseAuditLogDate(log.created_at), {
+                            addSuffix: true,
+                          })}
                         </span>
                         <button
                           onClick={(e) => handleDeleteOne(log.id, e)}
@@ -280,7 +300,7 @@ const NotificationCenter = () => {
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1 truncate" title={log.target}>
-                      {log.target} {log.details ? `- ${log.details}` : ''}
+                      {log.target} {log.details ? `- ${log.details}` : ""}
                     </p>
                   </div>
                 </div>
@@ -296,57 +316,57 @@ const NotificationCenter = () => {
 // Menu items for different app types
 const getMenuItemsForApp = (appType: string | null) => {
   switch (appType) {
-    case 'finder':
+    case "finder":
       return {
-        appName: 'Finder',
+        appName: "Finder",
         menus: [
-          { label: 'File', items: ['New Folder', 'New Window', 'Close Window'] },
-          { label: 'Edit', items: ['Cut', 'Copy', 'Paste', 'Select All'] },
-          { label: 'View', items: ['as Icons', 'as List', 'as Columns', 'Show Preview'] },
-          { label: 'Go', items: ['Back', 'Forward', 'Enclosing Folder', 'Home', 'Desktop'] },
-        ]
+          { label: "File", items: ["New Folder", "New Window", "Close Window"] },
+          { label: "Edit", items: ["Cut", "Copy", "Paste", "Select All"] },
+          { label: "View", items: ["as Icons", "as List", "as Columns", "Show Preview"] },
+          { label: "Go", items: ["Back", "Forward", "Enclosing Folder", "Home", "Desktop"] },
+        ],
       };
-    case 'photos':
+    case "photos":
       return {
-        appName: 'Photos',
+        appName: "Photos",
         menus: [
-          { label: 'File', items: ['Import', 'Export', 'Share'] },
-          { label: 'Edit', items: ['Rotate', 'Crop', 'Adjust Color'] },
-          { label: 'View', items: ['Show Sidebar', 'Zoom In', 'Zoom Out'] },
-        ]
+          { label: "File", items: ["Import", "Export", "Share"] },
+          { label: "Edit", items: ["Rotate", "Crop", "Adjust Color"] },
+          { label: "View", items: ["Show Sidebar", "Zoom In", "Zoom Out"] },
+        ],
       };
-    case 'terminal':
+    case "terminal":
       return {
-        appName: 'Terminal',
+        appName: "Terminal",
         menus: [
-          { label: 'Shell', items: ['New Window', 'New Tab', 'Close Tab'] },
-          { label: 'Edit', items: ['Copy', 'Paste', 'Select All', 'Clear'] },
-          { label: 'View', items: ['Increase Font Size', 'Decrease Font Size'] },
-        ]
+          { label: "Shell", items: ["New Window", "New Tab", "Close Tab"] },
+          { label: "Edit", items: ["Copy", "Paste", "Select All", "Clear"] },
+          { label: "View", items: ["Increase Font Size", "Decrease Font Size"] },
+        ],
       };
-    case 'docker':
+    case "docker":
       return {
-        appName: 'Docker Manager',
+        appName: "Docker Manager",
         menus: [
-          { label: 'File', items: ['Refresh', 'Settings'] },
-          { label: 'Container', items: ['Start', 'Stop', 'Restart', 'Remove'] },
-          { label: 'View', items: ['Show Logs', 'Show Stats'] },
-        ]
+          { label: "File", items: ["Refresh", "Settings"] },
+          { label: "Container", items: ["Start", "Stop", "Restart", "Remove"] },
+          { label: "View", items: ["Show Logs", "Show Stats"] },
+        ],
       };
     default:
       return {
-        appName: 'Desktop',
+        appName: "Desktop",
         menus: [
-          { label: 'File', items: ['New Folder', 'Get Info'] },
-          { label: 'Edit', items: ['Undo', 'Redo'] },
-          { label: 'View', items: ['Clean Up', 'Sort By'] },
-        ]
+          { label: "File", items: ["New Folder", "Get Info"] },
+          { label: "Edit", items: ["Undo", "Redo"] },
+          { label: "View", items: ["Clean Up", "Sort By"] },
+        ],
       };
   }
 };
 
 export const TopBar = () => {
-  const [time, setTime] = useState<string>('');
+  const [time, setTime] = useState<string>("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const logoutMutation = useLogout();
   const { data: systemStatus } = useSystemStatus();
@@ -354,20 +374,20 @@ export const TopBar = () => {
   const { windows, activeWindowId, showDesktop, toggleShowDesktop, openWindow } = useWindowStore();
   const { uploadSpeed, downloadSpeed } = useTransferStore();
 
-  const activeWindow = windows.find(w => w.id === activeWindowId);
+  const activeWindow = windows.find((w) => w.id === activeWindowId);
   const menuConfig = getMenuItemsForApp(activeWindow?.appType || null);
 
   const handleLogout = async () => {
     try {
       await logoutMutation.mutateAsync();
-      window.location.href = '/login';
+      window.location.href = "/login";
     } catch (error) {
-      console.error('Logout failed:', error);
+      console.error("Logout failed:", error);
     }
   };
 
   const handleOpenApp = (appType: AppType) => {
-    const existing = windows.find(w => w.appType === appType);
+    const existing = windows.find((w) => w.appType === appType);
     if (existing) {
       useWindowStore.getState().focusWindow(existing.id);
     } else {
@@ -378,11 +398,13 @@ export const TopBar = () => {
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      setTime(now.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      }));
+      setTime(
+        now.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        }),
+      );
     };
 
     updateTime();
@@ -396,21 +418,23 @@ export const TopBar = () => {
       <div className="flex items-center gap-4">
         <DropdownMenu>
           <DropdownMenuTrigger className="outline-none">
-            <span className="font-bold text-lg hover:text-white/70 transition-colors cursor-default"></span>
+            <span className="font-bold text-lg hover:text-white/70 transition-colors cursor-default">
+              
+            </span>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-56 bg-black/80 backdrop-blur-xl border-white/10 text-white">
             <DropdownMenuLabel>Koimsurai NAS</DropdownMenuLabel>
             <DropdownMenuSeparator className="bg-white/10" />
             <DropdownMenuItem
               className="focus:bg-white/10 focus:text-white cursor-default"
-              onClick={() => handleOpenApp('settings')}
+              onClick={() => handleOpenApp("settings")}
             >
               <Settings className="mr-2 h-4 w-4" />
               <span>系統設定...</span>
             </DropdownMenuItem>
             <DropdownMenuItem
               className="focus:bg-white/10 focus:text-white cursor-default"
-              onClick={() => handleOpenApp('dashboard')}
+              onClick={() => handleOpenApp("dashboard")}
             >
               <Activity className="mr-2 h-4 w-4" />
               <span>活動監視器</span>
@@ -430,7 +454,7 @@ export const TopBar = () => {
         <button
           className={cn(
             "p-1 hover:bg-white/10 rounded-md transition-colors",
-            showDesktop && "text-blue-400 bg-white/10"
+            showDesktop && "text-blue-400 bg-white/10",
           )}
           onClick={toggleShowDesktop}
           title="Show Desktop"
@@ -475,7 +499,9 @@ export const TopBar = () => {
             </div>
             <div className="flex items-center gap-1" title="RAM Usage">
               <Activity className="w-3 h-3" />
-              <span>{Math.round((systemStatus.used_memory / systemStatus.total_memory) * 100)}%</span>
+              <span>
+                {Math.round((systemStatus.used_memory / systemStatus.total_memory) * 100)}%
+              </span>
             </div>
           </div>
         )}
@@ -500,9 +526,9 @@ export const TopBar = () => {
 
         <div
           className="hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer transition-colors"
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         >
-          {theme === 'dark' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+          {theme === "dark" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
         </div>
 
         <div
@@ -523,7 +549,11 @@ export const TopBar = () => {
               </div>
             </div>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0 mr-2 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-white/20" align="end" sideOffset={8}>
+          <PopoverContent
+            className="w-auto p-0 mr-2 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-white/20"
+            align="end"
+            sideOffset={8}
+          >
             <NotificationCenter />
           </PopoverContent>
         </Popover>

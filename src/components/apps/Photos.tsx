@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
-import type { FileInfo } from '@/types/api';
-import { format, parseISO } from 'date-fns';
-import { Search, Image as ImageIcon, Film, Calendar } from 'lucide-react';
-import { Virtuoso } from 'react-virtuoso';
-import { FilePreview } from './FilePreview';
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api-client";
+import type { FileInfo } from "@/types/api";
+import { format, parseISO } from "date-fns";
+import { Search, Image as ImageIcon, Film, Calendar } from "lucide-react";
+import { Virtuoso } from "react-virtuoso";
+import { FilePreview } from "./FilePreview";
 
 interface MediaItem extends FileInfo {
   date: string; // YYYY-MM-DD
@@ -19,11 +19,11 @@ interface TimelineGroup {
 }
 
 export const Photos = () => {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [previewFile, setPreviewFile] = useState<FileInfo | null>(null);
 
   const { data: timeline, isLoading } = useQuery({
-    queryKey: ['media', 'timeline', searchQuery],
+    queryKey: ["media", "timeline", searchQuery],
     queryFn: async () => {
       // In a real implementation, we would pass searchQuery to the backend
       // For now, we fetch all and filter client-side or assume backend handles it
@@ -36,18 +36,21 @@ export const Photos = () => {
   // Each item can be a header (date) or a row of photos
   const flattenedItems = useMemo(() => {
     if (!timeline) return [];
-    const items: ({ type: 'header', date: string, count: number } | { type: 'row', items: MediaItem[] })[] = [];
-    
-    timeline.forEach(group => {
-      items.push({ type: 'header', date: group.date, count: group.items.length });
-      
+    const items: (
+      | { type: "header"; date: string; count: number }
+      | { type: "row"; items: MediaItem[] }
+    )[] = [];
+
+    timeline.forEach((group) => {
+      items.push({ type: "header", date: group.date, count: group.items.length });
+
       // Chunk items into rows of 6 (matching the grid layout)
       const chunkSize = 6;
       for (let i = 0; i < group.items.length; i += chunkSize) {
-        items.push({ type: 'row', items: group.items.slice(i, i + chunkSize) });
+        items.push({ type: "row", items: group.items.slice(i, i + chunkSize) });
       }
     });
-    
+
     return items;
   }, [timeline]);
 
@@ -89,19 +92,17 @@ export const Photos = () => {
           </div>
         ) : (
           <Virtuoso
-            style={{ height: '100%' }}
+            style={{ height: "100%" }}
             data={flattenedItems}
             itemContent={(_index, item) => {
-              if (item.type === 'header') {
+              if (item.type === "header") {
                 return (
                   <div className="flex items-center gap-2 bg-white/80 dark:bg-black/80 backdrop-blur-md py-2 z-10 px-2 rounded-lg mb-2 mt-4">
                     <Calendar className="w-4 h-4 text-gray-500" />
                     <h3 className="font-medium text-gray-900 dark:text-white">
-                      {format(parseISO(item.date), 'MMMM d, yyyy')}
+                      {format(parseISO(item.date), "MMMM d, yyyy")}
                     </h3>
-                    <span className="text-xs text-gray-500">
-                      {item.count} items
-                    </span>
+                    <span className="text-xs text-gray-500">{item.count} items</span>
                   </div>
                 );
               } else {
@@ -119,7 +120,7 @@ export const Photos = () => {
                           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
                           loading="lazy"
                         />
-                        {photo.mime_type?.startsWith('video/') && (
+                        {photo.mime_type?.startsWith("video/") && (
                           <div className="absolute top-2 right-2 p-1 bg-black/50 rounded-full text-white">
                             <Film className="w-3 h-3" />
                           </div>
@@ -139,9 +140,7 @@ export const Photos = () => {
         )}
       </div>
 
-      {previewFile && (
-        <FilePreview file={previewFile} onClose={() => setPreviewFile(null)} />
-      )}
+      {previewFile && <FilePreview file={previewFile} onClose={() => setPreviewFile(null)} />}
     </div>
   );
 };
