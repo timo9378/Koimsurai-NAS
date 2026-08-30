@@ -5,31 +5,37 @@
 // 仍會擋），必須放模組層級。上游改寫之後可以拿掉。
 #![allow(clippy::needless_for_each, reason = "utoipa OpenApi derive 的巨集展開")]
 
+use crate::handlers::{
+    audit, auth, docker, file, job, media, permission, search, share, system, tag, terminal, trash, upload,
+    upload_link, version, webdav, ws,
+};
+use crate::middleware::auth::require_auth;
+use crate::state::AppState;
 use axum::{
-    routing::{get, post, any, delete},
-    Router,
-    middleware,
     extract::DefaultBodyLimit,
     http::Method,
+    middleware,
+    routing::{any, delete, get, post},
+    Router,
 };
-use tower_http::cors::{CorsLayer, Any};
-use tower_sessions::{SessionManagerLayer, Expiry};
+use tower_http::cors::{Any, CorsLayer};
+use tower_sessions::{Expiry, SessionManagerLayer};
 use tower_sessions_sqlx_store::SqliteStore;
 use utoipa::OpenApi;
 use utoipa_scalar::{Scalar, Servable};
-use crate::state::AppState;
-use crate::handlers::{auth, file, share, system, webdav, media, trash, permission, ws, job, upload, upload_link, tag, audit, version, search, docker, terminal};
-use crate::middleware::auth::require_auth;
 
-
-
-use crate::models::{RegisterRequest, LoginRequest, EmptyResponse, FileInfo, User, CreateShareLinkRequest, ShareLinkResponse, InitUploadRequest, InitUploadResponse, UploadSession, Tag, LoginResponse, TwoFactorLoginRequest, TwoFactorSetupResponse, TwoFactorVerifySetupRequest, TwoFactorVerifySetupResponse, TwoFactorDisableRequest, TwoFactorStatusResponse};
-use crate::handlers::tag::AddTagRequest;
-use crate::services::audit::AuditLog;
-use crate::utils::versioning::FileVersion;
-use crate::services::search::SearchResult;
-use crate::handlers::system::{SystemStatus, DiskInfo, ConsistencyCheckResult, RescanResult};
 use crate::handlers::media::TimelineGroup;
+use crate::handlers::system::{ConsistencyCheckResult, DiskInfo, RescanResult, SystemStatus};
+use crate::handlers::tag::AddTagRequest;
+use crate::models::{
+    CreateShareLinkRequest, EmptyResponse, FileInfo, InitUploadRequest, InitUploadResponse, LoginRequest,
+    LoginResponse, RegisterRequest, ShareLinkResponse, Tag, TwoFactorDisableRequest, TwoFactorLoginRequest,
+    TwoFactorSetupResponse, TwoFactorStatusResponse, TwoFactorVerifySetupRequest,
+    TwoFactorVerifySetupResponse, UploadSession, User,
+};
+use crate::services::audit::AuditLog;
+use crate::services::search::SearchResult;
+use crate::utils::versioning::FileVersion;
 
 #[derive(OpenApi)]
 #[openapi(
@@ -108,7 +114,9 @@ pub async fn create_router(state: AppState) -> Router {
 
     let session_layer = SessionManagerLayer::new(session_store)
         .with_secure(false) // Set to true in production with HTTPS
-        .with_expiry(Expiry::OnInactivity(tower_sessions::cookie::time::Duration::seconds(3600)));
+        .with_expiry(Expiry::OnInactivity(
+            tower_sessions::cookie::time::Duration::seconds(3600),
+        ));
 
     // 2FA routes 需要登入（require_auth），而 /2fa/login 是公開的（用 temp_token）
     let two_factor_protected = Router::new()
@@ -134,7 +142,10 @@ pub async fn create_router(state: AppState) -> Router {
         .route("/files/batch/move", post(file::batch_move))
         .route("/files/batch/copy", post(file::batch_copy))
         .route("/upload/init", post(upload::init_upload))
-        .route("/upload/session/:id", axum::routing::patch(upload::upload_chunk).get(upload::get_upload_status))
+        .route(
+            "/upload/session/:id",
+            axum::routing::patch(upload::upload_chunk).get(upload::get_upload_status),
+        )
         .route("/upload", post(file::upload_file_root))
         .route("/upload/*path", post(file::upload_file))
         .route("/download/*path", get(file::download_file))
@@ -143,12 +154,19 @@ pub async fn create_router(state: AppState) -> Router {
         .route("/tags", get(tag::list_tags))
         .route("/tags/:tag_name/files", get(tag::list_files_by_tag))
         .route("/tags/add/*path", post(tag::add_tag))
-        .route("/tags/remove/:tag_name/*path", axum::routing::delete(tag::remove_tag))
+        .route(
+            "/tags/remove/:tag_name/*path",
+            axum::routing::delete(tag::remove_tag),
+        )
         .route("/star/file/*path", post(tag::toggle_star))
         .route("/versions/file/*path", get(version::list_file_versions))
         .route("/versions/restore/:version_id", post(version::restore_version))
-        .route("/files/*path", get(file::list_files).delete(file::delete_file).put(file::rename_file))
-
+        .route(
+            "/files/*path",
+            get(file::list_files)
+                .delete(file::delete_file)
+                .put(file::rename_file),
+        )
         .route("/share", post(share::create_share_link))
         .route("/upload-link", post(upload_link::create_upload_link))
         .route("/system/status", get(system::get_system_status))
@@ -164,13 +182,19 @@ pub async fn create_router(state: AppState) -> Router {
         .route("/media/hls/qualities", get(media::hls_qualities))
         // 其他
         .route("/trash", get(trash::list_trash))
-        .route("/trash/:filename", post(trash::restore_file).delete(trash::permanent_delete))
+        .route(
+            "/trash/:filename",
+            post(trash::restore_file).delete(trash::permanent_delete),
+        )
         .route("/trash", axum::routing::delete(trash::empty_trash))
         .route("/permissions", post(permission::set_permission))
         .route("/tasks", get(job::list_jobs))
         .route("/terminal", get(terminal::terminal_handler))
         .route("/ws", get(ws::ws_handler))
-        .route("/audit/logs", get(audit::list_audit_logs).delete(audit::clear_audit_logs))
+        .route(
+            "/audit/logs",
+            get(audit::list_audit_logs).delete(audit::clear_audit_logs),
+        )
         .route("/audit/logs/:id", axum::routing::delete(audit::delete_audit_log))
         .route("/search", get(search::search_files))
         .route("/search/ai-tags", get(search::search_ai_tags))
@@ -184,7 +208,10 @@ pub async fn create_router(state: AppState) -> Router {
         .route("/connect", post(docker::docker_connect))
         // 容器操作
         .route("/containers", get(docker::list_containers))
-        .route("/containers/:id", get(docker::inspect_container).delete(docker::remove_container))
+        .route(
+            "/containers/:id",
+            get(docker::inspect_container).delete(docker::remove_container),
+        )
         .route("/containers/:id/start", post(docker::start_container))
         .route("/containers/:id/stop", post(docker::stop_container))
         .route("/containers/:id/restart", post(docker::restart_container))
@@ -199,13 +226,18 @@ pub async fn create_router(state: AppState) -> Router {
         .route("/networks", get(docker::list_networks))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth)); // Protect docker routes
 
-
-
     // Configure CORS for direct frontend-to-backend requests (e.g., file uploads)
     // Note: allow_credentials cannot be used with allow_origin(Any)
     let cors = CorsLayer::new()
         .allow_origin(Any)
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::PATCH, Method::OPTIONS])
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::PATCH,
+            Method::OPTIONS,
+        ])
         .allow_headers(Any);
 
     Router::new()
@@ -218,9 +250,12 @@ pub async fn create_router(state: AppState) -> Router {
         .merge(
             Router::new()
                 .route("/api/upload-link/:id/upload", post(upload_link::upload_via_link))
-                .layer(DefaultBodyLimit::max(10 * 1024 * 1024 * 1024)) // 10GB for public uploads
+                .layer(DefaultBodyLimit::max(10 * 1024 * 1024 * 1024)), // 10GB for public uploads
         )
-        .route("/api/upload-link/:id/info", get(upload_link::get_upload_link_info)) // Public upload link - info
+        .route(
+            "/api/upload-link/:id/info",
+            get(upload_link::get_upload_link_info),
+        ) // Public upload link - info
         .route("/webdav", any(webdav::webdav_handler))
         .route("/webdav/*path", any(webdav::webdav_handler))
         // Public health check for uptime monitoring (no auth, returns 200)

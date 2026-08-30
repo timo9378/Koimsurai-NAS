@@ -1,16 +1,16 @@
 // 見 lib.rs 上方對這條的完整說明（只擋 unwrap、不擋 expect）。
 #![deny(clippy::unwrap_used)]
 
+use dotenvy::dotenv;
 use std::{env, path::PathBuf};
 use tokio::fs;
-use dotenvy::dotenv;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use Koimsurai_NAS::{db, create_app};
+use Koimsurai_NAS::{create_app, db};
 
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-    
+
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .with(tracing_subscriber::fmt::layer())
@@ -18,7 +18,9 @@ async fn main() {
 
     // Fail-fast if JWT_SECRET is not configured — prevents runtime login errors.
     if std::env::var("JWT_SECRET").is_err() {
-        tracing::error!("JWT_SECRET environment variable is not set. Set it in your environment or .env file.");
+        tracing::error!(
+            "JWT_SECRET environment variable is not set. Set it in your environment or .env file."
+        );
         std::process::exit(1);
     }
 
@@ -31,7 +33,9 @@ async fn main() {
     let storage_path_str = env::var("STORAGE_PATH").unwrap_or_else(|_| "storage".to_string());
     let storage_path = PathBuf::from(storage_path_str);
     if !storage_path.exists() {
-        fs::create_dir_all(&storage_path).await.expect("Failed to create storage directory");
+        fs::create_dir_all(&storage_path)
+            .await
+            .expect("Failed to create storage directory");
     }
 
     let app = create_app(pool, storage_path).await;

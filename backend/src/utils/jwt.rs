@@ -11,7 +11,10 @@ pub struct Claims {
 
 /// 使用指定的 secret 建立 JWT access token
 /// Create JWT access token with the given secret
-pub fn create_access_token_with_secret(user_id: i64, secret: &str) -> Result<String, jsonwebtoken::errors::Error> {
+pub fn create_access_token_with_secret(
+    user_id: i64,
+    secret: &str,
+) -> Result<String, jsonwebtoken::errors::Error> {
     let expiration = Utc::now()
         .checked_add_signed(Duration::minutes(15))
         .ok_or_else(|| jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidKeyFormat))?
@@ -20,9 +23,8 @@ pub fn create_access_token_with_secret(user_id: i64, secret: &str) -> Result<Str
     // 只有負的時間戳（＝ 1970 之前）才轉不過來，而這裡是 now()+15min。
     // ⚠️ 刻意不用 unwrap_or fallback：usize::MAX 當 exp 等於「永不過期」，
     // 真的轉不過去要讓建 token 直接失敗，不能發出一張不會到期的 token。
-    let exp = usize::try_from(expiration).map_err(|_| {
-        jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidKeyFormat)
-    })?;
+    let exp = usize::try_from(expiration)
+        .map_err(|_| jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidKeyFormat))?;
 
     let claims = Claims {
         sub: user_id.to_string(),
@@ -40,12 +42,8 @@ pub fn create_access_token_with_secret(user_id: i64, secret: &str) -> Result<Str
 /// Verify JWT token with the given secret
 pub fn verify_token_with_secret(token: &str, secret: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
     let validation = Validation::default();
-    
-    let token_data = decode::<Claims>(
-        token,
-        &DecodingKey::from_secret(secret.as_bytes()),
-        &validation,
-    )?;
+
+    let token_data = decode::<Claims>(token, &DecodingKey::from_secret(secret.as_bytes()), &validation)?;
 
     Ok(token_data.claims)
 }

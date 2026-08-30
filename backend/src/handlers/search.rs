@@ -1,10 +1,10 @@
+use crate::error::AppError;
+use crate::services::search::{search_by_ai_tag, AiTagSearchResult, SearchResult};
+use crate::state::AppState;
 use axum::{
-    extract::{State, Query},
+    extract::{Query, State},
     Json,
 };
-use crate::state::AppState;
-use crate::error::AppError;
-use crate::services::search::{SearchResult, AiTagSearchResult, search_by_ai_tag};
 
 #[derive(serde::Deserialize)]
 pub struct SearchQuery {
@@ -53,11 +53,6 @@ pub async fn search_ai_tags(
     State(state): State<AppState>,
     Query(query): Query<AiTagSearchQuery>,
 ) -> Result<Json<Vec<AiTagSearchResult>>, AppError> {
-    let results = search_by_ai_tag(
-        &state.pool,
-        &query.q,
-        query.min_confidence,
-        query.limit,
-    ).await?;
+    let results = search_by_ai_tag(&state.pool, &query.q, query.min_confidence, query.limit).await?;
     Ok(Json(results))
 }

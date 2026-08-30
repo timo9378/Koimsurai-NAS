@@ -11,16 +11,16 @@ use sqlx::{Pool, Sqlite};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, warn};
 
 #[cfg(feature = "ai")]
 use {
-    candle_core::{Device, Tensor, DType},
+    candle_core::{DType, Device, Tensor},
     candle_nn::VarBuilder,
     candle_transformers::models::clip,
     hf_hub::{api::sync::Api, Repo, RepoType},
-    tokenizers::Tokenizer,
     std::sync::RwLock,
+    tokenizers::Tokenizer,
 };
 
 /// AI 標籤結果
@@ -76,25 +76,115 @@ impl Default for AiConfig {
 #[cfg(feature = "ai")]
 const PREDEFINED_TAGS: &[&str] = &[
     // 場景
-    "beach", "forest", "mountain", "city", "countryside", "desert", "ocean", "lake", "river", "sunset",
-    "sunrise", "night", "indoor", "outdoor", "garden", "park", "street", "building", "house", "room",
+    "beach",
+    "forest",
+    "mountain",
+    "city",
+    "countryside",
+    "desert",
+    "ocean",
+    "lake",
+    "river",
+    "sunset",
+    "sunrise",
+    "night",
+    "indoor",
+    "outdoor",
+    "garden",
+    "park",
+    "street",
+    "building",
+    "house",
+    "room",
     // 動物
-    "cat", "dog", "bird", "fish", "horse", "cow", "sheep", "elephant", "lion", "tiger",
-    "bear", "rabbit", "deer", "butterfly", "insect",
+    "cat",
+    "dog",
+    "bird",
+    "fish",
+    "horse",
+    "cow",
+    "sheep",
+    "elephant",
+    "lion",
+    "tiger",
+    "bear",
+    "rabbit",
+    "deer",
+    "butterfly",
+    "insect",
     // 人物相關
-    "person", "people", "crowd", "portrait", "selfie", "family", "friends", "child", "baby", "group",
+    "person",
+    "people",
+    "crowd",
+    "portrait",
+    "selfie",
+    "family",
+    "friends",
+    "child",
+    "baby",
+    "group",
     // 活動
-    "party", "wedding", "birthday", "vacation", "travel", "hiking", "sports", "swimming", "running", "cycling",
+    "party",
+    "wedding",
+    "birthday",
+    "vacation",
+    "travel",
+    "hiking",
+    "sports",
+    "swimming",
+    "running",
+    "cycling",
     // 食物
-    "food", "meal", "breakfast", "lunch", "dinner", "dessert", "fruit", "vegetables", "drink", "coffee",
+    "food",
+    "meal",
+    "breakfast",
+    "lunch",
+    "dinner",
+    "dessert",
+    "fruit",
+    "vegetables",
+    "drink",
+    "coffee",
     // 物品
-    "car", "bicycle", "motorcycle", "boat", "airplane", "train", "phone", "computer", "book", "flower",
+    "car",
+    "bicycle",
+    "motorcycle",
+    "boat",
+    "airplane",
+    "train",
+    "phone",
+    "computer",
+    "book",
+    "flower",
     // 藝術/風格
-    "art", "painting", "drawing", "photography", "black and white", "colorful", "vintage", "modern", "abstract",
+    "art",
+    "painting",
+    "drawing",
+    "photography",
+    "black and white",
+    "colorful",
+    "vintage",
+    "modern",
+    "abstract",
     // 季節/天氣
-    "spring", "summer", "autumn", "winter", "sunny", "cloudy", "rainy", "snowy", "foggy",
+    "spring",
+    "summer",
+    "autumn",
+    "winter",
+    "sunny",
+    "cloudy",
+    "rainy",
+    "snowy",
+    "foggy",
     // 情感
-    "happy", "sad", "romantic", "peaceful", "exciting", "beautiful", "cute", "funny",
+    "happy",
+    "sad",
+    "romantic",
+    "peaceful",
+    "exciting",
+    "beautiful",
+    "cute",
+    "funny",
 ];
 
 /// AI 圖片標籤服務
@@ -154,8 +244,7 @@ impl AiService {
                 .ok()
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(4),
-            use_gpu: std::env::var("AI_USE_GPU")
-                .map_or(true, |v| v.to_lowercase() == "true"),
+            use_gpu: std::env::var("AI_USE_GPU").map_or(true, |v| v.to_lowercase() == "true"),
             max_tags: std::env::var("AI_MAX_TAGS")
                 .ok()
                 .and_then(|s| s.parse().ok())
@@ -168,7 +257,10 @@ impl AiService {
     async fn load_model(&self) -> Result<()> {
         // 檢查是否已載入
         {
-            let model = self.clip_model.read().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+            let model = self
+                .clip_model
+                .read()
+                .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
             if model.is_some() {
                 return Ok(());
             }
@@ -199,9 +291,10 @@ impl AiService {
         let repo = api.repo(Repo::new(self.config.model_name.clone(), RepoType::Model));
 
         // 載入模型權重
-        let model_file = repo.get("model.safetensors")
+        let model_file = repo
+            .get("model.safetensors")
             .or_else(|_| repo.get("pytorch_model.bin"))?;
-        
+
         let config_file = repo.get("config.json")?;
         let tokenizer_file = repo.get("tokenizer.json")?;
 
@@ -213,8 +306,9 @@ impl AiService {
         let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[model_file], DType::F32, &device)? };
 
         // 創建視覺模型
-        let vision_model = clip::ClipVisionTransformer::new(vb.pp("vision_model"), &clip_config.vision_config)?;
-        
+        let vision_model =
+            clip::ClipVisionTransformer::new(vb.pp("vision_model"), &clip_config.vision_config)?;
+
         // 創建文字模型
         let text_model = clip::ClipTextTransformer::new(vb.pp("text_model"), &clip_config.text_config)?;
 
@@ -225,14 +319,15 @@ impl AiService {
         // 預計算所有標籤的文字嵌入
         let tag_names: Vec<String> = PREDEFINED_TAGS.iter().map(|s| s.to_string()).collect();
         let text_prompts: Vec<String> = tag_names.iter().map(|t| format!("a photo of {}", t)).collect();
-        
+
         // Tokenize 所有標籤
-        let encodings = tokenizer.encode_batch(text_prompts.clone(), true)
+        let encodings = tokenizer
+            .encode_batch(text_prompts.clone(), true)
             .map_err(|e| anyhow::anyhow!("Tokenization error: {}", e))?;
-        
+
         let max_len = encodings.iter().map(|e| e.get_ids().len()).max().unwrap_or(77);
         let max_len = max_len.min(77); // CLIP 最大長度
-        
+
         let mut input_ids = Vec::new();
         for encoding in &encodings {
             let mut ids = encoding.get_ids().to_vec();
@@ -242,7 +337,7 @@ impl AiService {
             }
             input_ids.extend(ids);
         }
-        
+
         let input_tensor = Tensor::from_vec(
             input_ids.iter().map(|&x| x as i64).collect::<Vec<_>>(),
             (encodings.len(), max_len),
@@ -251,7 +346,7 @@ impl AiService {
 
         // 計算文字嵌入
         let text_embeddings = text_model.forward(&input_tensor)?;
-        
+
         // L2 正規化
         let text_embeddings = Self::l2_normalize(&text_embeddings)?;
 
@@ -259,7 +354,10 @@ impl AiService {
         info!("CLIP model loaded in {:?}", load_time);
 
         // 儲存模型
-        let mut model = self.clip_model.write().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let mut model = self
+            .clip_model
+            .write()
+            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
         *model = Some(ClipModel {
             vision_model,
             text_model,
@@ -297,8 +395,13 @@ impl AiService {
         let img = img.to_rgb8();
 
         // 轉換為 tensor
-        let model = self.clip_model.read().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
-        let model = model.as_ref().ok_or_else(|| anyhow::anyhow!("Model not loaded"))?;
+        let model = self
+            .clip_model
+            .read()
+            .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+        let model = model
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Model not loaded"))?;
 
         let mut pixel_values = Vec::new();
         for pixel in img.pixels() {
@@ -323,7 +426,8 @@ impl AiService {
         let similarities_vec: Vec<f32> = similarities.to_vec1()?;
 
         // 收集結果並排序
-        let mut tags: Vec<AiTag> = model.tag_names
+        let mut tags: Vec<AiTag> = model
+            .tag_names
             .iter()
             .zip(similarities_vec.iter())
             .map(|(name, &conf)| AiTag {
@@ -353,7 +457,9 @@ impl AiService {
 
         debug!(
             "AI analysis completed for {} in {}ms ({} tags)",
-            image_path, duration_ms, result.tags.len()
+            image_path,
+            duration_ms,
+            result.tags.len()
         );
 
         Ok(result)
@@ -366,7 +472,10 @@ impl AiService {
         let _permit = self.inference_semaphore.acquire().await?;
 
         let start = std::time::Instant::now();
-        debug!("AI analysis requested for: {} (stub mode - ai feature not enabled)", image_path);
+        debug!(
+            "AI analysis requested for: {} (stub mode - ai feature not enabled)",
+            image_path
+        );
 
         // Stub 實作 - 返回空結果
         let tags: Vec<AiTag> = Vec::new();
@@ -430,7 +539,10 @@ impl AiService {
     /// 獲取已存在的標籤
     // confidence 存進 DB 是 REAL（f64），而 DTO 用 f32 —— 這是刻意的窄化：
     // 信心值域是 0..1，f32 的 ~7 位有效數字遠超過需要的精度。
-    #[allow(clippy::cast_possible_truncation, reason = "confidence 值域 0..1，f32 精度綽綽有餘")]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "confidence 值域 0..1，f32 精度綽綽有餘"
+    )]
     async fn get_existing_tags(&self, image_path: &str) -> Result<AiAnalysisResult> {
         let tags = sqlx::query_as::<_, (String, f64)>(
             "SELECT tag_name, confidence FROM image_ai_tags WHERE file_path = ?",
@@ -473,11 +585,7 @@ impl AiService {
             }
         }
 
-        debug!(
-            "Saved {} tags for {}",
-            result.tags.len(),
-            result.file_path
-        );
+        debug!("Saved {} tags for {}", result.tags.len(), result.file_path);
 
         Ok(())
     }
@@ -550,11 +658,7 @@ impl AiService {
     }
 
     /// 根據標籤搜尋圖片
-    pub async fn search_by_tag(
-        &self,
-        tag_name: &str,
-        min_confidence: Option<f32>,
-    ) -> Result<Vec<String>> {
+    pub async fn search_by_tag(&self, tag_name: &str, min_confidence: Option<f32>) -> Result<Vec<String>> {
         let min_conf = min_confidence.unwrap_or(self.config.min_confidence);
 
         let results = sqlx::query_scalar::<_, String>(
@@ -591,7 +695,10 @@ impl AiService {
     /// 獲取圖片的所有標籤
     // confidence 存進 DB 是 REAL（f64），而 DTO 用 f32 —— 這是刻意的窄化：
     // 信心值域是 0..1，f32 的 ~7 位有效數字遠超過需要的精度。
-    #[allow(clippy::cast_possible_truncation, reason = "confidence 值域 0..1，f32 精度綽綽有餘")]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "confidence 值域 0..1，f32 精度綽綽有餘"
+    )]
     pub async fn get_image_tags(&self, image_path: &str) -> Result<Vec<AiTag>> {
         let tags = sqlx::query_as::<_, (String, f64)>(
             "SELECT tag_name, confidence FROM image_ai_tags WHERE file_path = ? ORDER BY confidence DESC",
@@ -617,10 +724,9 @@ impl AiService {
         .fetch_one(&self.pool)
         .await?;
 
-        let total_tags =
-            sqlx::query_scalar::<_, i32>("SELECT COUNT(DISTINCT tag_name) FROM image_ai_tags")
-                .fetch_one(&self.pool)
-                .await?;
+        let total_tags = sqlx::query_scalar::<_, i32>("SELECT COUNT(DISTINCT tag_name) FROM image_ai_tags")
+            .fetch_one(&self.pool)
+            .await?;
 
         let pending_images = sqlx::query_scalar::<_, i32>(
             r"
@@ -635,12 +741,11 @@ impl AiService {
         .await
         .unwrap_or(0);
 
-        let failed_images = sqlx::query_scalar::<_, i32>(
-            "SELECT COUNT(*) FROM ai_analysis_status WHERE status = 'failed'",
-        )
-        .fetch_one(&self.pool)
-        .await
-        .unwrap_or(0);
+        let failed_images =
+            sqlx::query_scalar::<_, i32>("SELECT COUNT(*) FROM ai_analysis_status WHERE status = 'failed'")
+                .fetch_one(&self.pool)
+                .await
+                .unwrap_or(0);
 
         Ok(AiStats {
             total_analyzed_images: u32::try_from(total_images).unwrap_or(0),
@@ -659,7 +764,7 @@ impl AiService {
     /// 重新分析失敗的圖片
     pub async fn retry_failed(&self) -> Result<u32> {
         let failed_paths = sqlx::query_scalar::<_, String>(
-            "SELECT file_path FROM ai_analysis_status WHERE status = 'failed'"
+            "SELECT file_path FROM ai_analysis_status WHERE status = 'failed'",
         )
         .fetch_all(&self.pool)
         .await?;
@@ -696,10 +801,7 @@ pub struct AiStats {
 
 /// 檢查檔案是否為圖片
 pub fn is_image_file(path: &Path) -> bool {
-    let extension = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(str::to_lowercase);
+    let extension = path.extension().and_then(|e| e.to_str()).map(str::to_lowercase);
 
     matches!(
         extension.as_deref(),

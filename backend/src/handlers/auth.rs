@@ -1,23 +1,18 @@
-use axum::{
-    extract::State,
-    http::StatusCode,
-    Extension, Json,
-};
-use axum_extra::extract::cookie::{Cookie, SameSite, CookieJar};
+use crate::error::AppError;
 use crate::models::{
-    RegisterRequest, LoginRequest, User, EmptyResponse, RefreshToken,
-    LoginResponse, TwoFactorLoginRequest,
-    TwoFactorSetupResponse, TwoFactorVerifySetupRequest, TwoFactorVerifySetupResponse,
-    TwoFactorDisableRequest, TwoFactorStatusResponse,
+    EmptyResponse, LoginRequest, LoginResponse, RefreshToken, RegisterRequest, TwoFactorDisableRequest,
+    TwoFactorLoginRequest, TwoFactorSetupResponse, TwoFactorStatusResponse, TwoFactorVerifySetupRequest,
+    TwoFactorVerifySetupResponse, User,
 };
 use crate::state::AppState;
 use crate::utils::hash::{hash_password, verify_password};
 use crate::utils::jwt::create_access_token_with_secret;
-use crate::utils::totp::{generate_secret, build_otpauth_uri, verify_code, generate_backup_codes};
-use crate::error::AppError;
-use jsonwebtoken::{encode, EncodingKey, Header, decode, DecodingKey, Validation};
+use crate::utils::totp::{build_otpauth_uri, generate_backup_codes, generate_secret, verify_code};
+use axum::{extract::State, http::StatusCode, Extension, Json};
+use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
+use chrono::{Duration, Utc};
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
-use chrono::{Utc, Duration};
 use uuid::Uuid;
 
 pub const AUTH_SESSION_KEY: &str = "authenticated_user_id";
@@ -27,7 +22,7 @@ pub const ACCESS_TOKEN_COOKIE_NAME: &str = "access_token";
 /// 5 分鐘的短效 token，登入第一階段通過密碼後發給前端，第二階段送回驗 code
 #[derive(Debug, Serialize, Deserialize)]
 struct TwoFactorTempClaims {
-    pub sub: String, // user_id
+    pub sub: String,     // user_id
     pub purpose: String, // 必須是 "2fa_pending"
     pub exp: usize,
 }
@@ -38,8 +33,7 @@ fn create_2fa_temp_token(user_id: i64, secret: &str) -> Result<String, AppError>
         .ok_or_else(|| AppError::InternalServerError("time overflow".to_string()))?
         .timestamp();
     // 同 utils/jwt.rs：不用 fallback，轉不過去就讓它失敗（見該處說明）。
-    let exp = usize::try_from(exp)
-        .map_err(|_| AppError::InternalServerError("time overflow".to_string()))?;
+    let exp = usize::try_from(exp).map_err(|_| AppError::InternalServerError("time overflow".to_string()))?;
     let claims = TwoFactorTempClaims {
         sub: user_id.to_string(),
         purpose: "2fa_pending".to_string(),
@@ -63,7 +57,9 @@ fn verify_2fa_temp_token(token: &str, secret: &str) -> Result<i64, AppError> {
     if data.claims.purpose != "2fa_pending" {
         return Err(AppError::AuthError("wrong token purpose".to_string()));
     }
-    data.claims.sub.parse::<i64>()
+    data.claims
+        .sub
+        .parse::<i64>()
         .map_err(|_| AppError::AuthError("invalid sub".to_string()))
 }
 
@@ -94,16 +90,24 @@ async fn issue_session_cookies(
         .path("/")
         .same_site(SameSite::Lax)
         .max_age(time::Duration::days(7));
-    if cookie_secure { refresh_b = refresh_b.secure(true); }
-    if let Some(d) = &cookie_domain { refresh_b = refresh_b.domain(d.clone()); }
+    if cookie_secure {
+        refresh_b = refresh_b.secure(true);
+    }
+    if let Some(d) = &cookie_domain {
+        refresh_b = refresh_b.domain(d.clone());
+    }
 
     let mut access_b = Cookie::build((ACCESS_TOKEN_COOKIE_NAME, access_token))
         .http_only(true)
         .path("/")
         .same_site(SameSite::Lax)
         .max_age(time::Duration::minutes(15));
-    if cookie_secure { access_b = access_b.secure(true); }
-    if let Some(d) = &cookie_domain { access_b = access_b.domain(d.clone()); }
+    if cookie_secure {
+        access_b = access_b.secure(true);
+    }
+    if let Some(d) = &cookie_domain {
+        access_b = access_b.domain(d.clone());
+    }
 
     Ok(jar.add(refresh_b.build()).add(access_b.build()))
 }
@@ -142,7 +146,10 @@ pub async fn register(
         .await
         .map_err(AppError::from)?;
     if user_exists.is_some() {
-        return Err(AppError::Custom(StatusCode::CONFLICT, "Username already exists".to_string()));
+        return Err(AppError::Custom(
+            StatusCode::CONFLICT,
+            "Username already exists".to_string(),
+        ));
     }
 
     let password_hash = hash_password(&payload.password).map_err(AppError::from)?;
@@ -171,17 +178,18 @@ pub async fn login(
 ) -> Result<(CookieJar, Json<LoginResponse>), AppError> {
     let user: Option<User> = sqlx::query_as(
         "SELECT id, username, password_hash, created_at, totp_secret, totp_enabled, totp_backup_codes
-         FROM users WHERE username = ?"
+         FROM users WHERE username = ?",
     )
     .bind(payload.username)
     .fetch_optional(&state.pool)
     .await
     .map_err(AppError::from)?;
 
-    let Some(user) = user else { return Err(AppError::AuthError("Invalid credentials".to_string())) };
+    let Some(user) = user else {
+        return Err(AppError::AuthError("Invalid credentials".to_string()));
+    };
 
-    let is_valid = verify_password(&payload.password, &user.password_hash)
-        .map_err(AppError::from)?;
+    let is_valid = verify_password(&payload.password, &user.password_hash).map_err(AppError::from)?;
     if !is_valid {
         return Err(AppError::AuthError("Invalid credentials".to_string()));
     }
@@ -189,10 +197,13 @@ pub async fn login(
     // 已啟用 2FA → 不直接發 cookie，回 temp_token 給前端，下一步驗 code
     if user.totp_enabled == 1 {
         let temp_token = create_2fa_temp_token(user.id, &state.jwt_secret)?;
-        return Ok((jar, Json(LoginResponse::NeedsTwoFactor {
-            requires_2fa: true,
-            temp_token,
-        })));
+        return Ok((
+            jar,
+            Json(LoginResponse::NeedsTwoFactor {
+                requires_2fa: true,
+                temp_token,
+            }),
+        ));
     }
 
     // 沒啟用 2FA → 照舊發 cookie
@@ -219,7 +230,7 @@ pub async fn two_factor_login(
 
     let user: User = sqlx::query_as(
         "SELECT id, username, password_hash, created_at, totp_secret, totp_enabled, totp_backup_codes
-         FROM users WHERE id = ?"
+         FROM users WHERE id = ?",
     )
     .bind(user_id)
     .fetch_one(&state.pool)
@@ -229,7 +240,9 @@ pub async fn two_factor_login(
     if user.totp_enabled != 1 {
         return Err(AppError::AuthError("2FA not enabled".to_string()));
     }
-    let secret = user.totp_secret.as_deref()
+    let secret = user
+        .totp_secret
+        .as_deref()
         .ok_or_else(|| AppError::InternalServerError("totp_secret missing".to_string()))?;
 
     // 先試 6 位 TOTP，再試 backup code
@@ -237,8 +250,7 @@ pub async fn two_factor_login(
     let is_totp = !trimmed.contains('-');
 
     if is_totp {
-        let ok = verify_code(secret, &trimmed)
-            .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+        let ok = verify_code(secret, &trimmed).map_err(|e| AppError::InternalServerError(e.to_string()))?;
         if !ok {
             return Err(AppError::AuthError("Invalid code".to_string()));
         }
@@ -287,15 +299,15 @@ pub async fn refresh(
         .ok_or_else(|| AppError::AuthError("Missing refresh token".to_string()))?;
 
     let token_record: Option<RefreshToken> = sqlx::query_as(
-        "SELECT * FROM refresh_tokens WHERE token = ? AND revoked = FALSE AND expires_at > CURRENT_TIMESTAMP"
+        "SELECT * FROM refresh_tokens WHERE token = ? AND revoked = FALSE AND expires_at > CURRENT_TIMESTAMP",
     )
     .bind(&refresh_token)
     .fetch_optional(&state.pool)
     .await
     .map_err(AppError::from)?;
 
-    let token_record = token_record
-        .ok_or_else(|| AppError::AuthError("Invalid or expired refresh token".to_string()))?;
+    let token_record =
+        token_record.ok_or_else(|| AppError::AuthError("Invalid or expired refresh token".to_string()))?;
 
     sqlx::query("UPDATE refresh_tokens SET revoked = TRUE WHERE id = ?")
         .bind(token_record.id)
@@ -335,16 +347,24 @@ pub async fn logout(
         .path("/")
         .same_site(SameSite::Lax)
         .max_age(time::Duration::seconds(0));
-    if cookie_secure { refresh_b = refresh_b.secure(true); }
-    if let Some(d) = &cookie_domain { refresh_b = refresh_b.domain(d.clone()); }
+    if cookie_secure {
+        refresh_b = refresh_b.secure(true);
+    }
+    if let Some(d) = &cookie_domain {
+        refresh_b = refresh_b.domain(d.clone());
+    }
 
     let mut access_b = Cookie::build((ACCESS_TOKEN_COOKIE_NAME, ""))
         .http_only(true)
         .path("/")
         .same_site(SameSite::Lax)
         .max_age(time::Duration::seconds(0));
-    if cookie_secure { access_b = access_b.secure(true); }
-    if let Some(d) = &cookie_domain { access_b = access_b.domain(d.clone()); }
+    if cookie_secure {
+        access_b = access_b.secure(true);
+    }
+    if let Some(d) = &cookie_domain {
+        access_b = access_b.domain(d.clone());
+    }
 
     Ok((jar.add(refresh_b.build()).add(access_b.build()), StatusCode::OK))
 }
@@ -366,7 +386,7 @@ pub async fn two_factor_setup(
 ) -> Result<Json<TwoFactorSetupResponse>, AppError> {
     let user: User = sqlx::query_as(
         "SELECT id, username, password_hash, created_at, totp_secret, totp_enabled, totp_backup_codes
-         FROM users WHERE id = ?"
+         FROM users WHERE id = ?",
     )
     .bind(user_id)
     .fetch_one(&state.pool)
@@ -392,7 +412,10 @@ pub async fn two_factor_setup(
         .await
         .map_err(AppError::from)?;
 
-    Ok(Json(TwoFactorSetupResponse { secret, otpauth_uri: uri }))
+    Ok(Json(TwoFactorSetupResponse {
+        secret,
+        otpauth_uri: uri,
+    }))
 }
 
 #[utoipa::path(
@@ -411,29 +434,32 @@ pub async fn two_factor_verify_setup(
 ) -> Result<Json<TwoFactorVerifySetupResponse>, AppError> {
     let user: User = sqlx::query_as(
         "SELECT id, username, password_hash, created_at, totp_secret, totp_enabled, totp_backup_codes
-         FROM users WHERE id = ?"
+         FROM users WHERE id = ?",
     )
     .bind(user_id)
     .fetch_one(&state.pool)
     .await
     .map_err(AppError::from)?;
 
-    let secret = user.totp_secret.as_deref()
+    let secret = user
+        .totp_secret
+        .as_deref()
         .ok_or_else(|| AppError::Custom(StatusCode::BAD_REQUEST, "Run /setup first".to_string()))?;
 
-    let ok = verify_code(secret, payload.code.trim())
-        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+    let ok =
+        verify_code(secret, payload.code.trim()).map_err(|e| AppError::InternalServerError(e.to_string()))?;
     if !ok {
         return Err(AppError::AuthError("Invalid code".to_string()));
     }
 
     // 產 8 組 backup codes，hash 後存 DB，明文回傳一次
     let codes = generate_backup_codes();
-    let hashed: Vec<String> = codes.iter()
+    let hashed: Vec<String> = codes
+        .iter()
         .map(|c| hash_password(c).map_err(AppError::from))
         .collect::<Result<_, _>>()?;
-    let codes_json = serde_json::to_string(&hashed)
-        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
+    let codes_json =
+        serde_json::to_string(&hashed).map_err(|e| AppError::InternalServerError(e.to_string()))?;
 
     sqlx::query("UPDATE users SET totp_enabled = 1, totp_backup_codes = ? WHERE id = ?")
         .bind(codes_json)
@@ -461,7 +487,7 @@ pub async fn two_factor_disable(
 ) -> Result<StatusCode, AppError> {
     let user: User = sqlx::query_as(
         "SELECT id, username, password_hash, created_at, totp_secret, totp_enabled, totp_backup_codes
-         FROM users WHERE id = ?"
+         FROM users WHERE id = ?",
     )
     .bind(user_id)
     .fetch_one(&state.pool)
@@ -469,7 +495,10 @@ pub async fn two_factor_disable(
     .map_err(AppError::from)?;
 
     if user.totp_enabled != 1 {
-        return Err(AppError::Custom(StatusCode::BAD_REQUEST, "2FA not enabled".to_string()));
+        return Err(AppError::Custom(
+            StatusCode::BAD_REQUEST,
+            "2FA not enabled".to_string(),
+        ));
     }
 
     // 必須 password OK + code OK 才能停用（防止 cookie 被劫持）
@@ -477,27 +506,32 @@ pub async fn two_factor_disable(
         return Err(AppError::AuthError("Wrong password".to_string()));
     }
 
-    let secret = user.totp_secret.as_deref()
+    let secret = user
+        .totp_secret
+        .as_deref()
         .ok_or_else(|| AppError::InternalServerError("totp_secret missing".to_string()))?;
     let trimmed = payload.code.trim().to_uppercase();
     let valid = if trimmed.contains('-') {
         // backup code
         let codes_json = user.totp_backup_codes.as_deref().unwrap_or("[]");
         let codes: Vec<String> = serde_json::from_str(codes_json).unwrap_or_default();
-        codes.iter().any(|h| verify_password(&trimmed, h).unwrap_or(false))
+        codes
+            .iter()
+            .any(|h| verify_password(&trimmed, h).unwrap_or(false))
     } else {
-        verify_code(secret, &trimmed)
-            .map_err(|e| AppError::InternalServerError(e.to_string()))?
+        verify_code(secret, &trimmed).map_err(|e| AppError::InternalServerError(e.to_string()))?
     };
     if !valid {
         return Err(AppError::AuthError("Invalid code".to_string()));
     }
 
-    sqlx::query("UPDATE users SET totp_enabled = 0, totp_secret = NULL, totp_backup_codes = NULL WHERE id = ?")
-        .bind(user.id)
-        .execute(&state.pool)
-        .await
-        .map_err(AppError::from)?;
+    sqlx::query(
+        "UPDATE users SET totp_enabled = 0, totp_secret = NULL, totp_backup_codes = NULL WHERE id = ?",
+    )
+    .bind(user.id)
+    .execute(&state.pool)
+    .await
+    .map_err(AppError::from)?;
     Ok(StatusCode::OK)
 }
 
@@ -514,7 +548,7 @@ pub async fn two_factor_status(
 ) -> Result<Json<TwoFactorStatusResponse>, AppError> {
     let user: User = sqlx::query_as(
         "SELECT id, username, password_hash, created_at, totp_secret, totp_enabled, totp_backup_codes
-         FROM users WHERE id = ?"
+         FROM users WHERE id = ?",
     )
     .bind(user_id)
     .fetch_one(&state.pool)
@@ -522,10 +556,13 @@ pub async fn two_factor_status(
     .map_err(AppError::from)?;
 
     let remaining = if user.totp_enabled == 1 {
-        user.totp_backup_codes.as_deref()
+        user.totp_backup_codes
+            .as_deref()
             .and_then(|s| serde_json::from_str::<Vec<String>>(s).ok())
             .map_or(0, |v| v.len())
-    } else { 0 };
+    } else {
+        0
+    };
 
     Ok(Json(TwoFactorStatusResponse {
         enabled: user.totp_enabled == 1,

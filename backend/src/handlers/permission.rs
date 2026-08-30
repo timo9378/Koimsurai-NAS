@@ -1,10 +1,10 @@
-use axum::{
-    extract::{State, Extension, Json},
-    http::StatusCode,
-};
-use crate::state::AppState;
 use crate::error::AppError;
 use crate::models::CreatePermissionRequest;
+use crate::state::AppState;
+use axum::{
+    extract::{Extension, Json, State},
+    http::StatusCode,
+};
 
 pub async fn set_permission(
     State(state): State<AppState>,
@@ -18,7 +18,7 @@ pub async fn set_permission(
         ON CONFLICT(user_id, path) DO UPDATE SET
             can_read = excluded.can_read,
             can_write = excluded.can_write
-        "
+        ",
     )
     .bind(payload.user_id)
     .bind(&payload.path)

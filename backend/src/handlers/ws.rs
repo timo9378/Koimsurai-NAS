@@ -1,11 +1,14 @@
+use crate::models::JobUpdate;
+use crate::state::AppState;
 use axum::{
-    extract::{ws::{Message, WebSocket, WebSocketUpgrade}, State},
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        State,
+    },
     response::IntoResponse,
 };
 use futures::{sink::SinkExt, stream::StreamExt};
 use serde::{Deserialize, Serialize};
-use crate::models::JobUpdate;
-use crate::state::AppState;
 
 /// WebSocket 客戶端發送的訊息類型
 ///
@@ -53,20 +56,14 @@ pub enum WsServerMessage {
         timestamp: i64,
     },
     /// Docker 統計錯誤
-    DockerStatsError {
-        container_id: String,
-        error: String,
-    },
+    DockerStatsError { container_id: String, error: String },
     /// Pong 回應
     Pong,
     /// 錯誤訊息
     Error { message: String },
 }
 
-pub async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
     ws.on_upgrade(|socket| handle_socket(socket, state))
 }
 
@@ -75,14 +72,15 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     let mut rx = state.tx.subscribe();
 
     // 追蹤訂閱的 Docker 容器
-    let docker_subscriptions = std::sync::Arc::new(tokio::sync::RwLock::new(
-        std::collections::HashSet::<String>::new(),
-    ));
-    
+    let docker_subscriptions = std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashSet::<
+        String,
+    >::new()));
+
     // Docker 統計推送任務句柄
-    let docker_tasks = std::sync::Arc::new(tokio::sync::RwLock::new(
-        std::collections::HashMap::<String, tokio::task::JoinHandle<()>>::new(),
-    ));
+    let docker_tasks = std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::<
+        String,
+        tokio::task::JoinHandle<()>,
+    >::new()));
 
     // 創建一個 channel 來傳送 WebSocket 訊息
     let (ws_tx, mut ws_rx) = tokio::sync::mpsc::channel::<WsServerMessage>(100);
@@ -170,7 +168,10 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                                                         };
                                                         let _ = tx.send(msg).await;
                                                         // 發生錯誤時等待較長時間再重試
-                                                        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                                                        tokio::time::sleep(tokio::time::Duration::from_secs(
+                                                            5,
+                                                        ))
+                                                        .await;
                                                         continue;
                                                     }
                                                 }
@@ -183,9 +184,11 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                                         tasks.insert(container_id, task);
                                     }
                                 } else {
-                                    let _ = ws_tx_clone.send(WsServerMessage::Error {
-                                        message: "Docker service is not enabled".to_string(),
-                                    }).await;
+                                    let _ = ws_tx_clone
+                                        .send(WsServerMessage::Error {
+                                            message: "Docker service is not enabled".to_string(),
+                                        })
+                                        .await;
                                 }
                             }
                             WsClientMessage::UnsubscribeDockerStats { container_id } => {

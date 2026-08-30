@@ -4,13 +4,12 @@
 //! 提供容器列表、啟動、停止、重啟等功能。
 
 use bollard::container::LogOutput;
+use bollard::exec::{CreateExecOptions, StartExecOptions, StartExecResults};
 use bollard::query_parameters::{
     CreateImageOptionsBuilder, ListContainersOptionsBuilder, ListImagesOptionsBuilder,
-    LogsOptionsBuilder, RemoveContainerOptionsBuilder, RemoveImageOptionsBuilder,
+    ListNetworksOptionsBuilder, LogsOptionsBuilder, RemoveContainerOptionsBuilder, RemoveImageOptionsBuilder,
     RestartContainerOptionsBuilder, StatsOptionsBuilder, StopContainerOptionsBuilder,
-    ListNetworksOptionsBuilder,
 };
-use bollard::exec::{CreateExecOptions, StartExecOptions, StartExecResults};
 use bollard::Docker;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -283,7 +282,9 @@ impl DockerService {
     /// 獲取容器詳細資訊
     pub async fn inspect_container(&self, id: &str) -> Result<ContainerDetails, DockerError> {
         let docker = self.get_docker().await?;
-        let info = docker.inspect_container(id, None::<bollard::query_parameters::InspectContainerOptions>).await?;
+        let info = docker
+            .inspect_container(id, None::<bollard::query_parameters::InspectContainerOptions>)
+            .await?;
 
         let state = info.state.as_ref();
         let config = info.config.as_ref();
@@ -348,16 +349,14 @@ impl DockerService {
     /// 啟動容器
     pub async fn start_container(&self, id: &str) -> Result<(), DockerError> {
         let docker = self.get_docker().await?;
-        docker.start_container(id, None::<bollard::query_parameters::StartContainerOptions>).await?;
+        docker
+            .start_container(id, None::<bollard::query_parameters::StartContainerOptions>)
+            .await?;
         Ok(())
     }
 
     /// 停止容器
-    pub async fn stop_container(
-        &self,
-        id: &str,
-        timeout_secs: Option<i64>,
-    ) -> Result<(), DockerError> {
+    pub async fn stop_container(&self, id: &str, timeout_secs: Option<i64>) -> Result<(), DockerError> {
         let docker = self.get_docker().await?;
         let options = StopContainerOptionsBuilder::default()
             .t(i32::try_from(timeout_secs.unwrap_or(10)).unwrap_or(10))
@@ -367,11 +366,7 @@ impl DockerService {
     }
 
     /// 重啟容器
-    pub async fn restart_container(
-        &self,
-        id: &str,
-        timeout_secs: Option<i64>,
-    ) -> Result<(), DockerError> {
+    pub async fn restart_container(&self, id: &str, timeout_secs: Option<i64>) -> Result<(), DockerError> {
         let docker = self.get_docker().await?;
         let options = RestartContainerOptionsBuilder::default()
             .t(i32::try_from(timeout_secs.unwrap_or(10)).unwrap_or(10))
@@ -411,12 +406,14 @@ impl DockerService {
             match result {
                 Ok(output) => {
                     let (stream_type, message) = match output {
-                        LogOutput::StdOut { message } => {
-                            ("stdout".to_string(), String::from_utf8_lossy(&message).to_string())
-                        }
-                        LogOutput::StdErr { message } => {
-                            ("stderr".to_string(), String::from_utf8_lossy(&message).to_string())
-                        }
+                        LogOutput::StdOut { message } => (
+                            "stdout".to_string(),
+                            String::from_utf8_lossy(&message).to_string(),
+                        ),
+                        LogOutput::StdErr { message } => (
+                            "stderr".to_string(),
+                            String::from_utf8_lossy(&message).to_string(),
+                        ),
                         _ => continue,
                     };
                     logs.push(LogEntry {
@@ -438,7 +435,10 @@ impl DockerService {
     pub async fn container_stats(&self, id: &str) -> Result<ContainerStats, DockerError> {
         let docker = self.get_docker().await?;
 
-        let options = StatsOptionsBuilder::default().stream(false).one_shot(true).build();
+        let options = StatsOptionsBuilder::default()
+            .stream(false)
+            .one_shot(true)
+            .build();
 
         let mut stream = docker.stats(id, Some(options));
 
@@ -476,34 +476,23 @@ impl DockerService {
             let memory_percent = (memory_usage as f64 / memory_limit as f64) * 100.0;
 
             // 網絡統計
-            let (network_rx, network_tx) = stats
-                .networks
-                .as_ref()
-                .map_or((0, 0), |networks| {
-                    networks.values().fold((0u64, 0u64), |(rx, tx), net| {
-                        (
-                            rx + net.rx_bytes.unwrap_or(0),
-                            tx + net.tx_bytes.unwrap_or(0),
-                        )
-                    })
-                });
+            let (network_rx, network_tx) = stats.networks.as_ref().map_or((0, 0), |networks| {
+                networks.values().fold((0u64, 0u64), |(rx, tx), net| {
+                    (rx + net.rx_bytes.unwrap_or(0), tx + net.tx_bytes.unwrap_or(0))
+                })
+            });
 
             // 磁碟 I/O
             let blkio_stats = stats.blkio_stats.as_ref();
             let (block_read, block_write) = blkio_stats
                 .and_then(|b| b.io_service_bytes_recursive.as_ref())
                 .map_or((0, 0), |io| {
-                    io.iter().fold((0u64, 0u64), |(read, write), entry| {
-                        match entry.op.as_deref() {
-                            Some("read" | "Read") => {
-                                (read + entry.value.unwrap_or(0), write)
-                            }
-                            Some("write" | "Write") => {
-                                (read, write + entry.value.unwrap_or(0))
-                            }
+                    io.iter()
+                        .fold((0u64, 0u64), |(read, write), entry| match entry.op.as_deref() {
+                            Some("read" | "Read") => (read + entry.value.unwrap_or(0), write),
+                            Some("write" | "Write") => (read, write + entry.value.unwrap_or(0)),
                             _ => (read, write),
-                        }
-                    })
+                        })
                 });
 
             return Ok(ContainerStats {
@@ -587,7 +576,8 @@ impl DockerService {
         let summaries = networks
             .into_iter()
             .map(|n| {
-                let container_count = n.containers
+                let container_count = n
+                    .containers
                     .as_ref()
                     .map_or(0, |c| i32::try_from(c.len()).unwrap_or(i32::MAX));
                 NetworkSummary {
@@ -610,11 +600,7 @@ impl DockerService {
     // ==================== Exec 操作 ====================
 
     /// 創建 Exec 實例
-    pub async fn create_exec(
-        &self,
-        container_id: &str,
-        cmd: Vec<String>,
-    ) -> Result<String, DockerError> {
+    pub async fn create_exec(&self, container_id: &str, cmd: Vec<String>) -> Result<String, DockerError> {
         let docker = self.get_docker().await?;
 
         let config = CreateExecOptions {

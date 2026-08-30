@@ -1,22 +1,23 @@
+use anyhow::Result;
 use sqlx::{migrate::MigrateDatabase, sqlite::SqlitePoolOptions, Pool, Sqlite};
 use std::env;
-use anyhow::Result;
 use tracing::info;
 
 // 初始化資料庫連線與表格
 // Initialize database connection and tables
 pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
-    let database_url = database_url.unwrap_or_else(|| env::var("DATABASE_URL").expect("DATABASE_URL must be set"));
-    
+    let database_url =
+        database_url.unwrap_or_else(|| env::var("DATABASE_URL").expect("DATABASE_URL must be set"));
+
     // 從環境變數讀取資料庫連線數 (開發機: 5, Server: 50+)
     // Read max connections from env (Dev: 5, Server: 50+)
     let max_connections = env::var("DATABASE_MAX_CONNECTIONS")
         .unwrap_or_else(|_| "5".to_string())
         .parse::<u32>()
         .unwrap_or(5);
-    
+
     info!("Database max connections: {}", max_connections);
-    
+
     // 如果資料庫檔案不存在，則建立它
     // Create database file if it doesn't exist
     if !Sqlite::database_exists(&database_url).await.unwrap_or(false) {
@@ -31,28 +32,24 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
 
     // 啟用 WAL 模式以提升並發效能 (對 Litestream 也是推薦的)
     // Enable WAL mode for better concurrency (also recommended for Litestream)
-    sqlx::query("PRAGMA journal_mode=WAL")
-        .execute(&pool)
-        .await?;
-    
+    sqlx::query("PRAGMA journal_mode=WAL").execute(&pool).await?;
+
     // 設定 synchronous 為 NORMAL (WAL 模式下的推薦設定)
     // Set synchronous to NORMAL (recommended for WAL mode)
-    sqlx::query("PRAGMA synchronous=NORMAL")
-        .execute(&pool)
-        .await?;
-    
+    sqlx::query("PRAGMA synchronous=NORMAL").execute(&pool).await?;
+
     // 從環境變數讀取 mmap_size (MB)，讓常用資料駐留 RAM
     // Read mmap_size from env (MB), keeps frequently accessed data in RAM
     let mmap_size_mb = env::var("DATABASE_MMAP_SIZE_MB")
         .unwrap_or_else(|_| "256".to_string())
         .parse::<u64>()
         .unwrap_or(256);
-    
+
     let mmap_size_bytes = mmap_size_mb * 1024 * 1024;
     sqlx::query(&format!("PRAGMA mmap_size={mmap_size_bytes}"))
         .execute(&pool)
         .await?;
-    
+
     info!("Database mmap_size: {}MB", mmap_size_mb);
 
     // 建立使用者表格
@@ -65,7 +62,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             password_hash TEXT NOT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        "
+        ",
     )
     .execute(&pool)
     .await?;
@@ -83,7 +80,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             creator_id INTEGER,
             FOREIGN KEY(creator_id) REFERENCES users(id)
         );
-        "
+        ",
     )
     .execute(&pool)
     .await?;
@@ -101,7 +98,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             FOREIGN KEY(user_id) REFERENCES users(id),
             UNIQUE(user_id, path)
         );
-        "
+        ",
     )
     .execute(&pool)
     .await?;
@@ -123,7 +120,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             hash TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_files_parent_path ON files(parent_path);
-        "
+        ",
     )
     .execute(&pool)
     .await?;
@@ -141,7 +138,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             error TEXT
         );
-        "
+        ",
     )
     .execute(&pool)
     .await?;
@@ -161,7 +158,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
-        "
+        ",
     )
     .execute(&pool)
     .await?;
@@ -180,7 +177,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             FOREIGN KEY(user_id) REFERENCES users(id),
             UNIQUE(user_id, file_path, tag_name)
         );
-        "
+        ",
     )
     .execute(&pool)
     .await?;
@@ -197,7 +194,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             FOREIGN KEY(user_id) REFERENCES users(id),
             UNIQUE(user_id, file_path)
         );
-        "
+        ",
     )
     .execute(&pool)
     .await?;
@@ -216,7 +213,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
-        "
+        ",
     )
     .execute(&pool)
     .await?;
@@ -230,7 +227,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             value TEXT NOT NULL,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        "
+        ",
     )
     .execute(&pool)
     .await?;
@@ -251,7 +248,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
         CREATE INDEX IF NOT EXISTS idx_image_ai_tags_file_path ON image_ai_tags(file_path);
         CREATE INDEX IF NOT EXISTS idx_image_ai_tags_tag_name ON image_ai_tags(tag_name);
         CREATE INDEX IF NOT EXISTS idx_image_ai_tags_confidence ON image_ai_tags(confidence);
-        "
+        ",
     )
     .execute(&pool)
     .await?;
@@ -266,7 +263,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             model_version TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'completed'
         );
-        "
+        ",
     )
     .execute(&pool)
     .await?;
@@ -286,7 +283,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
 
         CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id ON refresh_tokens(user_id);
         CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token);
-        "
+        ",
     )
     .execute(&pool)
     .await?;
@@ -306,7 +303,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             creator_id INTEGER,
             FOREIGN KEY(creator_id) REFERENCES users(id)
         );
-        "
+        ",
     )
     .execute(&pool)
     .await?;
@@ -323,7 +320,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
             deleted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(deleted_by) REFERENCES users(id)
         );
-        "
+        ",
     )
     .execute(&pool)
     .await?;
@@ -339,12 +336,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
 }
 
 /// 加 column 但確保 idempotent：先檢查存在才 alter，避免重新部署時 duplicate column error
-async fn ensure_column(
-    pool: &Pool<Sqlite>,
-    table: &str,
-    column: &str,
-    definition: &str,
-) -> Result<()> {
+async fn ensure_column(pool: &Pool<Sqlite>, table: &str, column: &str, definition: &str) -> Result<()> {
     let row: (i64,) = sqlx::query_as(&format!(
         "SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = ?"
     ))
@@ -353,11 +345,9 @@ async fn ensure_column(
     .await?;
 
     if row.0 == 0 {
-        sqlx::query(&format!(
-            "ALTER TABLE {table} ADD COLUMN {column} {definition}"
-        ))
-        .execute(pool)
-        .await?;
+        sqlx::query(&format!("ALTER TABLE {table} ADD COLUMN {column} {definition}"))
+            .execute(pool)
+            .await?;
         info!("Schema: added {}.{}", table, column);
     }
     Ok(())

@@ -1,11 +1,11 @@
+use crate::error::AppError;
+use crate::state::AppState;
 use axum::{
-    extract::{State, Path as AxumPath, Extension},
-    Json,
+    extract::{Extension, Path as AxumPath, State},
     http::StatusCode,
+    Json,
 };
 use serde::{Deserialize, Serialize};
-use crate::state::AppState;
-use crate::error::AppError;
 use utoipa::ToSchema;
 
 #[derive(Deserialize, ToSchema, specta::Type)]
@@ -49,16 +49,14 @@ pub async fn add_tag(
     AxumPath(path): AxumPath<String>,
     Json(payload): Json<AddTagRequest>,
 ) -> Result<StatusCode, AppError> {
-    sqlx::query(
-        "INSERT INTO file_tags (user_id, file_path, tag_name, color) VALUES (?, ?, ?, ?)"
-    )
-    .bind(user_id)
-    .bind(&path)
-    .bind(&payload.tag_name)
-    .bind(&payload.color)
-    .execute(&state.pool)
-    .await
-    .map_err(AppError::from)?;
+    sqlx::query("INSERT INTO file_tags (user_id, file_path, tag_name, color) VALUES (?, ?, ?, ?)")
+        .bind(user_id)
+        .bind(&path)
+        .bind(&payload.tag_name)
+        .bind(&payload.color)
+        .execute(&state.pool)
+        .await
+        .map_err(AppError::from)?;
 
     Ok(StatusCode::OK)
 }
@@ -79,15 +77,13 @@ pub async fn remove_tag(
     Extension(user_id): Extension<i64>,
     AxumPath((tag_name, path)): AxumPath<(String, String)>,
 ) -> Result<StatusCode, AppError> {
-    sqlx::query(
-        "DELETE FROM file_tags WHERE user_id = ? AND file_path = ? AND tag_name = ?"
-    )
-    .bind(user_id)
-    .bind(&path)
-    .bind(&tag_name)
-    .execute(&state.pool)
-    .await
-    .map_err(AppError::from)?;
+    sqlx::query("DELETE FROM file_tags WHERE user_id = ? AND file_path = ? AND tag_name = ?")
+        .bind(user_id)
+        .bind(&path)
+        .bind(&tag_name)
+        .execute(&state.pool)
+        .await
+        .map_err(AppError::from)?;
 
     Ok(StatusCode::OK)
 }
@@ -108,7 +104,7 @@ pub async fn toggle_star(
     AxumPath(path): AxumPath<String>,
 ) -> Result<StatusCode, AppError> {
     let exists = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM file_stars WHERE user_id = ? AND file_path = ?)"
+        "SELECT EXISTS(SELECT 1 FROM file_stars WHERE user_id = ? AND file_path = ?)",
     )
     .bind(user_id)
     .bind(&path)
@@ -154,7 +150,7 @@ pub async fn list_tags(
         WHERE user_id = ?
         GROUP BY tag_name, color
         ORDER BY tag_name
-        "
+        ",
     )
     .bind(user_id)
     .fetch_all(&state.pool)
@@ -191,7 +187,7 @@ pub async fn list_files_by_tag(
         FROM file_tags
         WHERE user_id = ? AND tag_name = ?
         ORDER BY file_path
-        "
+        ",
     )
     .bind(user_id)
     .bind(&tag_name)
@@ -208,13 +204,15 @@ pub async fn list_files_by_tag(
             let metadata = full_path.metadata().ok()?;
             let is_dir = metadata.is_dir();
             let size = if is_dir { 0 } else { metadata.len() };
-            let modified = metadata.modified().ok()
+            let modified = metadata
+                .modified()
+                .ok()
                 .map(|t| {
                     let datetime: chrono::DateTime<chrono::Utc> = t.into();
                     datetime.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
                 })
                 .unwrap_or_default();
-            
+
             Some(TaggedFile {
                 path,
                 name,

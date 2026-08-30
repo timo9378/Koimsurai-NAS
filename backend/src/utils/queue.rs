@@ -1,9 +1,9 @@
-use tokio::sync::{mpsc, broadcast};
-use std::path::PathBuf;
-use tracing::{info, error, warn};
-use sqlx::{Pool, Sqlite};
-use uuid::Uuid;
 use crate::models::job::{JobStatus, JobUpdate};
+use sqlx::{Pool, Sqlite};
+use std::path::PathBuf;
+use tokio::sync::{broadcast, mpsc};
+use tracing::{error, info, warn};
+use uuid::Uuid;
 
 #[derive(Debug)]
 pub enum JobType {
@@ -21,14 +21,14 @@ pub enum JobType {
     GenerateVideoProxy {
         input_path: PathBuf,
         output_path: PathBuf,
-        target_height: u32,   // e.g., 720 or 1080
-        bitrate_kbps: u32,    // e.g., 2000 (2Mbps)
+        target_height: u32, // e.g., 720 or 1080
+        bitrate_kbps: u32,  // e.g., 2000 (2Mbps)
     },
     /// 生成 HLS 串流檔案 (.m3u8 + .ts segments)
     GenerateHls {
         input_path: PathBuf,
         output_dir: PathBuf,
-        quality: String,      // e.g., "1080p", "720p", "480p", "all"
+        quality: String, // e.g., "1080p", "720p", "480p", "all"
     },
     CopyFiles {
         paths: Vec<String>,
@@ -76,17 +76,15 @@ impl JobQueue {
 
     pub async fn enqueue(&self, job_type: JobType) -> Result<String, String> {
         let job_id = Uuid::new_v4().to_string();
-        
+
         // Persist job to DB
-        sqlx::query(
-            "INSERT INTO jobs (id, job_type, status) VALUES (?, ?, ?)"
-        )
-        .bind(&job_id)
-        .bind(job_type.to_string())
-        .bind(JobStatus::Pending.to_string())
-        .execute(&self.pool)
-        .await
-        .map_err(|e| e.to_string())?;
+        sqlx::query("INSERT INTO jobs (id, job_type, status) VALUES (?, ?, ?)")
+            .bind(&job_id)
+            .bind(job_type.to_string())
+            .bind(JobStatus::Pending.to_string())
+            .execute(&self.pool)
+            .await
+            .map_err(|e| e.to_string())?;
 
         let job = Job {
             id: job_id.clone(),
@@ -98,8 +96,8 @@ impl JobQueue {
     }
 }
 
-use crate::services::search::SearchService;
 use crate::services::ai::AiService;
+use crate::services::search::SearchService;
 use std::sync::Arc;
 
 pub async fn worker(
@@ -110,10 +108,17 @@ pub async fn worker(
     ai_service: Option<Arc<AiService>>,
     storage_root: std::path::PathBuf,
 ) {
-    info!("Job worker started (AI service: {})", if ai_service.is_some() { "enabled" } else { "disabled" });
+    info!(
+        "Job worker started (AI service: {})",
+        if ai_service.is_some() {
+            "enabled"
+        } else {
+            "disabled"
+        }
+    );
     while let Some(job) = receiver.recv().await {
         info!("Processing job: {:?}", job);
-        
+
         // Update status to processing
         let _ = sqlx::query("UPDATE jobs SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
             .bind(JobStatus::Processing.to_string())
@@ -130,12 +135,16 @@ pub async fn worker(
         });
 
         let result = match job.job_type {
-            JobType::Transcode { input_path, output_path, resolution } => {
+            JobType::Transcode {
+                input_path,
+                output_path,
+                resolution,
+            } => {
                 // 使用支援 GPU 加速的 FFmpeg 命令
                 use crate::utils::ffmpeg::FfmpegCommand;
-                
-                let ffmpeg = FfmpegCommand::new(&input_path.to_string_lossy())
-                    .output(&output_path.to_string_lossy());
+
+                let ffmpeg =
+                    FfmpegCommand::new(&input_path.to_string_lossy()).output(&output_path.to_string_lossy());
                 let mut cmd = ffmpeg.transcode(&resolution);
                 let status = cmd.status();
 
@@ -145,7 +154,10 @@ pub async fn worker(
                     Err(e) => Err(format!("Failed to execute ffmpeg: {e}")),
                 }
             }
-            JobType::GenerateThumbnail { input_path, output_path: _ } => {
+            JobType::GenerateThumbnail {
+                input_path,
+                output_path: _,
+            } => {
                 // Use the higher-level thumbnail generator which writes to
                 // storage/.thumbnails/<relative_parent>/<file>.<size>.jpg for all sizes.
                 // This avoids trying to overwrite the input file and centralises logic.
@@ -155,65 +167,73 @@ pub async fn worker(
                 image::generate_thumbnails(input_path.clone(), storage_root.clone());
                 Ok(())
             }
-            JobType::GenerateVideoProxy { input_path, output_path, target_height, bitrate_kbps } => {
+            JobType::GenerateVideoProxy {
+                input_path,
+                output_path,
+                target_height,
+                bitrate_kbps,
+            } => {
                 // 為高碼率影片（如 GoPro）生成低碼率 proxy
                 // Proxy 用於預覽，原始檔案保留供下載
                 use crate::utils::ffmpeg::FfmpegCommand;
-                
+
                 // 確保輸出目錄存在
                 if let Some(parent) = output_path.parent() {
                     let _ = tokio::fs::create_dir_all(parent).await;
                 }
-                
+
                 let ffmpeg = FfmpegCommand::new(&input_path.to_string_lossy());
-                let mut cmd = ffmpeg.generate_proxy(
-                    &output_path.to_string_lossy(),
-                    target_height,
-                    bitrate_kbps,
+                let mut cmd =
+                    ffmpeg.generate_proxy(&output_path.to_string_lossy(), target_height, bitrate_kbps);
+
+                info!(
+                    "Generating proxy: {:?} -> {:?} @ {}p {}kbps",
+                    input_path, output_path, target_height, bitrate_kbps
                 );
-                
-                info!("Generating proxy: {:?} -> {:?} @ {}p {}kbps",
-                      input_path, output_path, target_height, bitrate_kbps);
-                
+
                 let status = cmd.status();
 
                 match status {
                     Ok(s) if s.success() => {
                         info!("Proxy generated successfully: {:?}", output_path);
                         Ok(())
-                    },
+                    }
                     Ok(s) => Err(format!("Proxy generation failed with status: {s}")),
                     Err(e) => Err(format!("Failed to execute ffmpeg for proxy: {e}")),
                 }
             }
-            JobType::GenerateHls { input_path, output_dir, quality } => {
+            JobType::GenerateHls {
+                input_path,
+                output_dir,
+                quality,
+            } => {
                 use crate::utils::ffmpeg::{FfmpegCommand, HlsQuality};
-                
+
                 // 確保輸出目錄存在
                 if let Err(e) = tokio::fs::create_dir_all(&output_dir).await {
                     error!("Failed to create HLS output directory: {}", e);
                     Err(format!("Failed to create HLS output directory: {e}"))
                 } else {
                     let ffmpeg = FfmpegCommand::new(&input_path.to_string_lossy());
-                    
+
                     if quality == "all" {
                         // 生成所有品質 + master playlist
                         let qualities = HlsQuality::all_presets();
                         let mut success = true;
                         let mut error_msg = String::new();
-                        
+
                         for q in &qualities {
                             let quality_dir = output_dir.join(&q.name);
                             if let Err(e) = tokio::fs::create_dir_all(&quality_dir).await {
                                 error!("Failed to create quality dir {:?}: {}", quality_dir, e);
                                 continue;
                             }
-                            
+
                             let ffmpeg = FfmpegCommand::new(&input_path.to_string_lossy());
                             let mut cmd = ffmpeg.generate_hls(&quality_dir.to_string_lossy(), q);
-                            
+
                             info!("Generating HLS {}: {:?}", q.name, input_path);
-                            
+
                             match cmd.status() {
                                 Ok(s) if s.success() => {
                                     info!("HLS {} generated successfully", q.name);
@@ -230,10 +250,13 @@ pub async fn worker(
                                 }
                             }
                         }
-                        
+
                         // 生成 master playlist
                         if success {
-                            if let Err(e) = FfmpegCommand::generate_master_playlist(&output_dir.to_string_lossy(), &qualities) {
+                            if let Err(e) = FfmpegCommand::generate_master_playlist(
+                                &output_dir.to_string_lossy(),
+                                &qualities,
+                            ) {
                                 Err(format!("Failed to create master playlist: {e}"))
                             } else {
                                 info!("Master playlist created at {:?}", output_dir);
@@ -244,15 +267,17 @@ pub async fn worker(
                         }
                     } else {
                         // 生成單一品質
-                        let hls_quality = HlsQuality::from_name(&quality)
-                            .unwrap_or_else(HlsQuality::preset_720p);
-                        
+                        let hls_quality =
+                            HlsQuality::from_name(&quality).unwrap_or_else(HlsQuality::preset_720p);
+
                         let quality_dir = output_dir.join(&hls_quality.name);
-                        if let Err(e) = tokio::fs::create_dir_all(&quality_dir).await { Err(format!("Failed to create quality dir: {e}")) } else {
+                        if let Err(e) = tokio::fs::create_dir_all(&quality_dir).await {
+                            Err(format!("Failed to create quality dir: {e}"))
+                        } else {
                             let mut cmd = ffmpeg.generate_hls(&quality_dir.to_string_lossy(), &hls_quality);
-                            
+
                             info!("Generating HLS {}: {:?}", quality, input_path);
-                            
+
                             match cmd.status() {
                                 Ok(s) if s.success() => {
                                     info!("HLS generated successfully: {:?}", output_dir);
@@ -279,16 +304,21 @@ pub async fn worker(
 
                 for path in paths {
                     let src_path = storage_path.join(&path);
-                    if !src_path.exists() { continue; }
+                    if !src_path.exists() {
+                        continue;
+                    }
 
                     let file_name = src_path.file_name().unwrap_or_default();
                     let target_path = dest_path.join(file_name);
 
                     if src_path.is_dir() {
                         if let Err(e) = copy_recursive(&src_path, &target_path).await {
-                             error!("Failed to copy directory {:?} to {:?}: {}", src_path, target_path, e);
-                             success = false;
-                             error_msg = e.to_string();
+                            error!(
+                                "Failed to copy directory {:?} to {:?}: {}",
+                                src_path, target_path, e
+                            );
+                            success = false;
+                            error_msg = e.to_string();
                         }
                     } else if let Err(e) = tokio::fs::copy(&src_path, &target_path).await {
                         error!("Failed to copy file {:?} to {:?}: {}", src_path, target_path, e);
@@ -296,7 +326,7 @@ pub async fn worker(
                         error_msg = e.to_string();
                     }
                 }
-                
+
                 if success {
                     Ok(())
                 } else {
@@ -312,8 +342,12 @@ pub async fn worker(
                     // Simple text extraction (for now just read to string if possible)
                     // In real world, use `tika` or similar for PDF/Docx
                     let content = tokio::fs::read_to_string(&full_path).await.unwrap_or_default();
-                    let name = full_path.file_name().unwrap_or_default().to_string_lossy().to_string();
-                    
+                    let name = full_path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string();
+
                     if let Err(e) = search_service.index_file(&path, &name, &content) {
                         Err(format!("Failed to index file: {e:?}"))
                     } else {
@@ -329,8 +363,11 @@ pub async fn worker(
                     info!("AI analyzing image: {}", image_path);
                     match ai.analyze_and_save(&image_path).await {
                         Ok(result) => {
-                            info!("AI analysis completed for {}: {} tags detected", 
-                                  image_path, result.tags.len());
+                            info!(
+                                "AI analysis completed for {}: {} tags detected",
+                                image_path,
+                                result.tags.len()
+                            );
                             Ok(())
                         }
                         Err(e) => {
@@ -340,7 +377,10 @@ pub async fn worker(
                     }
                 } else {
                     // AI 服務未啟用，跳過此任務
-                    warn!("AI service not enabled, skipping AI analysis job for: {}", image_path);
+                    warn!(
+                        "AI service not enabled, skipping AI analysis job for: {}",
+                        image_path
+                    );
                     Ok(()) // 返回 Ok 避免任務被標記為失敗
                 }
             }
@@ -349,11 +389,13 @@ pub async fn worker(
         // Update final status
         match result {
             Ok(()) => {
-                let _ = sqlx::query("UPDATE jobs SET status = ?, progress = 100, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-                    .bind(JobStatus::Completed.to_string())
-                    .bind(&job.id)
-                    .execute(&pool)
-                    .await;
+                let _ = sqlx::query(
+                    "UPDATE jobs SET status = ?, progress = 100, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                )
+                .bind(JobStatus::Completed.to_string())
+                .bind(&job.id)
+                .execute(&pool)
+                .await;
 
                 let _ = tx.send(JobUpdate {
                     job_id: job.id.clone(),
@@ -363,12 +405,14 @@ pub async fn worker(
                 });
             }
             Err(e) => {
-                let _ = sqlx::query("UPDATE jobs SET status = ?, error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-                    .bind(JobStatus::Failed.to_string())
-                    .bind(&e)
-                    .bind(&job.id)
-                    .execute(&pool)
-                    .await;
+                let _ = sqlx::query(
+                    "UPDATE jobs SET status = ?, error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                )
+                .bind(JobStatus::Failed.to_string())
+                .bind(&e)
+                .bind(&job.id)
+                .execute(&pool)
+                .await;
 
                 let _ = tx.send(JobUpdate {
                     job_id: job.id.clone(),

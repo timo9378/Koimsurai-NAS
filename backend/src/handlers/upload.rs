@@ -1,17 +1,17 @@
-use axum::{
-    extract::{State, Path as AxumPath, Extension},
-    body::Body,
-    Json,
-    http::{StatusCode, HeaderMap},
-};
-use futures::StreamExt;
-use tokio::io::AsyncWriteExt;
-use tokio::fs::OpenOptions;
-use uuid::Uuid;
-use crate::state::AppState;
-use crate::models::{InitUploadRequest, InitUploadResponse, UploadSession};
 use crate::error::AppError;
 use crate::handlers::file::validate_path;
+use crate::models::{InitUploadRequest, InitUploadResponse, UploadSession};
+use crate::state::AppState;
+use axum::{
+    body::Body,
+    extract::{Extension, Path as AxumPath, State},
+    http::{HeaderMap, StatusCode},
+    Json,
+};
+use futures::StreamExt;
+use tokio::fs::OpenOptions;
+use tokio::io::AsyncWriteExt;
+use uuid::Uuid;
 
 #[utoipa::path(
     post,
@@ -27,9 +27,11 @@ pub async fn init_upload(
     Json(payload): Json<InitUploadRequest>,
 ) -> Result<Json<InitUploadResponse>, AppError> {
     let target_dir = validate_path(&state.storage_path, &payload.file_path)?;
-    
+
     if !target_dir.exists() {
-        tokio::fs::create_dir_all(&target_dir).await.map_err(AppError::from)?;
+        tokio::fs::create_dir_all(&target_dir)
+            .await
+            .map_err(AppError::from)?;
     }
 
     // Check if file already exists (completed file)
@@ -40,14 +42,15 @@ pub async fn init_upload(
 
     // Check for existing upload session for same user + path + name
     if let Some(existing) = sqlx::query_as::<_, UploadSession>(
-        "SELECT * FROM upload_sessions WHERE user_id = ? AND file_path = ? AND file_name = ?"
+        "SELECT * FROM upload_sessions WHERE user_id = ? AND file_path = ? AND file_name = ?",
     )
     .bind(user_id)
     .bind(&payload.file_path)
     .bind(&payload.file_name)
     .fetch_optional(&state.pool)
     .await
-    .map_err(AppError::from)? {
+    .map_err(AppError::from)?
+    {
         // If total_size matches, resume
         if existing.total_size == payload.total_size {
             return Ok(Json(InitUploadResponse {
@@ -66,7 +69,7 @@ pub async fn init_upload(
     let upload_id = Uuid::new_v4().to_string();
 
     sqlx::query(
-        "INSERT INTO upload_sessions (id, user_id, file_path, file_name, total_size) VALUES (?, ?, ?, ?, ?)"
+        "INSERT INTO upload_sessions (id, user_id, file_path, file_name, total_size) VALUES (?, ?, ?, ?, ?)",
     )
     .bind(&upload_id)
     .bind(user_id)
@@ -77,7 +80,11 @@ pub async fn init_upload(
     .await
     .map_err(AppError::from)?;
 
-    Ok(Json(InitUploadResponse { upload_id, uploaded_size: Some(0), status: Some("created".to_string()) }))
+    Ok(Json(InitUploadResponse {
+        upload_id,
+        uploaded_size: Some(0),
+        status: Some("created".to_string()),
+    }))
 }
 
 #[utoipa::path(
@@ -99,22 +106,22 @@ pub async fn upload_chunk(
     body: Body,
 ) -> Result<StatusCode, AppError> {
     // 1. Get session info
-    let session = sqlx::query_as::<_, UploadSession>(
-        "SELECT * FROM upload_sessions WHERE id = ?"
-    )
-    .bind(&id)
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(AppError::from)?
-    .ok_or(AppError::Status(StatusCode::NOT_FOUND))?;
+    let session = sqlx::query_as::<_, UploadSession>("SELECT * FROM upload_sessions WHERE id = ?")
+        .bind(&id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(AppError::from)?
+        .ok_or(AppError::Status(StatusCode::NOT_FOUND))?;
 
     // 2. Parse Content-Range or X-Upload-Offset
     // For simplicity, we'll assume sequential chunks and append to a temp file
     // In a real Tus implementation, we'd need to handle offsets strictly
-    
+
     let temp_dir = state.storage_path.join(".temp_uploads");
     if !temp_dir.exists() {
-        tokio::fs::create_dir_all(&temp_dir).await.map_err(AppError::from)?;
+        tokio::fs::create_dir_all(&temp_dir)
+            .await
+            .map_err(AppError::from)?;
     }
     let temp_file_path = temp_dir.join(&id);
 
@@ -126,7 +133,13 @@ pub async fn upload_chunk(
                 if let Some(start_str) = range_part.split('-').next() {
                     if let Ok(start_val) = start_str.parse::<i64>() {
                         if start_val != session.uploaded_size {
-                            return Err(AppError::Custom(StatusCode::CONFLICT, format!("Offset mismatch: session has {} but upload started at {}", session.uploaded_size, start_val)));
+                            return Err(AppError::Custom(
+                                StatusCode::CONFLICT,
+                                format!(
+                                    "Offset mismatch: session has {} but upload started at {}",
+                                    session.uploaded_size, start_val
+                                ),
+                            ));
                         }
                     }
                 }
@@ -135,7 +148,13 @@ pub async fn upload_chunk(
     } else if let Some(offset_val) = headers.get("x-upload-offset").and_then(|v| v.to_str().ok()) {
         if let Ok(start_val) = offset_val.parse::<i64>() {
             if start_val != session.uploaded_size {
-                return Err(AppError::Custom(StatusCode::CONFLICT, format!("Offset mismatch: session has {} but upload started at {}", session.uploaded_size, start_val)));
+                return Err(AppError::Custom(
+                    StatusCode::CONFLICT,
+                    format!(
+                        "Offset mismatch: session has {} but upload started at {}",
+                        session.uploaded_size, start_val
+                    ),
+                ));
             }
         }
     }
@@ -177,8 +196,10 @@ pub async fn upload_chunk(
             }
         }
 
-        tokio::fs::rename(&temp_file_path, &final_path).await.map_err(AppError::from)?;
-        
+        tokio::fs::rename(&temp_file_path, &final_path)
+            .await
+            .map_err(AppError::from)?;
+
         // Cleanup session
         sqlx::query("DELETE FROM upload_sessions WHERE id = ?")
             .bind(&id)
@@ -194,15 +215,18 @@ pub async fn upload_chunk(
             format!("{}/{}", session.file_path, session.file_name)
         };
         let full_relative_path = full_relative_path.replace('\\', "/");
-        
+
         let metadata = tokio::fs::metadata(&final_path).await.map_err(AppError::from)?;
-        let modified = chrono::DateTime::<chrono::Utc>::from(metadata.modified().map_err(AppError::from)?).naive_utc();
-        let mime_type = mime_guess::from_path(&final_path).first_or_octet_stream().to_string();
+        let modified =
+            chrono::DateTime::<chrono::Utc>::from(metadata.modified().map_err(AppError::from)?).naive_utc();
+        let mime_type = mime_guess::from_path(&final_path)
+            .first_or_octet_stream()
+            .to_string();
         let parent_path = std::path::Path::new(&full_relative_path)
             .parent()
             .map(|p| p.to_string_lossy().to_string().replace('\\', "/"))
             .unwrap_or_default();
-        
+
         sqlx::query(
             r"
             INSERT INTO files (path, name, size, mime_type, parent_path, is_dir, modified)
@@ -211,7 +235,7 @@ pub async fn upload_chunk(
                 size = excluded.size,
                 modified = excluded.modified,
                 mime_type = excluded.mime_type
-            "
+            ",
         )
         .bind(&full_relative_path)
         .bind(&session.file_name)
@@ -226,8 +250,13 @@ pub async fn upload_chunk(
         // ===============================
 
         // Trigger thumbnail generation only for detected images/videos
-        let mime_type = mime_guess::from_path(&final_path).first_or_octet_stream().to_string();
-        if mime_type.starts_with("image/") || mime_type.starts_with("video/") || crate::utils::image::is_likely_media(&final_path) {
+        let mime_type = mime_guess::from_path(&final_path)
+            .first_or_octet_stream()
+            .to_string();
+        if mime_type.starts_with("image/")
+            || mime_type.starts_with("video/")
+            || crate::utils::image::is_likely_media(&final_path)
+        {
             let job_type = crate::utils::queue::JobType::GenerateThumbnail {
                 input_path: final_path.clone(),
                 output_path: final_path.clone(),
@@ -237,7 +266,7 @@ pub async fn upload_chunk(
 
         // Trigger search indexing
         let index_job = crate::utils::queue::JobType::IndexFile {
-            path: full_relative_path
+            path: full_relative_path,
         };
         let _ = state.queue.enqueue(index_job).await;
 
@@ -261,14 +290,12 @@ pub async fn get_upload_status(
     State(state): State<AppState>,
     AxumPath(id): AxumPath<String>,
 ) -> Result<Json<UploadSession>, AppError> {
-    let session = sqlx::query_as::<_, UploadSession>(
-        "SELECT * FROM upload_sessions WHERE id = ?"
-    )
-    .bind(&id)
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(AppError::from)?
-    .ok_or(AppError::Status(StatusCode::NOT_FOUND))?;
+    let session = sqlx::query_as::<_, UploadSession>("SELECT * FROM upload_sessions WHERE id = ?")
+        .bind(&id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(AppError::from)?
+        .ok_or(AppError::Status(StatusCode::NOT_FOUND))?;
 
     Ok(Json(session))
 }

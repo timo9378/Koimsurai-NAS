@@ -1,18 +1,18 @@
-use axum::{
-    extract::{State, Query, Extension},
-    response::{IntoResponse, Response},
-    body::Body,
-    http::header,
-};
-use tokio::process::Command;
-use tokio_util::io::ReaderStream;
-use std::process::Stdio;
-use std::path::PathBuf;
 use crate::state::AppState;
 use crate::utils::ffmpeg::{FfmpegCommand, HlsQuality};
 use crate::utils::queue::JobType;
+use axum::{
+    body::Body,
+    extract::{Extension, Query, State},
+    http::header,
+    response::{IntoResponse, Response},
+};
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn, error};
+use std::path::PathBuf;
+use std::process::Stdio;
+use tokio::process::Command;
+use tokio_util::io::ReaderStream;
+use tracing::{error, info, warn};
 
 #[derive(Deserialize)]
 pub struct StreamParams {
@@ -34,13 +34,16 @@ pub struct StreamParams {
 )]
 // permit 刻意活到 stream 結束 —— 它會被 move 進 TranscodeStream，drop 的時機
 // 就是釋放轉碼名額的時機，那正是併發上限的機制本身，縮短它等於拿掉限流。
-#[allow(clippy::significant_drop_tightening, reason = "permit 的存活期就是併發上限的機制")]
+#[allow(
+    clippy::significant_drop_tightening,
+    reason = "permit 的存活期就是併發上限的機制"
+)]
 pub async fn stream_media(
     State(state): State<AppState>,
     Query(params): Query<StreamParams>,
 ) -> impl IntoResponse {
     let file_path = state.storage_path.join(&params.path);
-    
+
     if !file_path.exists() {
         return Response::builder()
             .status(404)
@@ -65,12 +68,15 @@ pub async fn stream_media(
                 .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數");
         };
 
-        info!("Starting transcode for {} at resolution {}", params.path, resolution);
+        info!(
+            "Starting transcode for {} at resolution {}",
+            params.path, resolution
+        );
 
         // 使用 FfmpegCommand 建構器生成命令 (支援 GPU 加速)
         let ffmpeg_cmd = FfmpegCommand::new(&file_path.to_string_lossy());
         let std_cmd = ffmpeg_cmd.transcode_stream(&resolution);
-        
+
         // 轉換為 tokio Command
         let child = Command::from(std_cmd)
             .stdout(Stdio::piped())
@@ -80,11 +86,11 @@ pub async fn stream_media(
         match child {
             Ok(mut child) => {
                 let stdout = child.stdout.take().expect("Failed to open stdout");
-                
+
                 // 當 stream 結束時自動釋放 permit
                 // Permit is automatically released when the stream ends
                 let stream = TranscodeStream::new(stdout, permit);
-                
+
                 Response::builder()
                     .header("Content-Type", "video/x-matroska")
                     .body(Body::from_stream(stream))
@@ -99,13 +105,15 @@ pub async fn stream_media(
             }
         }
     } else {
-         // Fallback to direct stream for now if no resolution
-         // Ideally, we should use ServeFile for direct play which supports Range requests
-         // For now, we just return a message
-         
-         Response::builder()
+        // Fallback to direct stream for now if no resolution
+        // Ideally, we should use ServeFile for direct play which supports Range requests
+        // For now, we just return a message
+
+        Response::builder()
             .status(400)
-            .body(Body::from("Resolution required for transcoding. For direct play, use /api/download/{path}"))
+            .body(Body::from(
+                "Resolution required for transcoding. For direct play, use /api/download/{path}",
+            ))
             .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數")
     }
 }
@@ -172,11 +180,11 @@ pub async fn get_timeline(
     // Wait, metadata is NOT stored in DB currently. It's extracted in list_files.
     // This makes timeline view very slow if we have to open every file.
     // OPTIMIZATION: We should store metadata (at least date taken) in the DB.
-    
+
     // For now, let's use the 'modified' time from DB as a proxy for 'date taken' if we don't have EXIF in DB.
     // Or better, let's add a 'taken_at' column to files table?
     // Given the constraints, let's use 'modified' time for now, which is indexed.
-    
+
     let group_format = match query.group_by.as_deref() {
         Some("year") => "%Y",
         Some("month") => "%Y-%m",
@@ -194,12 +202,24 @@ pub async fn get_timeline(
         "
     );
 
-    let rows = sqlx::query_as::<_, (String, String, bool, i64, chrono::NaiveDateTime, Option<String>, String)>(&sql)
-        .fetch_all(&state.pool)
-        .await
-        .map_err(crate::error::AppError::from)?;
+    let rows = sqlx::query_as::<
+        _,
+        (
+            String,
+            String,
+            bool,
+            i64,
+            chrono::NaiveDateTime,
+            Option<String>,
+            String,
+        ),
+    >(&sql)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(crate::error::AppError::from)?;
 
-    let mut groups: std::collections::HashMap<String, Vec<crate::models::FileInfo>> = std::collections::HashMap::new();
+    let mut groups: std::collections::HashMap<String, Vec<crate::models::FileInfo>> =
+        std::collections::HashMap::new();
 
     for (date_group, name, is_dir, size, modified, mime_type, parent_path) in rows {
         // Check permission (naive approach, better to join in SQL)
@@ -209,17 +229,18 @@ pub async fn get_timeline(
             format!("{parent_path}/{name}")
         };
 
-        let has_permission = sqlx::query_scalar::<_, bool>(
-            "SELECT can_read FROM permissions WHERE user_id = ? AND path = ?"
-        )
-        .bind(user_id)
-        .bind(&full_path)
-        .fetch_optional(&state.pool)
-        .await
-        .map_err(crate::error::AppError::from)?;
+        let has_permission =
+            sqlx::query_scalar::<_, bool>("SELECT can_read FROM permissions WHERE user_id = ? AND path = ?")
+                .bind(user_id)
+                .bind(&full_path)
+                .fetch_optional(&state.pool)
+                .await
+                .map_err(crate::error::AppError::from)?;
 
         if let Some(can_read) = has_permission {
-            if !can_read { continue; }
+            if !can_read {
+                continue;
+            }
         }
 
         let file_info = crate::models::FileInfo {
@@ -237,7 +258,8 @@ pub async fn get_timeline(
         groups.entry(date_group).or_default().push(file_info);
     }
 
-    let mut result: Vec<TimelineGroup> = groups.into_iter()
+    let mut result: Vec<TimelineGroup> = groups
+        .into_iter()
         .map(|(date, files)| TimelineGroup { date, files })
         .collect();
 
@@ -257,39 +279,39 @@ const HLS_CACHE_DIR: &str = ".hls_cache";
 /// HLS 狀態響應
 #[derive(Serialize, utoipa::ToSchema, specta::Type)]
 pub struct HlsStatusResponse {
-    pub status: String,          // "ready", "processing", "not_found"
-    pub qualities: Vec<String>,  // 可用的品質列表
+    pub status: String,         // "ready", "processing", "not_found"
+    pub qualities: Vec<String>, // 可用的品質列表
     pub master_playlist: Option<String>,
-    pub job_id: Option<String>,  // 如果正在處理中，返回 job_id
+    pub job_id: Option<String>, // 如果正在處理中，返回 job_id
 }
 
 /// HLS 請求參數
 #[derive(Deserialize)]
 pub struct HlsParams {
     pub path: String,
-    pub quality: Option<String>,  // "1080p", "720p", "480p", "360p", "all"
+    pub quality: Option<String>, // "1080p", "720p", "480p", "360p", "all"
 }
 
 /// 計算檔案的 HLS 快取路徑
 fn get_hls_cache_path(storage_path: &std::path::Path, file_path: &str) -> PathBuf {
-    use sha2::{Sha256, Digest};
-    
+    use sha2::{Digest, Sha256};
+
     // 使用檔案路徑的 hash 作為快取目錄名稱
     let mut hasher = Sha256::new();
     hasher.update(file_path.as_bytes());
     let hash = format!("{:x}", hasher.finalize());
     let short_hash = &hash[..16]; // 使用前 16 個字元
-    
+
     storage_path.join(HLS_CACHE_DIR).join(short_hash)
 }
 
 /// 檢查 HLS 是否已經生成
 fn check_hls_ready(cache_path: &std::path::Path, quality: &str) -> (bool, Vec<String>) {
     let mut available_qualities = Vec::new();
-    
+
     // 檢查 master playlist
     let master_exists = cache_path.join("master.m3u8").exists();
-    
+
     // 檢查各個品質
     for q in ["1080p", "720p", "480p", "360p"] {
         let quality_playlist = cache_path.join(q).join("playlist.m3u8");
@@ -297,13 +319,13 @@ fn check_hls_ready(cache_path: &std::path::Path, quality: &str) -> (bool, Vec<St
             available_qualities.push(q.to_string());
         }
     }
-    
+
     let ready = if quality == "all" {
         master_exists && !available_qualities.is_empty()
     } else {
         available_qualities.contains(&quality.to_string())
     };
-    
+
     (ready, available_qualities)
 }
 
@@ -320,12 +342,9 @@ fn check_hls_ready(cache_path: &std::path::Path, quality: &str) -> (bool, Vec<St
         (status = 404, description = "Video file not found")
     )
 )]
-pub async fn hls_status(
-    State(state): State<AppState>,
-    Query(params): Query<HlsParams>,
-) -> impl IntoResponse {
+pub async fn hls_status(State(state): State<AppState>, Query(params): Query<HlsParams>) -> impl IntoResponse {
     let file_path = state.storage_path.join(&params.path);
-    
+
     if !file_path.exists() {
         return Response::builder()
             .status(404)
@@ -333,29 +352,34 @@ pub async fn hls_status(
             .body(Body::from(r#"{"error": "Video file not found"}"#))
             .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數");
     }
-    
+
     let quality = params.quality.unwrap_or_else(|| "720p".to_string());
     let cache_path = get_hls_cache_path(&state.storage_path, &params.path);
     let (ready, available_qualities) = check_hls_ready(&cache_path, &quality);
-    
+
     if ready {
         let master_playlist = if cache_path.join("master.m3u8").exists() {
-            Some(format!("/api/media/hls/serve?path={}&file=master.m3u8", params.path))
+            Some(format!(
+                "/api/media/hls/serve?path={}&file=master.m3u8",
+                params.path
+            ))
         } else {
             None
         };
-        
+
         let response = HlsStatusResponse {
             status: "ready".to_string(),
             qualities: available_qualities,
             master_playlist,
             job_id: None,
         };
-        
+
         Response::builder()
             .status(200)
             .header("Content-Type", "application/json")
-            .body(Body::from(serde_json::to_string(&response).expect("欄位皆為 String/數字，序列化不會失敗")))
+            .body(Body::from(
+                serde_json::to_string(&response).expect("欄位皆為 String/數字，序列化不會失敗"),
+            ))
             .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數")
     } else {
         // 觸發 HLS 生成任務
@@ -364,7 +388,7 @@ pub async fn hls_status(
             output_dir: cache_path,
             quality: quality.clone(),
         };
-        
+
         // 發送任務到 queue
         let job_id = match state.queue.enqueue(job_type).await {
             Ok(id) => id,
@@ -377,20 +401,25 @@ pub async fn hls_status(
                     .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數");
             }
         };
-        
-        info!("Queued HLS generation job {} for {} @ {}", job_id, params.path, quality);
-        
+
+        info!(
+            "Queued HLS generation job {} for {} @ {}",
+            job_id, params.path, quality
+        );
+
         let response = HlsStatusResponse {
             status: "processing".to_string(),
             qualities: available_qualities,
             master_playlist: None,
             job_id: Some(job_id),
         };
-        
+
         Response::builder()
             .status(202)
             .header("Content-Type", "application/json")
-            .body(Body::from(serde_json::to_string(&response).expect("欄位皆為 String/數字，序列化不會失敗")))
+            .body(Body::from(
+                serde_json::to_string(&response).expect("欄位皆為 String/數字，序列化不會失敗"),
+            ))
             .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數")
     }
 }
@@ -398,8 +427,8 @@ pub async fn hls_status(
 /// HLS 檔案服務參數
 #[derive(Deserialize)]
 pub struct HlsServeParams {
-    pub path: String,       // 原始影片路徑
-    pub file: String,       // HLS 檔案名稱 (e.g., "master.m3u8", "720p/playlist.m3u8", "720p/segment_001.ts")
+    pub path: String, // 原始影片路徑
+    pub file: String, // HLS 檔案名稱 (e.g., "master.m3u8", "720p/playlist.m3u8", "720p/segment_001.ts")
 }
 
 /// 提供 HLS 檔案 (playlist 或 segment)
@@ -421,7 +450,7 @@ pub async fn hls_serve(
 ) -> impl IntoResponse {
     let cache_path = get_hls_cache_path(&state.storage_path, &params.path);
     let file_path = cache_path.join(&params.file);
-    
+
     // 安全檢查：確保路徑沒有超出快取目錄
     if !file_path.starts_with(&cache_path) {
         return Response::builder()
@@ -429,14 +458,14 @@ pub async fn hls_serve(
             .body(Body::from("Access denied"))
             .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數");
     }
-    
+
     if !file_path.exists() {
         return Response::builder()
             .status(404)
             .body(Body::from("HLS file not found"))
             .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數");
     }
-    
+
     // 讀取檔案
     match tokio::fs::read(&file_path).await {
         Ok(contents) => {
@@ -451,7 +480,7 @@ pub async fn hls_serve(
             } else {
                 "application/octet-stream"
             };
-            
+
             // 對 m3u8 檔案進行路徑重寫
             let body = if ext == Some(std::ffi::OsStr::new("m3u8")) {
                 let content = String::from_utf8_lossy(&contents);
@@ -460,7 +489,7 @@ pub async fn hls_serve(
             } else {
                 Body::from(contents)
             };
-            
+
             Response::builder()
                 .status(200)
                 .header(header::CONTENT_TYPE, content_type)
@@ -486,7 +515,7 @@ fn rewrite_hls_urls(content: &str, video_path: &str, playlist_file: &str) -> Str
     } else {
         ""
     };
-    
+
     for line in content.lines() {
         if line.starts_with('#') || line.is_empty() {
             result.push_str(line);
@@ -497,14 +526,16 @@ fn rewrite_hls_urls(content: &str, video_path: &str, playlist_file: &str) -> Str
             } else {
                 format!("{base_dir}/{line}")
             };
-            let url = format!("/api/media/hls/serve?path={}&file={}", 
+            let url = format!(
+                "/api/media/hls/serve?path={}&file={}",
                 urlencoding::encode(video_path),
-                urlencoding::encode(&file_ref));
+                urlencoding::encode(&file_ref)
+            );
             result.push_str(&url);
         }
         result.push('\n');
     }
-    
+
     result
 }
 
@@ -519,18 +550,22 @@ fn rewrite_hls_urls(content: &str, video_path: &str, playlist_file: &str) -> Str
 pub async fn hls_qualities() -> impl IntoResponse {
     let qualities: Vec<serde_json::Value> = HlsQuality::all_presets()
         .iter()
-        .map(|q| serde_json::json!({
-            "name": q.name,
-            "width": q.width,
-            "height": q.height,
-            "video_bitrate_kbps": q.video_bitrate_kbps,
-            "audio_bitrate_kbps": q.audio_bitrate_kbps,
-        }))
+        .map(|q| {
+            serde_json::json!({
+                "name": q.name,
+                "width": q.width,
+                "height": q.height,
+                "video_bitrate_kbps": q.video_bitrate_kbps,
+                "audio_bitrate_kbps": q.audio_bitrate_kbps,
+            })
+        })
         .collect();
-    
+
     Response::builder()
         .status(200)
         .header("Content-Type", "application/json")
-        .body(Body::from(serde_json::to_string(&qualities).expect("欄位皆為 String/數字，序列化不會失敗")))
+        .body(Body::from(
+            serde_json::to_string(&qualities).expect("欄位皆為 String/數字，序列化不會失敗"),
+        ))
         .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數")
 }

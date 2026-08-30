@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 use sqlx::FromRow;
+use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, PartialEq, Clone, specta::Type)]
 #[serde(rename_all = "lowercase")]

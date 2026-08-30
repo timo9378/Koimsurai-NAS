@@ -1,5 +1,5 @@
-use sqlx::{Pool, Sqlite};
 use serde::Serialize;
+use sqlx::{Pool, Sqlite};
 use utoipa::ToSchema;
 
 pub struct AuditService {
@@ -20,7 +20,7 @@ impl AuditService {
         ip_address: Option<String>,
     ) {
         let result = sqlx::query(
-            "INSERT INTO audit_logs (user_id, action, target, details, ip_address) VALUES (?, ?, ?, ?, ?)"
+            "INSERT INTO audit_logs (user_id, action, target, details, ip_address) VALUES (?, ?, ?, ?, ?)",
         )
         .bind(user_id)
         .bind(action)

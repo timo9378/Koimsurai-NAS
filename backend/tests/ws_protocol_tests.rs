@@ -58,10 +58,9 @@ fn server_variant_tags_are_snake_case() {
 
 #[test]
 fn client_messages_parse_from_the_documented_shape() {
-    let msg: WsClientMessage = serde_json::from_str(
-        r#"{"type":"subscribe_docker_stats","payload":{"container_id":"abc"}}"#,
-    )
-    .expect("前端送的形狀必須解析得出來");
+    let msg: WsClientMessage =
+        serde_json::from_str(r#"{"type":"subscribe_docker_stats","payload":{"container_id":"abc"}}"#)
+            .expect("前端送的形狀必須解析得出來");
     match msg {
         WsClientMessage::SubscribeDockerStats { container_id } => assert_eq!(container_id, "abc"),
         other => panic!("解析成了錯的 variant: {other:?}"),

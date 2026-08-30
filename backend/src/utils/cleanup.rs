@@ -31,10 +31,7 @@ use walkdir::WalkDir;
 /// let max_age = Duration::from_secs(3600); // 1 小時
 /// let (deleted, freed) = cleanup_hls_cache(cache_dir, max_age).await?;
 /// ```
-pub async fn cleanup_hls_cache(
-    cache_dir: PathBuf,
-    max_age: Duration,
-) -> anyhow::Result<(u64, u64)> {
+pub async fn cleanup_hls_cache(cache_dir: PathBuf, max_age: Duration) -> anyhow::Result<(u64, u64)> {
     if !cache_dir.exists() {
         debug!("HLS cache directory does not exist: {:?}", cache_dir);
         return Ok((0, 0));
@@ -47,14 +44,14 @@ pub async fn cleanup_hls_cache(
     // 收集要刪除的檔案 (使用同步 walkdir，然後異步刪除)
     let files_to_delete: Vec<PathBuf> = {
         let mut files = Vec::new();
-        
+
         for entry in WalkDir::new(&cache_dir)
             .into_iter()
             .filter_map(std::result::Result::ok)
             .filter(|e| e.file_type().is_file())
         {
             let path = entry.path();
-            
+
             // 只處理 HLS 相關檔案
             let extension = path.extension().and_then(|e| e.to_str());
             if !matches!(extension, Some("ts" | "m3u8")) {
@@ -72,7 +69,7 @@ pub async fn cleanup_hls_cache(
                 }
             }
         }
-        
+
         files
     };
 
@@ -100,7 +97,7 @@ pub async fn cleanup_hls_cache(
 
     // 清理空的子目錄
     let empty_dirs = cleanup_empty_dirs(&cache_dir).await?;
-    
+
     if deleted_count > 0 || empty_dirs > 0 {
         info!(
             "HLS cleanup completed: deleted {} files ({} bytes), removed {} empty directories",
@@ -116,7 +113,7 @@ pub async fn cleanup_hls_cache(
 /// 清理空的子目錄
 async fn cleanup_empty_dirs(dir: &PathBuf) -> anyhow::Result<u64> {
     let mut removed_count = 0u64;
-    
+
     // 收集所有子目錄 (深度優先，從最深的開始)
     let mut dirs: Vec<PathBuf> = Vec::new();
     for entry in WalkDir::new(dir)
@@ -129,7 +126,7 @@ async fn cleanup_empty_dirs(dir: &PathBuf) -> anyhow::Result<u64> {
             dirs.push(path);
         }
     }
-    
+
     // 按路徑長度降序排序 (深層目錄先處理)
     dirs.sort_by_key(|d| std::cmp::Reverse(d.as_os_str().len()));
 
@@ -162,7 +159,10 @@ async fn cleanup_empty_dirs(dir: &PathBuf) -> anyhow::Result<u64> {
 /// 格式化位元組數量為人類可讀格式
 // 百分比顯示：u64 位元組轉浮點必然有損，而這正是要的 —— 顯示到小數點後一位，
 // 而 u64 的位元組數在 f32/f64 的尾數範圍內綽綽有餘（f64 可精確表示到 2^53 位元組 = 9 PB）。
-#[allow(clippy::cast_precision_loss, reason = "百分比顯示，位元組數遠低於浮點尾數上限")]
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "百分比顯示，位元組數遠低於浮點尾數上限"
+)]
 fn format_bytes(bytes: u64) -> String {
     const KB: u64 = 1024;
     const MB: u64 = KB * 1024;
@@ -213,16 +213,20 @@ pub fn spawn_hls_cleanup_task(
 
     tokio::spawn(async move {
         let mut interval_timer = tokio::time::interval(interval);
-        
+
         loop {
             interval_timer.tick().await;
-            
+
             debug!("Running scheduled HLS cleanup...");
-            
+
             match cleanup_hls_cache(cache_dir.clone(), max_age).await {
                 Ok((deleted, freed)) => {
                     if deleted > 0 {
-                        debug!("Scheduled cleanup: deleted {} files, freed {}", deleted, format_bytes(freed));
+                        debug!(
+                            "Scheduled cleanup: deleted {} files, freed {}",
+                            deleted,
+                            format_bytes(freed)
+                        );
                     }
                 }
                 Err(e) => {
@@ -242,7 +246,7 @@ pub fn spawn_hls_cleanup_task(
 /// - `session_id`: 串流 session ID (通常是目錄名稱)
 pub async fn cleanup_hls_session(cache_dir: PathBuf, session_id: &str) -> anyhow::Result<u64> {
     let session_dir = cache_dir.join(session_id);
-    
+
     if !session_dir.exists() {
         return Ok(0);
     }
@@ -261,7 +265,7 @@ pub async fn cleanup_hls_session(cache_dir: PathBuf, session_id: &str) -> anyhow
 
     // 刪除空目錄
     fs::remove_dir(&session_dir).await?;
-    
+
     info!(
         "Cleaned up HLS session {}: freed {}",
         session_id,
@@ -291,18 +295,18 @@ mod tests {
     #[tokio::test]
     async fn test_cleanup_old_files() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         // 創建測試檔案
         let ts_file = temp_dir.path().join("test.ts");
         let m3u8_file = temp_dir.path().join("playlist.m3u8");
         let other_file = temp_dir.path().join("test.txt");
-        
+
         let mut f1 = File::create(&ts_file).await.unwrap();
         f1.write_all(b"dummy ts content").await.unwrap();
-        
+
         let mut f2 = File::create(&m3u8_file).await.unwrap();
         f2.write_all(b"#EXTM3U\n").await.unwrap();
-        
+
         let mut f3 = File::create(&other_file).await.unwrap();
         f3.write_all(b"other content").await.unwrap();
 
@@ -310,10 +314,10 @@ mod tests {
         let (deleted, _) = cleanup_hls_cache(temp_dir.path().to_path_buf(), Duration::from_secs(0))
             .await
             .unwrap();
-        
+
         // 應該刪除 2 個 HLS 檔案 (.ts 和 .m3u8)
         assert_eq!(deleted, 2);
-        
+
         // .txt 檔案應該保留
         assert!(other_file.exists());
     }
@@ -321,7 +325,7 @@ mod tests {
     #[tokio::test]
     async fn test_cleanup_preserves_new_files() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         // 創建測試檔案
         let ts_file = temp_dir.path().join("test.ts");
         let mut f = File::create(&ts_file).await.unwrap();
@@ -331,7 +335,7 @@ mod tests {
         let (deleted, _) = cleanup_hls_cache(temp_dir.path().to_path_buf(), Duration::from_secs(3600))
             .await
             .unwrap();
-        
+
         assert_eq!(deleted, 0);
         assert!(ts_file.exists());
     }

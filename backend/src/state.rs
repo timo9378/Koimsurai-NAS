@@ -1,15 +1,15 @@
+use crate::models::job::JobUpdate;
+use crate::services::ai::AiService;
+use crate::services::audit::AuditService;
+use crate::services::docker::DockerService;
+use crate::services::search::SearchService;
+use crate::utils::queue::JobQueue;
+use dav_server::DavHandler;
 use sqlx::{Pool, Sqlite};
+use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::env;
-use dav_server::DavHandler;
 use tokio::sync::{broadcast, Semaphore};
-use crate::utils::queue::JobQueue;
-use crate::models::job::JobUpdate;
-use crate::services::audit::AuditService;
-use crate::services::search::SearchService;
-use crate::services::docker::DockerService;
-use crate::services::ai::AiService;
 
 /// 從環境變數取得即時轉碼並發限制
 /// Get transcode concurrency limit from env
@@ -24,15 +24,13 @@ pub fn get_max_concurrent_transcodes() -> usize {
 /// 從環境變數取得是否啟用 Docker 管理功能
 /// Get whether Docker management is enabled from env
 pub fn get_docker_enabled() -> bool {
-    env::var("ENABLE_DOCKER_MANAGER")
-        .is_ok_and(|v| v.to_lowercase() == "true" || v == "1")
+    env::var("ENABLE_DOCKER_MANAGER").is_ok_and(|v| v.to_lowercase() == "true" || v == "1")
 }
 
 /// 從環境變數取得是否啟用 AI 圖片標籤功能
 /// Get whether AI image labelling is enabled from env
 pub fn get_ai_enabled() -> bool {
-    env::var("ENABLE_AI_LABELLING")
-        .is_ok_and(|v| v.to_lowercase() == "true" || v == "1")
+    env::var("ENABLE_AI_LABELLING").is_ok_and(|v| v.to_lowercase() == "true" || v == "1")
 }
 
 #[derive(Clone)]
@@ -57,4 +55,3 @@ pub struct AppState {
     /// AI image tagging service (optional)
     pub ai_service: Option<Arc<AiService>>,
 }
-

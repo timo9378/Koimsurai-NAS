@@ -1,12 +1,15 @@
 use axum::{
-    extract::{ws::{Message, WebSocket, WebSocketUpgrade}, Query, State},
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        Query, State,
+    },
     response::IntoResponse,
 };
 use futures::{sink::SinkExt, stream::StreamExt};
 use serde::Deserialize;
 // write! 寫進 String 需要這個 trait 在 scope（format_push_string 的建議寫法）
-use std::fmt::Write;
 use std::collections::HashSet;
+use std::fmt::Write;
 
 use crate::state::AppState;
 
@@ -21,49 +24,44 @@ pub struct TerminalQuery {
     pub rows: u16,
 }
 
-const fn default_cols() -> u16 { 80 }
-const fn default_rows() -> u16 { 24 }
+const fn default_cols() -> u16 {
+    80
+}
+const fn default_rows() -> u16 {
+    24
+}
 
 /// 允許的命令白名單 - 只包含容器內實際可用的命令
 fn get_allowed_commands() -> HashSet<&'static str> {
     [
         // 內建命令
-        "help", "clear", "exit", "logout", "history",
-        // 檔案操作 (coreutils - 容器內有)
-        "ls", "ll", "la", "pwd", "cd", "cat", "head", "tail",
-        "echo", "mkdir", "touch", "cp", "mv", "rm", "ln",
-        "chmod", "chgrp", "stat", "file", "basename", "dirname",
-        "realpath", "readlink",
+        "help", "clear", "exit", "logout", "history", // 檔案操作 (coreutils - 容器內有)
+        "ls", "ll", "la", "pwd", "cd", "cat", "head", "tail", "echo", "mkdir", "touch", "cp", "mv", "rm",
+        "ln", "chmod", "chgrp", "stat", "file", "basename", "dirname", "realpath", "readlink",
         // 文字處理
-        "grep", "find", "wc", "sort", "uniq", "cut", "awk", "sed",
-        "tr", "tee", "xargs", "diff",
+        "grep", "find", "wc", "sort", "uniq", "cut", "awk", "sed", "tr", "tee", "xargs", "diff",
         // 系統資訊 (procps - 已安裝)
-        "ps", "top", "free", "uptime", "w", "kill", "pgrep", "pkill",
-        // 磁碟工具
+        "ps", "top", "free", "uptime", "w", "kill", "pgrep", "pkill", // 磁碟工具
         "df", "du",
         // 壓縮工具 (需要額外安裝，暫時移除)
         // "tar", "gzip", "gunzip", "zip", "unzip",
         // 其他
-        "date", "whoami", "hostname", "uname", "env", "printenv",
-        "which", "type", "true", "false", "test", "expr",
-        // FFmpeg (已安裝)
+        "date", "whoami", "hostname", "uname", "env", "printenv", "which", "type", "true", "false", "test",
+        "expr", // FFmpeg (已安裝)
         "ffmpeg", "ffprobe",
-    ].into_iter().collect()
+    ]
+    .into_iter()
+    .collect()
 }
 
 /// 獲取命令列表供 Tab 補全使用
 pub fn get_available_commands() -> Vec<&'static str> {
     vec![
-        "help", "clear", "exit", "logout", "history",
-        "ls", "ll", "la", "pwd", "cd", "cat", "head", "tail",
-        "echo", "mkdir", "touch", "cp", "mv", "rm", "ln",
-        "chmod", "stat", "file", "basename", "dirname",
-        "grep", "find", "wc", "sort", "uniq", "cut", "awk", "sed",
-        "tr", "tee", "xargs", "diff",
-        "ps", "top", "free", "uptime", "w", "kill",
-        "df", "du",
-        "date", "whoami", "hostname", "uname", "env",
-        "which", "ffmpeg", "ffprobe",
+        "help", "clear", "exit", "logout", "history", "ls", "ll", "la", "pwd", "cd", "cat", "head", "tail",
+        "echo", "mkdir", "touch", "cp", "mv", "rm", "ln", "chmod", "stat", "file", "basename", "dirname",
+        "grep", "find", "wc", "sort", "uniq", "cut", "awk", "sed", "tr", "tee", "xargs", "diff", "ps", "top",
+        "free", "uptime", "w", "kill", "df", "du", "date", "whoami", "hostname", "uname", "env", "which",
+        "ffmpeg", "ffprobe",
     ]
 }
 
@@ -71,16 +69,15 @@ pub fn get_available_commands() -> Vec<&'static str> {
 /// 這些字符可用來繞過白名單（命令替換、進程替換等）
 const fn get_dangerous_shell_chars() -> &'static [&'static str] {
     &[
-        "`",      // backtick 命令替換
-        "$(",     // $() 命令替換
-        "$((",    // 算術展開
-        "${",     // 變數展開
-        "<(",     // 進程替換
-        ">(", 
-        ">>",     // append redirect
-        "<<",     // here-doc
-        "\\",     // 反斜線轉義
-        "\n",     // newline (命令分隔)
+        "`",   // backtick 命令替換
+        "$(",  // $() 命令替換
+        "$((", // 算術展開
+        "${",  // 變數展開
+        "<(",  // 進程替換
+        ">(", ">>", // append redirect
+        "<<", // here-doc
+        "\\", // 反斜線轉義
+        "\n", // newline (命令分隔)
         "\r",
     ]
 }
@@ -88,27 +85,79 @@ const fn get_dangerous_shell_chars() -> &'static [&'static str] {
 /// 危險命令黑名單 — 絕對禁止的命令名稱
 fn get_dangerous_commands() -> HashSet<&'static str> {
     [
-        "sudo", "su", "chown", "chroot", "mount", "umount",
-        "mkfs", "dd", "eval", "exec", "source",
-        "curl", "wget", "nc", "ncat", "netcat", "nmap",
-        "python", "python3", "perl", "ruby", "node", "php",
-        "sh", "bash", "zsh", "csh", "dash", "ash",
-        "ssh", "scp", "sftp", "telnet", "ftp",
-        "apt", "apt-get", "yum", "dnf", "pacman", "pip", "pip3",
-        "systemctl", "service", "init", "shutdown", "reboot", "halt",
-        "iptables", "ip6tables", "nft",
-        "insmod", "rmmod", "modprobe",
-        "crontab", "at",
-        "strace", "ltrace", "gdb",
-        "passwd", "useradd", "userdel", "usermod", "groupadd",
-    ].into_iter().collect()
+        "sudo",
+        "su",
+        "chown",
+        "chroot",
+        "mount",
+        "umount",
+        "mkfs",
+        "dd",
+        "eval",
+        "exec",
+        "source",
+        "curl",
+        "wget",
+        "nc",
+        "ncat",
+        "netcat",
+        "nmap",
+        "python",
+        "python3",
+        "perl",
+        "ruby",
+        "node",
+        "php",
+        "sh",
+        "bash",
+        "zsh",
+        "csh",
+        "dash",
+        "ash",
+        "ssh",
+        "scp",
+        "sftp",
+        "telnet",
+        "ftp",
+        "apt",
+        "apt-get",
+        "yum",
+        "dnf",
+        "pacman",
+        "pip",
+        "pip3",
+        "systemctl",
+        "service",
+        "init",
+        "shutdown",
+        "reboot",
+        "halt",
+        "iptables",
+        "ip6tables",
+        "nft",
+        "insmod",
+        "rmmod",
+        "modprobe",
+        "crontab",
+        "at",
+        "strace",
+        "ltrace",
+        "gdb",
+        "passwd",
+        "useradd",
+        "userdel",
+        "usermod",
+        "groupadd",
+    ]
+    .into_iter()
+    .collect()
 }
 
 /// 解析命令字串為管道分隔的子命令，並驗證每一個子命令是否安全
 /// Parses a command string into pipe-separated sub-commands and validates each one
 fn is_command_safe(cmd: &str) -> Result<(), String> {
     let cmd_trimmed = cmd.trim();
-    
+
     if cmd_trimmed.is_empty() {
         return Ok(());
     }
@@ -136,7 +185,7 @@ fn is_command_safe(cmd: &str) -> Result<(), String> {
     let allowed = get_allowed_commands();
     let dangerous = get_dangerous_commands();
     let sub_commands: Vec<&str> = cmd_trimmed.split('|').collect();
-    
+
     for (i, sub_cmd) in sub_commands.iter().enumerate() {
         let sub_trimmed = sub_cmd.trim();
         if sub_trimmed.is_empty() {
@@ -175,7 +224,8 @@ fn is_command_safe(cmd: &str) -> Result<(), String> {
         // 3c. 額外的 rm 安全檢查
         if command_name == "rm" {
             let args_str = without_redirect.to_lowercase();
-            if args_str.contains("-rf") || args_str.contains("-fr") || args_str.contains("--no-preserve-root") {
+            if args_str.contains("-rf") || args_str.contains("-fr") || args_str.contains("--no-preserve-root")
+            {
                 return Err("禁止使用 rm -rf 命令".to_string());
             }
         }
@@ -195,10 +245,10 @@ fn is_command_safe(cmd: &str) -> Result<(), String> {
 /// Tab 補全：檔案和目錄
 fn get_completions(partial: &str, current_dir: &str, storage_base: &str) -> Vec<String> {
     let mut completions = Vec::new();
-    
+
     // 分離命令和參數
     let parts: Vec<&str> = partial.split_whitespace().collect();
-    
+
     if parts.is_empty() || (parts.len() == 1 && !partial.ends_with(' ')) {
         // 補全命令
         let prefix = parts.first().unwrap_or(&"");
@@ -209,15 +259,19 @@ fn get_completions(partial: &str, current_dir: &str, storage_base: &str) -> Vec<
         }
     } else {
         // 補全檔案/目錄路徑
-        let path_part = if partial.ends_with(' ') { "" } else { parts.last().unwrap_or(&"") };
-        
+        let path_part = if partial.ends_with(' ') {
+            ""
+        } else {
+            parts.last().unwrap_or(&"")
+        };
+
         // rsplit_once 一次做完「有沒有 /」與「切在哪」，取代原本
         // `contains('/')` 之後再 `rfind('/').unwrap()` 的兩段式寫法 ——
         // 那種寫法的 guard 與 unwrap 分處兩行，日後改動 guard 就會變成 panic。
         let (dir_to_search, file_prefix) = if let Some((head, prefix)) = path_part.rsplit_once('/') {
             // 下游需要保留結尾的 '/'（rsplit_once 會把分隔符吃掉）
             let dir = &path_part[..=head.len()];
-            
+
             // 構建完整路徑
             let full_dir = if dir.starts_with('/') || dir.starts_with("~/") {
                 if dir.starts_with("~/") {
@@ -232,24 +286,20 @@ fn get_completions(partial: &str, current_dir: &str, storage_base: &str) -> Vec<
         } else {
             (current_dir.to_string(), path_part.to_string())
         };
-        
+
         // 讀取目錄內容
         if let Ok(entries) = std::fs::read_dir(&dir_to_search) {
             for entry in entries.filter_map(std::result::Result::ok) {
                 let name = entry.file_name().to_string_lossy().to_string();
                 if name.starts_with(&file_prefix) {
                     let is_dir = entry.file_type().is_ok_and(|t| t.is_dir());
-                    let display_name = if is_dir {
-                        format!("{name}/")
-                    } else {
-                        name
-                    };
+                    let display_name = if is_dir { format!("{name}/") } else { name };
                     completions.push(display_name);
                 }
             }
         }
     }
-    
+
     completions.sort();
     completions
 }
@@ -300,17 +350,21 @@ pub async fn terminal_handler(
     State(state): State<AppState>,
     Query(query): Query<TerminalQuery>,
 ) -> impl IntoResponse {
-    tracing::info!("Terminal WebSocket connection requested: cols={}, rows={}", query.cols, query.rows);
+    tracing::info!(
+        "Terminal WebSocket connection requested: cols={}, rows={}",
+        query.cols,
+        query.rows
+    );
     ws.on_upgrade(move |socket| handle_terminal_socket(socket, state, query))
 }
 
 async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: TerminalQuery) {
     let (mut sender, mut receiver) = socket.split();
-    
+
     // 當前工作目錄（限制在 storage 內）
     let storage_path = state.storage_path.clone();
     let mut current_dir = storage_path.to_string_lossy().to_string();
-    
+
     // 發送歡迎訊息
     let welcome = "\x1b[2J\x1b[H\
          \x1b[36m╔════════════════════════════════════════════════════╗\x1b[0m\r\n\
@@ -319,13 +373,16 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
          \x1b[36m╠════════════════════════════════════════════════════╣\x1b[0m\r\n\
          \x1b[36m║\x1b[0m  輸入 \x1b[33mhelp\x1b[0m 查看可用命令                            \x1b[36m║\x1b[0m\r\n\
          \x1b[36m╚════════════════════════════════════════════════════╝\x1b[0m\r\n\r\n".to_string();
-    
+
     if sender.send(Message::Text(welcome)).await.is_err() {
         return;
     }
 
     // 發送初始提示符
-    let prompt = format!("\x1b[36mnas\x1b[0m:\x1b[34m{}\x1b[0m$ ", get_display_path(&current_dir, &storage_path.to_string_lossy()));
+    let prompt = format!(
+        "\x1b[36mnas\x1b[0m:\x1b[34m{}\x1b[0m$ ",
+        get_display_path(&current_dir, &storage_path.to_string_lossy())
+    );
     if sender.send(Message::Text(prompt)).await.is_err() {
         return;
     }
@@ -352,15 +409,17 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
                         '\r' | '\n' => {
                             // Enter 鍵 - 執行命令
                             let _ = sender.send(Message::Text("\r\n".to_string())).await;
-                            
+
                             let cmd = input_buffer.trim().to_string();
                             if !cmd.is_empty() {
                                 command_history.push(cmd.clone());
                             }
-                            
+
                             // 執行命令
-                            let output = execute_command(&cmd, &mut current_dir, &storage_path.to_string_lossy()).await;
-                            
+                            let output =
+                                execute_command(&cmd, &mut current_dir, &storage_path.to_string_lossy())
+                                    .await;
+
                             if !output.is_empty() {
                                 let _ = sender.send(Message::Text(format!("{output}\r\n"))).await;
                             }
@@ -370,33 +429,40 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
                                 let _ = sender.close().await;
                                 return;
                             }
-                            
+
                             input_buffer.clear();
-                            
+
                             // 發送新提示符
-                            let prompt = format!("\x1b[36mnas\x1b[0m:\x1b[34m{}\x1b[0m$ ", 
-                                get_display_path(&current_dir, &storage_path.to_string_lossy()));
+                            let prompt = format!(
+                                "\x1b[36mnas\x1b[0m:\x1b[34m{}\x1b[0m$ ",
+                                get_display_path(&current_dir, &storage_path.to_string_lossy())
+                            );
                             let _ = sender.send(Message::Text(prompt)).await;
                         }
                         '\t' => {
                             // Tab 鍵 - 自動補全
-                            let completions = get_completions(&input_buffer, &current_dir, &storage_path.to_string_lossy());
-                            
+                            let completions =
+                                get_completions(&input_buffer, &current_dir, &storage_path.to_string_lossy());
+
                             if completions.len() == 1 {
                                 // 唯一匹配：直接補全
                                 let completion = &completions[0];
-                                
+
                                 // 找出需要補全的部分
                                 let parts: Vec<&str> = input_buffer.split_whitespace().collect();
-                                let last_part = if input_buffer.ends_with(' ') { "" } else { parts.last().unwrap_or(&"") };
-                                
+                                let last_part = if input_buffer.ends_with(' ') {
+                                    ""
+                                } else {
+                                    parts.last().unwrap_or(&"")
+                                };
+
                                 // 計算需要添加的字符
                                 let to_add = if completion.len() > last_part.len() {
                                     &completion[last_part.len()..]
                                 } else {
                                     ""
                                 };
-                                
+
                                 if !to_add.is_empty() {
                                     input_buffer.push_str(to_add);
                                     let _ = sender.send(Message::Text(to_add.to_string())).await;
@@ -404,11 +470,16 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
                             } else if completions.len() > 1 {
                                 // 多個匹配：顯示所有選項
                                 let _ = sender.send(Message::Text("\r\n".to_string())).await;
-                                
+
                                 // 格式化輸出（類似 bash）
-                                let max_len = completions.iter().map(std::string::String::len).max().unwrap_or(10) + 2;
+                                let max_len = completions
+                                    .iter()
+                                    .map(std::string::String::len)
+                                    .max()
+                                    .unwrap_or(10)
+                                    + 2;
                                 let cols = 80 / max_len.max(10);
-                                
+
                                 for (i, comp) in completions.iter().enumerate() {
                                     let padded = format!("{comp:<max_len$}");
                                     let _ = sender.send(Message::Text(padded)).await;
@@ -416,21 +487,29 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
                                         let _ = sender.send(Message::Text("\r\n".to_string())).await;
                                     }
                                 }
-                                
+
                                 if !completions.len().is_multiple_of(cols) {
                                     let _ = sender.send(Message::Text("\r\n".to_string())).await;
                                 }
-                                
+
                                 // 重新顯示提示符和當前輸入
-                                let prompt = format!("\x1b[36mnas\x1b[0m:\x1b[34m{}\x1b[0m$ ", 
-                                    get_display_path(&current_dir, &storage_path.to_string_lossy()));
-                                let _ = sender.send(Message::Text(format!("{prompt}{input_buffer}"))).await;
-                                
+                                let prompt = format!(
+                                    "\x1b[36mnas\x1b[0m:\x1b[34m{}\x1b[0m$ ",
+                                    get_display_path(&current_dir, &storage_path.to_string_lossy())
+                                );
+                                let _ = sender
+                                    .send(Message::Text(format!("{prompt}{input_buffer}")))
+                                    .await;
+
                                 // 嘗試補全共同前綴
                                 if let Some(common) = find_common_prefix(&completions) {
                                     let parts: Vec<&str> = input_buffer.split_whitespace().collect();
-                                    let last_part = if input_buffer.ends_with(' ') { "" } else { parts.last().unwrap_or(&"") };
-                                    
+                                    let last_part = if input_buffer.ends_with(' ') {
+                                        ""
+                                    } else {
+                                        parts.last().unwrap_or(&"")
+                                    };
+
                                     if common.len() > last_part.len() {
                                         let to_add = &common[last_part.len()..];
                                         input_buffer.push_str(to_add);
@@ -450,8 +529,10 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
                             // Ctrl+C
                             input_buffer.clear();
                             let _ = sender.send(Message::Text("^C\r\n".to_string())).await;
-                            let prompt = format!("\x1b[36mnas\x1b[0m:\x1b[34m{}\x1b[0m$ ", 
-                                get_display_path(&current_dir, &storage_path.to_string_lossy()));
+                            let prompt = format!(
+                                "\x1b[36mnas\x1b[0m:\x1b[34m{}\x1b[0m$ ",
+                                get_display_path(&current_dir, &storage_path.to_string_lossy())
+                            );
                             let _ = sender.send(Message::Text(prompt)).await;
                         }
                         '\x1b' => {
@@ -480,7 +561,7 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
             _ => {}
         }
     }
-    
+
     tracing::info!("Terminal WebSocket connection closed");
 }
 
@@ -492,18 +573,15 @@ fn find_common_prefix(strings: &[String]) -> Option<String> {
     if strings.len() == 1 {
         return Some(strings[0].clone());
     }
-    
+
     let first = &strings[0];
     let mut prefix_len = first.len();
-    
+
     for s in &strings[1..] {
-        let common = first.chars()
-            .zip(s.chars())
-            .take_while(|(a, b)| a == b)
-            .count();
+        let common = first.chars().zip(s.chars()).take_while(|(a, b)| a == b).count();
         prefix_len = prefix_len.min(common);
     }
-    
+
     if prefix_len > 0 {
         Some(first[..prefix_len].to_string())
     } else {
@@ -525,7 +603,7 @@ fn get_display_path(current: &str, storage_base: &str) -> String {
 /// 執行命令
 async fn execute_command(cmd: &str, current_dir: &mut String, storage_base: &str) -> String {
     let cmd = cmd.trim();
-    
+
     if cmd.is_empty() {
         return String::new();
     }
@@ -552,11 +630,7 @@ async fn execute_command(cmd: &str, current_dir: &mut String, storage_base: &str
 
 /// 處理 cd 命令
 fn handle_cd_command(parts: &[&str], current_dir: &mut String, storage_base: &str) -> String {
-    let target = if parts.len() > 1 {
-        parts[1]
-    } else {
-        "~"
-    };
+    let target = if parts.len() > 1 { parts[1] } else { "~" };
 
     let new_path = if target == "~" || target.is_empty() {
         storage_base.to_string()
@@ -638,11 +712,14 @@ async fn execute_external_command(cmd: &str, current_dir: &str, storage_base: &s
     let args = &parts[1..];
 
     // 解析路徑參數：確保所有路徑在 storage 範圍內
-    let resolved_args: Vec<String> = args.iter().map(|a| {
-        // 如果參數看起來像路徑且不是 flag，不做特殊處理
-        // Command 會以當前目錄為基礎解析相對路徑
-        a.to_string()
-    }).collect();
+    let resolved_args: Vec<String> = args
+        .iter()
+        .map(|a| {
+            // 如果參數看起來像路徑且不是 flag，不做特殊處理
+            // Command 會以當前目錄為基礎解析相對路徑
+            a.to_string()
+        })
+        .collect();
 
     let result = Command::new(program)
         .args(&resolved_args)
@@ -667,7 +744,11 @@ async fn execute_external_command(cmd: &str, current_dir: &str, storage_base: &s
                         format!("{current_dir}/{target}")
                     };
                     // 驗證路徑在 storage 內
-                    if let Ok(canonical) = std::fs::canonicalize(std::path::Path::new(&target_path).parent().unwrap_or_else(|| std::path::Path::new(current_dir))) {
+                    if let Ok(canonical) = std::fs::canonicalize(
+                        std::path::Path::new(&target_path)
+                            .parent()
+                            .unwrap_or_else(|| std::path::Path::new(current_dir)),
+                    ) {
                         if canonical.to_string_lossy().starts_with(storage_base) {
                             if let Err(e) = tokio::fs::write(&target_path, stdout.as_bytes()).await {
                                 return format!("\x1b[31m寫入錯誤: {e}\x1b[0m");
@@ -699,8 +780,8 @@ async fn execute_external_command(cmd: &str, current_dir: &str, storage_base: &s
 /// 每個子行程的 stdout 直接接到下一個子行程的 stdin（透過 `tokio::io::copy` 串流），
 /// 固定 buffer size，避免 OOM 和死鎖（如 `yes | head -n 5`）。
 async fn execute_pipeline(cmd: &str, current_dir: &str, storage_base: &str) -> String {
-    use tokio::process::Command;
     use std::process::Stdio;
+    use tokio::process::Command;
 
     let segments: Vec<&str> = cmd.split('|').collect();
 
@@ -790,7 +871,10 @@ async fn execute_pipeline(cmd: &str, current_dir: &str, storage_base: &str) -> S
 
             let stdout = if output.stdout.len() > MAX_OUTPUT_SIZE {
                 let truncated = String::from_utf8_lossy(&output.stdout[..MAX_OUTPUT_SIZE]);
-                format!("{}\r\n\x1b[33m[輸出過長，已截斷至 10MB]\x1b[0m", truncated.replace('\n', "\r\n"))
+                format!(
+                    "{}\r\n\x1b[33m[輸出過長，已截斷至 10MB]\x1b[0m",
+                    truncated.replace('\n', "\r\n")
+                )
             } else {
                 String::from_utf8_lossy(&output.stdout).replace('\n', "\r\n")
             };

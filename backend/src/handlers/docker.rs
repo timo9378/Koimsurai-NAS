@@ -3,12 +3,15 @@
 //! 提供 `RESTful` API 端點用於管理 Docker 容器和鏡像。
 
 use axum::{
-    extract::{Path, Query, State, ws::{Message, WebSocket, WebSocketUpgrade}},
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        Path, Query, State,
+    },
     http::StatusCode,
     response::IntoResponse,
     Json,
 };
-use futures::{StreamExt, SinkExt};
+use futures::{SinkExt, StreamExt};
 use tokio::io::AsyncWriteExt; // For splitting streams if needed, but bollard returns result with output/input
 
 use serde::{Deserialize, Serialize};
@@ -121,9 +124,7 @@ pub struct DockerStatus {
     ),
     tag = "docker"
 )]
-pub async fn docker_status(
-    State(state): State<AppState>,
-) -> Result<Json<DockerStatus>, AppError> {
+pub async fn docker_status(State(state): State<AppState>) -> Result<Json<DockerStatus>, AppError> {
     let service = get_docker_service(&state)?;
 
     let connected = service.is_connected().await;
@@ -157,9 +158,7 @@ pub async fn docker_status(
     ),
     tag = "docker"
 )]
-pub async fn docker_connect(
-    State(state): State<AppState>,
-) -> Result<Json<DockerResult<()>>, AppError> {
+pub async fn docker_connect(State(state): State<AppState>) -> Result<Json<DockerResult<()>>, AppError> {
     let service = get_docker_service(&state)?;
 
     service
@@ -167,7 +166,9 @@ pub async fn docker_connect(
         .await
         .map_err(|e| AppError::Custom(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(DockerResult::<()>::success_message("已連接到 Docker daemon")))
+    Ok(Json(DockerResult::<()>::success_message(
+        "已連接到 Docker daemon",
+    )))
 }
 
 // ==================== 容器操作 ====================
@@ -252,7 +253,9 @@ pub async fn start_container(
         .await
         .map_err(|e| AppError::Custom(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(DockerResult::<()>::success_message(format!("容器 {id} 已啟動"))))
+    Ok(Json(DockerResult::<()>::success_message(format!(
+        "容器 {id} 已啟動"
+    ))))
 }
 
 /// 停止容器
@@ -284,7 +287,9 @@ pub async fn stop_container(
         .await
         .map_err(|e| AppError::Custom(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(DockerResult::<()>::success_message(format!("容器 {id} 已停止"))))
+    Ok(Json(DockerResult::<()>::success_message(format!(
+        "容器 {id} 已停止"
+    ))))
 }
 
 /// 重啟容器
@@ -316,7 +321,9 @@ pub async fn restart_container(
         .await
         .map_err(|e| AppError::Custom(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(DockerResult::<()>::success_message(format!("容器 {id} 已重啟"))))
+    Ok(Json(DockerResult::<()>::success_message(format!(
+        "容器 {id} 已重啟"
+    ))))
 }
 
 /// 刪除容器
@@ -346,7 +353,9 @@ pub async fn remove_container(
         .await
         .map_err(|e| AppError::Custom(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(DockerResult::<()>::success_message(format!("容器 {id} 已刪除"))))
+    Ok(Json(DockerResult::<()>::success_message(format!(
+        "容器 {id} 已刪除"
+    ))))
 }
 
 /// 獲取容器日誌
@@ -489,7 +498,9 @@ pub async fn remove_image(
         .await
         .map_err(|e| AppError::Custom(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(DockerResult::<()>::success_message(format!("已刪除鏡像 {id}"))))
+    Ok(Json(DockerResult::<()>::success_message(format!(
+        "已刪除鏡像 {id}"
+    ))))
 }
 
 // ==================== 網絡操作 ====================
@@ -546,13 +557,16 @@ pub async fn container_exec(
     let exec_id = match service.create_exec(&id, cmd.clone()).await {
         Ok(id) => id,
         Err(_) => {
-             // Fallback to sh
-             service.create_exec(&id, vec!["/bin/sh".to_string()])
+            // Fallback to sh
+            service
+                .create_exec(&id, vec!["/bin/sh".to_string()])
                 .await
-                .map_err(|e| AppError::Custom(
-                    StatusCode::INTERNAL_SERVER_ERROR, 
-                    format!("Failed to create exec instance: {e}")
-                ))?
+                .map_err(|e| {
+                    AppError::Custom(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Failed to create exec instance: {e}"),
+                    )
+                })?
         }
     };
 
@@ -563,52 +577,59 @@ async fn handle_exec_socket(socket: WebSocket, state: AppState, exec_id: String)
     let (mut ws_sender, mut ws_receiver) = socket.split();
 
     // 2. 開始 Exec 並獲取流
-    let Ok(service) = get_docker_service(&state) else { return };
+    let Ok(service) = get_docker_service(&state) else {
+        return;
+    };
 
     let start_result = match service.start_exec(&exec_id).await {
         Ok(res) => res,
         Err(e) => {
-            let _ = ws_sender.send(Message::Text(format!("Failed to start exec: {e}"))).await;
+            let _ = ws_sender
+                .send(Message::Text(format!("Failed to start exec: {e}")))
+                .await;
             return;
         }
     };
 
     match start_result {
-        bollard::exec::StartExecResults::Attached { mut output, mut input } => {
+        bollard::exec::StartExecResults::Attached {
+            mut output,
+            mut input,
+        } => {
             // 3. 管道轉發
 
             // Task 1: Docker Output -> WebSocket
             let mut send_task = tokio::spawn(async move {
                 while let Some(msg) = output.next().await {
-                   match msg {
-                       Ok(log_output) => {
-                           // Bollard LogOutput contains actual bytes
-                           // We send them as binary or text. xterm.js handles text usually.
-                           // But LogOutput wraps stdout/stderr.
-                           let payload = log_output.into_bytes();
-                           // Use binary message for xterm.js
-                           // Or text if it expects string. strict check:
-                           // xterm with attach addon usually sends/receives raw strings or binary.
-                           // Let's try sending Text first as it's easier to debug, or Binary.
-                           // Generic binary is safer for raw sticky bits.
-                           // However, `into_bytes` returns `Bytes`.
-                           
-                           // Using Binary for xterm-addon-attach
-                           // if ws_sender.send(Message::Binary(payload.to_vec())).await.is_err() {
-                           //    break;
-                           // }
-                           
-                           // Converting to string lossy for safety if client expects text
-                           // But xterm-addon-attach defaults to binary?
-                           // Actually standard is usually text for simple shell.
-                           // Let's safe-bet on Binary?
-                           // Update: xterm.js attach addon handles both. Binary is safer for raw TTY.
-                           if ws_sender.send(Message::Binary(payload.to_vec())).await.is_err() {
-                               break;
-                           }
-                       }
-                       Err(_) => break,
-                   }
+                    match msg {
+                        Ok(log_output) => {
+                            // Bollard LogOutput contains actual bytes
+                            // We send them as binary or text. xterm.js handles text usually.
+                            // But LogOutput wraps stdout/stderr.
+                            let payload = log_output.into_bytes();
+                            // Use binary message for xterm.js
+                            // Or text if it expects string. strict check:
+                            // xterm with attach addon usually sends/receives raw strings or binary.
+                            // Let's try sending Text first as it's easier to debug, or Binary.
+                            // Generic binary is safer for raw sticky bits.
+                            // However, `into_bytes` returns `Bytes`.
+
+                            // Using Binary for xterm-addon-attach
+                            // if ws_sender.send(Message::Binary(payload.to_vec())).await.is_err() {
+                            //    break;
+                            // }
+
+                            // Converting to string lossy for safety if client expects text
+                            // But xterm-addon-attach defaults to binary?
+                            // Actually standard is usually text for simple shell.
+                            // Let's safe-bet on Binary?
+                            // Update: xterm.js attach addon handles both. Binary is safer for raw TTY.
+                            if ws_sender.send(Message::Binary(payload.to_vec())).await.is_err() {
+                                break;
+                            }
+                        }
+                        Err(_) => break,
+                    }
                 }
             });
 
@@ -639,7 +660,9 @@ async fn handle_exec_socket(socket: WebSocket, state: AppState, exec_id: String)
             };
         }
         bollard::exec::StartExecResults::Detached => {
-            let _ = ws_sender.send(Message::Text("Detached mode not supported".to_string())).await;
+            let _ = ws_sender
+                .send(Message::Text("Detached mode not supported".to_string()))
+                .await;
         }
     }
 }
@@ -648,12 +671,11 @@ async fn handle_exec_socket(socket: WebSocket, state: AppState, exec_id: String)
 
 /// 從 `AppState` 獲取 `DockerService`
 fn get_docker_service(state: &AppState) -> Result<&DockerService, AppError> {
-    state.docker_service.as_ref().map(std::convert::AsRef::as_ref).ok_or_else(|| {
-        AppError::Custom(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "Docker 服務未啟用".to_string(),
-        )
-    })
+    state
+        .docker_service
+        .as_ref()
+        .map(std::convert::AsRef::as_ref)
+        .ok_or_else(|| AppError::Custom(StatusCode::SERVICE_UNAVAILABLE, "Docker 服務未啟用".to_string()))
 }
 
 /// 確保已連接到 Docker daemon

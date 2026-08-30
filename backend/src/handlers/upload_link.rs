@@ -1,25 +1,39 @@
-use axum::{
-    extract::{State, Path as AxumPath, Query, Extension, Multipart},
-    http::StatusCode,
-    Json,
-    response::IntoResponse,
-};
-use crate::state::AppState;
-use crate::models::{CreateUploadLinkRequest, UploadLinkResponse, UploadLinkInfoResponse};
 use crate::error::AppError;
+use crate::models::{CreateUploadLinkRequest, UploadLinkInfoResponse, UploadLinkResponse};
+use crate::state::AppState;
 use crate::utils::hash::{hash_password, verify_password};
+use axum::{
+    extract::{Extension, Multipart, Path as AxumPath, Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
 
 /// `SELECT target_path, password_hash, expires_at, max_files, max_file_size, uploaded_count, created_at`
-type UploadLinkInfoRow =
-    (String, Option<String>, Option<chrono::DateTime<Utc>>, Option<i32>, Option<i64>, i32, chrono::DateTime<Utc>);
+type UploadLinkInfoRow = (
+    String,
+    Option<String>,
+    Option<chrono::DateTime<Utc>>,
+    Option<i32>,
+    Option<i64>,
+    i32,
+    chrono::DateTime<Utc>,
+);
 /// 同上但不取 `created_at`
-type UploadLinkRow = (String, Option<String>, Option<chrono::DateTime<Utc>>, Option<i32>, Option<i64>, i32);
+type UploadLinkRow = (
+    String,
+    Option<String>,
+    Option<chrono::DateTime<Utc>>,
+    Option<i32>,
+    Option<i64>,
+    i32,
+);
 
-use uuid::Uuid;
-use chrono::{Utc, Duration};
+use chrono::{Duration, Utc};
 use std::path::Path;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
+use uuid::Uuid;
 
 #[derive(serde::Deserialize, utoipa::IntoParams)]
 pub struct UploadQuery {
@@ -47,7 +61,9 @@ pub async fn create_upload_link(
         None
     };
 
-    let expires_at = payload.expires_in_seconds.map(|s| Utc::now() + Duration::seconds(s));
+    let expires_at = payload
+        .expires_in_seconds
+        .map(|s| Utc::now() + Duration::seconds(s));
 
     sqlx::query(
         "INSERT INTO upload_links (id, target_path, password_hash, expires_at, max_files, max_file_size, creator_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
@@ -95,7 +111,7 @@ pub async fn get_upload_link_info(
     .await
     .map_err(AppError::from)?;
 
-    let (target_path, password_hash, expires_at, max_files, max_file_size, uploaded_count, created_at) = 
+    let (target_path, password_hash, expires_at, max_files, max_file_size, uploaded_count, created_at) =
         row.ok_or(AppError::Status(StatusCode::NOT_FOUND))?;
 
     // 檢查是否過期
@@ -106,14 +122,16 @@ pub async fn get_upload_link_info(
     }
 
     // 獲取目標資料夾名稱
-    let target_folder = Path::new(&target_path)
-        .file_name().map_or_else(|| {
+    let target_folder = Path::new(&target_path).file_name().map_or_else(
+        || {
             if target_path == "/" || target_path.is_empty() {
                 "Root".to_string()
             } else {
                 target_path.clone()
             }
-        }, |s| s.to_string_lossy().to_string());
+        },
+        |s| s.to_string_lossy().to_string(),
+    );
 
     Ok(Json(UploadLinkInfoResponse {
         id,
@@ -158,7 +176,7 @@ pub async fn upload_via_link(
     .await
     .map_err(AppError::from)?;
 
-    let (target_path, password_hash, expires_at, max_files, max_file_size, uploaded_count) = 
+    let (target_path, password_hash, expires_at, max_files, max_file_size, uploaded_count) =
         row.ok_or(AppError::Status(StatusCode::NOT_FOUND))?;
 
     // 檢查是否過期
@@ -214,7 +232,10 @@ pub async fn upload_via_link(
                 .collect::<Vec<_>>()
                 .join("/")
         } else {
-            field.file_name().map_or_else(|| format!("upload_{}", Uuid::new_v4()), std::string::ToString::to_string)
+            field.file_name().map_or_else(
+                || format!("upload_{}", Uuid::new_v4()),
+                std::string::ToString::to_string,
+            )
         };
         pending_relative_path = None; // Reset for next iteration
 
@@ -225,11 +246,15 @@ pub async fn upload_via_link(
 
         // 確保目標目錄存在
         if let Some(parent) = full_path.parent() {
-            fs::create_dir_all(parent).await.map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+            fs::create_dir_all(parent)
+                .await
+                .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
         }
 
         // 串流寫入檔案（避免將整個檔案載入記憶體）
-        let mut file = fs::File::create(&full_path).await.map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+        let mut file = fs::File::create(&full_path)
+            .await
+            .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let mut total_bytes: i64 = 0;
 
         while let Some(chunk) = field.chunk().await.map_err(|e| {
@@ -247,7 +272,9 @@ pub async fn upload_via_link(
                 }
             }
 
-            file.write_all(&chunk).await.map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+            file.write_all(&chunk)
+                .await
+                .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
         }
 
         files_uploaded += 1;

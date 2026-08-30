@@ -1,25 +1,30 @@
+use crate::error::AppError;
+use crate::models::{CreateShareLinkRequest, ShareLinkResponse};
+use crate::state::AppState;
+use crate::utils::hash::{hash_password, verify_password};
 use axum::{
-    extract::{State, Path as AxumPath, Query, Extension},
-    http::StatusCode,
     body::Body,
-    Json,
+    extract::{Extension, Path as AxumPath, Query, State},
+    http::StatusCode,
     response::IntoResponse,
+    Json,
 };
 use serde::Serialize;
-use crate::state::AppState;
-use crate::models::{CreateShareLinkRequest, ShareLinkResponse};
-use crate::error::AppError;
-use crate::utils::hash::{hash_password, verify_password};
 
 /// `SELECT file_path, password_hash, expires_at`
 type ShareAccessRow = (String, Option<String>, Option<chrono::DateTime<Utc>>);
 /// `SELECT file_path, password_hash, expires_at, created_at`
-type ShareInfoRow = (String, Option<String>, Option<chrono::DateTime<Utc>>, chrono::DateTime<Utc>);
+type ShareInfoRow = (
+    String,
+    Option<String>,
+    Option<chrono::DateTime<Utc>>,
+    chrono::DateTime<Utc>,
+);
 
-use uuid::Uuid;
-use chrono::{Utc, Duration};
-use tokio_util::io::ReaderStream;
+use chrono::{Duration, Utc};
 use std::path::Path;
+use tokio_util::io::ReaderStream;
+use uuid::Uuid;
 use walkdir::WalkDir;
 
 #[derive(serde::Deserialize, utoipa::IntoParams)]
@@ -61,7 +66,9 @@ pub async fn create_share_link(
         None
     };
 
-    let expires_at = payload.expires_in_seconds.map(|s| Utc::now() + Duration::seconds(s));
+    let expires_at = payload
+        .expires_in_seconds
+        .map(|s| Utc::now() + Duration::seconds(s));
 
     sqlx::query(
         "INSERT INTO share_links (id, file_path, password_hash, expires_at, creator_id) VALUES (?, ?, ?, ?, ?)"
@@ -100,13 +107,12 @@ pub async fn access_share_link(
     AxumPath(id): AxumPath<String>,
     Query(query): Query<ShareQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    let row: Option<ShareAccessRow> = sqlx::query_as(
-        "SELECT file_path, password_hash, expires_at FROM share_links WHERE id = ?"
-    )
-    .bind(&id)
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(AppError::from)?;
+    let row: Option<ShareAccessRow> =
+        sqlx::query_as("SELECT file_path, password_hash, expires_at FROM share_links WHERE id = ?")
+            .bind(&id)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(AppError::from)?;
 
     let (file_path_str, password_hash, expires_at) = row.ok_or(AppError::Status(StatusCode::NOT_FOUND))?;
 
@@ -141,7 +147,8 @@ pub async fn access_share_link(
     if is_directory {
         // === Directory: create zip and stream ===
         let dir_name = Path::new(clean_path)
-            .file_name().map_or_else(|| "download".to_string(), |n| n.to_string_lossy().to_string());
+            .file_name()
+            .map_or_else(|| "download".to_string(), |n| n.to_string_lossy().to_string());
         let zip_file_name = format!("{dir_name}.zip");
 
         let temp_path = std::env::temp_dir().join(format!("nas_share_{}.zip", Uuid::new_v4()));
@@ -153,13 +160,14 @@ pub async fn access_share_link(
             let file = std::fs::File::create(&temp_path_for_zip)
                 .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
             let mut zip = zip::ZipWriter::new(file);
-            let options = zip::write::SimpleFileOptions::default()
-                .compression_method(zip::CompressionMethod::Stored);
+            let options =
+                zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
 
             for entry in WalkDir::new(&full_path_for_zip).follow_links(false) {
                 let entry = entry.map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
                 let path = entry.path();
-                let relative = path.strip_prefix(&full_path_for_zip)
+                let relative = path
+                    .strip_prefix(&full_path_for_zip)
                     .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
 
                 if relative.as_os_str().is_empty() {
@@ -180,16 +188,20 @@ pub async fn access_share_link(
                 }
             }
 
-            zip.finish().map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+            zip.finish()
+                .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
             Ok(())
         })
         .await
         .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))??;
 
         // Open the temp zip, then unlink it (Linux keeps data accessible via fd)
-        let zip_file = tokio::fs::File::open(&temp_path).await
+        let zip_file = tokio::fs::File::open(&temp_path)
+            .await
             .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
-        let zip_metadata = zip_file.metadata().await
+        let zip_metadata = zip_file
+            .metadata()
+            .await
             .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let zip_size = zip_metadata.len();
 
@@ -217,14 +229,18 @@ pub async fn access_share_link(
         Ok(response)
     } else {
         // === Single file: stream directly ===
-        let file = tokio::fs::File::open(&full_path).await
+        let file = tokio::fs::File::open(&full_path)
+            .await
             .map_err(|_| AppError::Status(StatusCode::NOT_FOUND))?;
-        let metadata = file.metadata().await
+        let metadata = file
+            .metadata()
+            .await
             .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let file_size = metadata.len();
 
         let file_name = Path::new(clean_path)
-            .file_name().map_or_else(|| "download".to_string(), |n| n.to_string_lossy().to_string());
+            .file_name()
+            .map_or_else(|| "download".to_string(), |n| n.to_string_lossy().to_string());
 
         let mime_type = mime_guess::from_path(&full_path)
             .first_or_octet_stream()
@@ -270,14 +286,15 @@ pub async fn get_share_info(
 ) -> Result<Json<ShareInfoResponse>, AppError> {
     // 查詢分享連結資訊
     let row: Option<ShareInfoRow> = sqlx::query_as(
-        "SELECT file_path, password_hash, expires_at, created_at FROM share_links WHERE id = ?"
+        "SELECT file_path, password_hash, expires_at, created_at FROM share_links WHERE id = ?",
     )
     .bind(&id)
     .fetch_optional(&state.pool)
     .await
     .map_err(AppError::from)?;
 
-    let (file_path_str, password_hash, expires_at, created_at) = row.ok_or(AppError::Status(StatusCode::NOT_FOUND))?;
+    let (file_path_str, password_hash, expires_at, created_at) =
+        row.ok_or(AppError::Status(StatusCode::NOT_FOUND))?;
 
     // 檢查是否過期
     if let Some(expiry) = expires_at {
@@ -289,9 +306,13 @@ pub async fn get_share_info(
     // 獲取文件資訊
     let clean_path = file_path_str.strip_prefix('/').unwrap_or(&file_path_str);
     let full_path = state.storage_path.join(clean_path);
-    
+
     if !full_path.exists() {
-        tracing::warn!("Share file not found: {:?} (from db path: {})", full_path, file_path_str);
+        tracing::warn!(
+            "Share file not found: {:?} (from db path: {})",
+            full_path,
+            file_path_str
+        );
         return Err(AppError::Status(StatusCode::NOT_FOUND));
     }
 
@@ -299,14 +320,19 @@ pub async fn get_share_info(
 
     // 獲取文件名和大小
     let file_name = Path::new(clean_path)
-        .file_name().map_or_else(|| "unknown".to_string(), |s| s.to_string_lossy().to_string());
-    
+        .file_name()
+        .map_or_else(|| "unknown".to_string(), |s| s.to_string_lossy().to_string());
+
     let file_size = if is_directory {
         // Calculate total directory size by walking all files
         let full_path_for_size = full_path.clone();
         tokio::task::spawn_blocking(move || {
             let mut total: u64 = 0;
-            for entry in WalkDir::new(&full_path_for_size).follow_links(false).into_iter().flatten() {
+            for entry in WalkDir::new(&full_path_for_size)
+                .follow_links(false)
+                .into_iter()
+                .flatten()
+            {
                 if entry.path().is_file() {
                     if let Ok(meta) = std::fs::metadata(entry.path()) {
                         total += meta.len();
@@ -318,17 +344,14 @@ pub async fn get_share_info(
         .await
         .unwrap_or(0)
     } else {
-        tokio::fs::metadata(&full_path).await
-            .map_or(0, |m| m.len())
+        tokio::fs::metadata(&full_path).await.map_or(0, |m| m.len())
     };
 
     // 猜測 MIME 類型
     let mime_type = if is_directory {
         None
     } else {
-        mime_guess::from_path(&full_path)
-            .first()
-            .map(|m| m.to_string())
+        mime_guess::from_path(&full_path).first().map(|m| m.to_string())
     };
 
     Ok(Json(ShareInfoResponse {

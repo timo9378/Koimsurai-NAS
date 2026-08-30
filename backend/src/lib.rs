@@ -16,33 +16,33 @@
 #![deny(clippy::unwrap_used)]
 
 pub mod db;
+pub mod error;
 pub mod handlers;
 pub mod middleware;
 pub mod models;
 pub mod routes;
+pub mod services;
 pub mod state;
 pub mod utils;
-pub mod error;
-pub mod services;
 
-use std::sync::Arc;
-use std::path::PathBuf;
-use std::env;
-use dav_server::{localfs::LocalFs, DavHandler};
-use tokio::sync::Semaphore;
-use crate::state::{AppState, get_max_concurrent_transcodes, get_docker_enabled, get_ai_enabled};
-use crate::utils::queue::{JobQueue, worker};
-use crate::services::indexer::Indexer;
-use crate::services::audit::AuditService;
-use crate::services::search::SearchService;
-use crate::services::docker::DockerService;
 use crate::services::ai::AiService;
+use crate::services::audit::AuditService;
+use crate::services::docker::DockerService;
+use crate::services::indexer::Indexer;
+use crate::services::search::SearchService;
+use crate::state::{get_ai_enabled, get_docker_enabled, get_max_concurrent_transcodes, AppState};
+use crate::utils::queue::{worker, JobQueue};
+use dav_server::{localfs::LocalFs, DavHandler};
 use sqlx::SqlitePool;
+use std::env;
+use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::Semaphore;
 
 pub async fn create_app(pool: SqlitePool, storage_path: PathBuf) -> axum::Router {
     // Initialize Indexer
     let indexer = Arc::new(Indexer::new(pool.clone(), storage_path.clone()));
-    
+
     // Run initial scan (non-blocking for tests might be better, but keeping consistent)
     if let Err(e) = indexer.initial_scan().await {
         tracing::error!("Initial scan failed: {}", e);
@@ -62,7 +62,7 @@ pub async fn create_app(pool: SqlitePool, storage_path: PathBuf) -> axum::Router
     // Initialize Job Queue
     let (queue, receiver) = JobQueue::new(100, pool.clone());
     let queue = Arc::new(queue);
-    
+
     // Initialize Search Service
     let search = Arc::new(SearchService::new(&storage_path).expect("Failed to initialize search service"));
 
@@ -72,7 +72,10 @@ pub async fn create_app(pool: SqlitePool, storage_path: PathBuf) -> axum::Router
         let config = AiService::config_from_env();
         tracing::info!(
             "   Model: {}, Min confidence: {}, GPU: {}, Max concurrent: {}",
-            config.model_name, config.min_confidence, config.use_gpu, config.max_concurrent_inferences
+            config.model_name,
+            config.min_confidence,
+            config.use_gpu,
+            config.max_concurrent_inferences
         );
         Some(Arc::new(AiService::new(pool.clone(), Some(config))))
     } else {
@@ -84,7 +87,14 @@ pub async fn create_app(pool: SqlitePool, storage_path: PathBuf) -> axum::Router
     let search_clone = search.clone();
     let ai_clone = ai_service.clone();
     let storage_clone = storage_path.clone();
-    tokio::spawn(worker(receiver, pool.clone(), tx.clone(), search_clone, ai_clone, storage_clone));
+    tokio::spawn(worker(
+        receiver,
+        pool.clone(),
+        tx.clone(),
+        search_clone,
+        ai_clone,
+        storage_clone,
+    ));
 
     // Initialize WebDAV
     let webdav = DavHandler::builder()
@@ -123,15 +133,15 @@ pub async fn create_app(pool: SqlitePool, storage_path: PathBuf) -> axum::Router
         std::env::var("HLS_CACHE_MAX_AGE_SECS")
             .ok()
             .and_then(|s| s.parse().ok())
-            .unwrap_or(3600) // 預設 1 小時
+            .unwrap_or(3600), // 預設 1 小時
     );
     let hls_cleanup_interval = std::time::Duration::from_secs(
         std::env::var("HLS_CLEANUP_INTERVAL_SECS")
             .ok()
             .and_then(|s| s.parse().ok())
-            .unwrap_or(1800) // 預設 30 分鐘
+            .unwrap_or(1800), // 預設 30 分鐘
     );
-    
+
     tracing::info!(
         "🧹 HLS cleanup task: max_age={}s, interval={}s",
         hls_max_age.as_secs(),
@@ -140,9 +150,7 @@ pub async fn create_app(pool: SqlitePool, storage_path: PathBuf) -> axum::Router
     crate::utils::cleanup::spawn_hls_cleanup_task(hls_cache_dir, hls_max_age, hls_cleanup_interval);
 
     // JWT secret — 啟動時讀取一次，避免每次請求都讀 env var
-    let jwt_secret = Arc::new(
-        env::var("JWT_SECRET").expect("JWT_SECRET must be set (checked in main.rs)")
-    );
+    let jwt_secret = Arc::new(env::var("JWT_SECRET").expect("JWT_SECRET must be set (checked in main.rs)"));
 
     let state = AppState {
         pool,

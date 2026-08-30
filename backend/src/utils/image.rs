@@ -22,7 +22,9 @@ pub fn is_likely_media(file_path: &std::path::Path) -> bool {
     use std::fs::File;
     use std::io::Read;
 
-    let Ok(mut f) = File::open(file_path) else { return false };
+    let Ok(mut f) = File::open(file_path) else {
+        return false;
+    };
 
     let mut buf = [0u8; 16];
     let Ok(n) = f.read(&mut buf) else { return false };
@@ -63,7 +65,9 @@ pub fn is_likely_media(file_path: &std::path::Path) -> bool {
 
 fn generate_thumbnails_sync(file_path: &std::path::Path, storage_root: &std::path::Path) {
     // 計算相對路徑
-    let Ok(relative_path) = file_path.strip_prefix(storage_root) else { return };
+    let Ok(relative_path) = file_path.strip_prefix(storage_root) else {
+        return;
+    };
 
     let thumb_root = storage_root.join(".thumbnails");
     let thumb_dir = thumb_root.join(relative_path.parent().unwrap_or_else(|| Path::new("")));
@@ -76,23 +80,21 @@ fn generate_thumbnails_sync(file_path: &std::path::Path, storage_root: &std::pat
     let file_name = file_path.file_name().unwrap_or_default().to_string_lossy();
 
     // 檢查檔案大小來決定處理方式
-    let file_size = std::fs::metadata(file_path)
-        .map_or(0, |m| m.len());
+    let file_size = std::fs::metadata(file_path).map_or(0, |m| m.len());
 
     if file_size > LARGE_IMAGE_THRESHOLD {
-        warn!("Large image detected ({}MB), using FFmpeg for safety", file_size / 1024 / 1024);
+        warn!(
+            "Large image detected ({}MB), using FFmpeg for safety",
+            file_size / 1024 / 1024
+        );
     }
 
     // 定義縮圖尺寸
-    let sizes = [
-        ("small", 150),
-        ("medium", 800),
-        ("large", 1920),
-    ];
+    let sizes = [("small", 150), ("medium", 800), ("large", 1920)];
 
     for (size_name, max_dimension) in sizes {
         let output_path = thumb_dir.join(format!("{file_name}.{size_name}.jpg"));
-        
+
         // 跳過已存在的縮圖
         if output_path.exists() {
             debug!("Thumbnail already exists: {:?}", output_path);
@@ -126,7 +128,7 @@ fn generate_thumbnails_sync(file_path: &std::path::Path, storage_root: &std::pat
                     // FFmpeg 失敗時，嘗試使用 image crate 作為 fallback (僅對小檔案)
                     let stderr = String::from_utf8_lossy(&output.stderr);
                     warn!("FFmpeg failed for {:?}: {}, trying fallback", file_path, stderr);
-                    
+
                     if file_size < LARGE_IMAGE_THRESHOLD {
                         generate_thumbnail_fallback(file_path, &output_path, max_dimension);
                     }
@@ -147,7 +149,7 @@ fn generate_thumbnails_sync(file_path: &std::path::Path, storage_root: &std::pat
 /// Fallback: Use image crate to generate thumbnails (only for small files)
 fn generate_thumbnail_fallback(input_path: &Path, output_path: &Path, max_dimension: u32) {
     use image::ImageReader;
-    
+
     let reader = match ImageReader::open(input_path) {
         Ok(r) => r,
         Err(e) => {

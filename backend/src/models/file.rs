@@ -1,6 +1,6 @@
+use crate::utils::metadata::FileMetadata;
 use serde::Serialize;
 use utoipa::ToSchema;
-use crate::utils::metadata::FileMetadata;
 
 #[derive(Serialize, ToSchema, specta::Type)]
 pub struct FileInfo {

@@ -1,12 +1,12 @@
+use crate::error::AppError;
+use crate::services::audit::AuditLog;
+use crate::state::AppState;
 use axum::{
-    extract::{State, Query, Extension},
+    extract::{Extension, Query, State},
     Json,
     // http::StatusCode,
 };
 use serde::Deserialize;
-use crate::state::AppState;
-use crate::error::AppError;
-use crate::services::audit::AuditLog;
 
 #[derive(Deserialize)]
 pub struct AuditLogQuery {

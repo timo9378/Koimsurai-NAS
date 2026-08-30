@@ -1,12 +1,12 @@
+use chrono::{Duration, NaiveDateTime, Utc};
+use notify::{Event, RecursiveMode, Result as NotifyResult, Watcher};
 use sqlx::{Pool, Sqlite};
-use std::path::{Path, PathBuf};
 use std::collections::HashSet;
-use walkdir::WalkDir;
-use notify::{Watcher, RecursiveMode, Result as NotifyResult, Event};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::{info, error, debug, warn};
-use chrono::{Utc, NaiveDateTime, Duration};
+use tracing::{debug, error, info, warn};
+use walkdir::WalkDir;
 
 /// 掃描模式
 #[derive(Debug, Clone, Copy)]
@@ -31,14 +31,12 @@ impl Indexer {
 
     /// 取得上次完整掃描時間
     async fn get_last_full_scan_time(&self) -> Option<NaiveDateTime> {
-        sqlx::query_scalar::<_, String>(
-            "SELECT value FROM system_settings WHERE key = 'last_full_scan_time'"
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .ok()
-        .flatten()
-        .and_then(|s| NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S").ok())
+        sqlx::query_scalar::<_, String>("SELECT value FROM system_settings WHERE key = 'last_full_scan_time'")
+            .fetch_optional(&self.pool)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|s| NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S").ok())
     }
 
     /// 儲存完整掃描時間
@@ -49,7 +47,7 @@ impl Indexer {
             INSERT INTO system_settings (key, value, updated_at) 
             VALUES ('last_full_scan_time', ?, CURRENT_TIMESTAMP)
             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
-            "
+            ",
         )
         .bind(&time_str)
         .execute(&self.pool)
@@ -60,7 +58,7 @@ impl Indexer {
     /// 智能掃描：根據情況選擇最佳掃描策略
     pub async fn smart_scan(&self) -> anyhow::Result<()> {
         let last_scan = self.get_last_full_scan_time().await;
-        
+
         let scan_mode = match last_scan {
             None => {
                 info!("No previous scan found, performing full scan...");
@@ -70,10 +68,16 @@ impl Indexer {
                 let hours_since_last = (Utc::now().naive_utc() - last).num_hours();
                 if hours_since_last > 24 * 7 {
                     // 超過一週沒做完整掃描
-                    info!("Last full scan was {} hours ago, performing full scan...", hours_since_last);
+                    info!(
+                        "Last full scan was {} hours ago, performing full scan...",
+                        hours_since_last
+                    );
                     ScanMode::Full
                 } else {
-                    info!("Last full scan was {} hours ago, performing incremental scan...", hours_since_last);
+                    info!(
+                        "Last full scan was {} hours ago, performing incremental scan...",
+                        hours_since_last
+                    );
                     ScanMode::Incremental
                 }
             }
@@ -97,7 +101,9 @@ impl Indexer {
 
         for entry in walker.filter_map(std::result::Result::ok) {
             let path = entry.path();
-            if path == self.storage_path { continue; }
+            if path == self.storage_path {
+                continue;
+            }
 
             // 跳過隱藏檔案/目錄
             if entry.file_name().to_string_lossy().starts_with('.') {
@@ -147,21 +153,24 @@ impl Indexer {
 
     /// 增量掃描：只掃描自上次掃描後修改的檔案
     pub async fn incremental_scan(&self) -> anyhow::Result<()> {
-        let last_scan = self.get_last_full_scan_time().await
+        let last_scan = self
+            .get_last_full_scan_time()
+            .await
             .unwrap_or_else(|| Utc::now().naive_utc() - Duration::hours(24));
-        
+
         info!("Starting incremental scan (since {:?})...", last_scan);
 
-        let last_scan_time = std::time::SystemTime::from(
-            chrono::DateTime::<Utc>::from_naive_utc_and_offset(last_scan, Utc)
-        );
+        let last_scan_time =
+            std::time::SystemTime::from(chrono::DateTime::<Utc>::from_naive_utc_and_offset(last_scan, Utc));
 
         let walker = WalkDir::new(&self.storage_path).into_iter();
         let mut scanned = 0;
 
         for entry in walker.filter_map(std::result::Result::ok) {
             let path = entry.path();
-            if path == self.storage_path { continue; }
+            if path == self.storage_path {
+                continue;
+            }
 
             // 跳過隱藏檔案
             if entry.file_name().to_string_lossy().starts_with('.') {
@@ -184,7 +193,10 @@ impl Indexer {
         // 更新掃描時間
         self.set_last_full_scan_time(Utc::now().naive_utc()).await?;
 
-        info!("Incremental scan completed. Processed {} modified files.", scanned);
+        info!(
+            "Incremental scan completed. Processed {} modified files.",
+            scanned
+        );
         Ok(())
     }
 
@@ -195,13 +207,13 @@ impl Indexer {
         // 只掃描根目錄一層和最近 24 小時內有修改的目錄
         let threshold = std::time::SystemTime::now() - std::time::Duration::from_hours(24);
 
-        let walker = WalkDir::new(&self.storage_path)
-            .max_depth(1)
-            .into_iter();
+        let walker = WalkDir::new(&self.storage_path).max_depth(1).into_iter();
 
         for entry in walker.filter_map(std::result::Result::ok) {
             let path = entry.path();
-            if path == self.storage_path { continue; }
+            if path == self.storage_path {
+                continue;
+            }
 
             if entry.file_name().to_string_lossy().starts_with('.') {
                 continue;
@@ -231,7 +243,7 @@ impl Indexer {
 
         for entry in walker.filter_map(std::result::Result::ok) {
             let path = entry.path();
-            
+
             if entry.file_name().to_string_lossy().starts_with('.') {
                 continue;
             }
@@ -253,29 +265,30 @@ impl Indexer {
             Ok(p) => p.to_string_lossy().to_string(),
             Err(_) => return Ok(()), // Should not happen if walking storage_path
         };
-        
+
         // Normalize path separators to forward slashes for consistency in DB
         let relative_path = relative_path.replace('\\', "/");
-        
+
         // Skip hidden files/dirs
         if relative_path.split('/').any(|p| p.starts_with('.')) {
             return Ok(());
         }
 
         let Ok(metadata) = tokio::fs::metadata(path).await else {
-                // File might have been deleted
-                return self.remove_file(path).await;
-            };
+            // File might have been deleted
+            return self.remove_file(path).await;
+        };
 
         let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
         let size = i64::try_from(metadata.len()).unwrap_or(i64::MAX);
         let is_dir = metadata.is_dir();
         let modified = chrono::DateTime::<chrono::Utc>::from(metadata.modified()?).naive_utc();
-        
-        let parent_path = Path::new(&relative_path).parent()
+
+        let parent_path = Path::new(&relative_path)
+            .parent()
             .map(|p| p.to_string_lossy().to_string().replace('\\', "/"))
             .unwrap_or_default();
-            
+
         let mime_type = if is_dir {
             None
         } else {
@@ -292,7 +305,7 @@ impl Indexer {
                 mime_type = excluded.mime_type,
                 parent_path = excluded.parent_path,
                 is_dir = excluded.is_dir
-            "
+            ",
         )
         .bind(&relative_path)
         .bind(&name)
@@ -307,9 +320,9 @@ impl Indexer {
         debug!("Indexed: {}", relative_path);
         Ok(())
     }
-    
+
     pub async fn remove_file(&self, path: &Path) -> anyhow::Result<()> {
-         let relative_path = match path.strip_prefix(&self.storage_path) {
+        let relative_path = match path.strip_prefix(&self.storage_path) {
             Ok(p) => p.to_string_lossy().to_string(),
             Err(_) => return Ok(()),
         };
@@ -320,7 +333,7 @@ impl Indexer {
             .bind(format!("{relative_path}/%")) // Delete children if it's a dir
             .execute(&self.pool)
             .await?;
-            
+
         debug!("Removed index: {}", relative_path);
         Ok(())
     }
@@ -355,10 +368,10 @@ impl Indexer {
 
     pub async fn run_watcher(self: Arc<Self>) -> anyhow::Result<()> {
         let (tx, mut rx) = mpsc::channel(100);
-        
+
         let watcher_tx = tx.clone();
         let mut watcher = notify::recommended_watcher(move |res: NotifyResult<Event>| {
-            let _ = watcher_tx.blocking_send(res); 
+            let _ = watcher_tx.blocking_send(res);
         })?;
 
         watcher.watch(&self.storage_path, RecursiveMode::Recursive)?;

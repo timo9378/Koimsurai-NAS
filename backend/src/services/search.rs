@@ -1,15 +1,18 @@
-use tantivy::collector::TopDocs;
-use tantivy::query::QueryParser;
-use tantivy::schema::{Field, Schema, STRING, STORED, TEXT, Term};
-use tantivy::{Index, IndexWriter, ReloadPolicy, doc};
-use tantivy::schema::{TantivyDocument, Value};
-use std::path::Path;
-use std::sync::{Arc, Mutex, atomic::{AtomicUsize, Ordering}};
-use std::time::{Duration, Instant};
-use std::env;
 use crate::error::AppError;
 use axum::http::StatusCode;
 use sqlx::{Pool, Sqlite};
+use std::env;
+use std::path::Path;
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc, Mutex,
+};
+use std::time::{Duration, Instant};
+use tantivy::collector::TopDocs;
+use tantivy::query::QueryParser;
+use tantivy::schema::{Field, Schema, Term, STORED, STRING, TEXT};
+use tantivy::schema::{TantivyDocument, Value};
+use tantivy::{doc, Index, IndexWriter, ReloadPolicy};
 use tracing::{debug, info};
 
 /// 批次提交配置 - 從環境變數讀取
@@ -60,8 +63,12 @@ impl SearchService {
         let name_field = schema_builder.add_text_field("name", TEXT | STORED);
         let schema = schema_builder.build();
 
-        let index = Index::open_or_create(tantivy::directory::MmapDirectory::open(&index_path).map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?, schema)
-            .map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
+        let index = Index::open_or_create(
+            tantivy::directory::MmapDirectory::open(&index_path)
+                .map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?,
+            schema,
+        )
+        .map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
 
         // 從環境變數讀取搜尋索引緩衝區大小 (MB)
         // Read search index buffer size from env (MB)
@@ -70,16 +77,21 @@ impl SearchService {
             .unwrap_or_else(|_| "50".to_string())
             .parse::<usize>()
             .unwrap_or(50);
-        
+
         let buffer_size = buffer_size_mb * 1_000_000;
         info!("Search index buffer size: {}MB", buffer_size_mb);
-        
-        let writer = index.writer(buffer_size).map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
-        
+
+        let writer = index
+            .writer(buffer_size)
+            .map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
+
         let batch_size = get_batch_size();
         let commit_interval = Duration::from_secs(get_commit_interval_secs());
-        
-        info!("Search batch_size: {}, commit_interval: {:?}", batch_size, commit_interval);
+
+        info!(
+            "Search batch_size: {}, commit_interval: {:?}",
+            batch_size, commit_interval
+        );
 
         Ok(Self {
             index,
@@ -97,10 +109,12 @@ impl SearchService {
     /// 索引單一檔案 (不立即 commit，使用批次策略)
     /// Index a single file (doesn't commit immediately, uses batch strategy)
     pub fn index_file(&self, path: &str, name: &str, content: &str) -> Result<(), AppError> {
-        let mut writer = self.writer.lock().map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
-        
-        let (path_field, name_field, content_field) =
-            (self.path_field, self.name_field, self.content_field);
+        let mut writer = self
+            .writer
+            .lock()
+            .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+
+        let (path_field, name_field, content_field) = (self.path_field, self.name_field, self.content_field);
 
         // Remove existing document with same path to avoid duplicates (simple update strategy)
         let term = Term::from_field_text(path_field, path);
@@ -112,26 +126,36 @@ impl SearchService {
             content_field => content
         );
 
-        writer.add_document(doc).map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
-        
+        writer
+            .add_document(doc)
+            .map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
+
         // 增加待處理計數
         let pending = self.pending_count.fetch_add(1, Ordering::SeqCst) + 1;
-        
+
         // 檢查是否需要 commit
         let should_commit = {
-            let last_commit = self.last_commit.lock().map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+            let last_commit = self
+                .last_commit
+                .lock()
+                .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
             pending >= self.batch_size || last_commit.elapsed() >= self.commit_interval
         };
-        
+
         if should_commit {
             debug!("Batch committing {} indexed files", pending);
-            writer.commit().map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
+            writer
+                .commit()
+                .map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
             // ⚠️ 先放掉 writer 再去拿 last_commit。這兩把鎖原本是巢狀持有的
             // （writer → last_commit）；flush() 用同樣順序所以不會死鎖，但沒有理由
             // 讓 writer 在只是寫個時間戳的時候還被佔著 —— 索引寫入是全域序列化的。
             drop(writer);
             self.pending_count.store(0, Ordering::SeqCst);
-            *self.last_commit.lock().map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))? = Instant::now();
+            *self
+                .last_commit
+                .lock()
+                .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))? = Instant::now();
         }
 
         Ok(())
@@ -143,11 +167,19 @@ impl SearchService {
         let pending = self.pending_count.load(Ordering::SeqCst);
         if pending > 0 {
             info!("Flushing {} pending index entries", pending);
-            let mut writer = self.writer.lock().map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
-            writer.commit().map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
+            let mut writer = self
+                .writer
+                .lock()
+                .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+            writer
+                .commit()
+                .map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
             drop(writer); // 同 index_file：不要持著 writer 去拿 last_commit
             self.pending_count.store(0, Ordering::SeqCst);
-            *self.last_commit.lock().map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))? = Instant::now();
+            *self
+                .last_commit
+                .lock()
+                .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))? = Instant::now();
         }
         Ok(())
     }
@@ -156,8 +188,9 @@ impl SearchService {
         // 搜尋前先 flush 確保結果最新 (可選)
         // Optionally flush before search to ensure up-to-date results
         // self.flush()?;
-        
-        let reader = self.index
+
+        let reader = self
+            .index
             .reader_builder()
             .reload_policy(ReloadPolicy::OnCommitWithDelay) // 改用 OnCommitWithDelay 來自動更新
             .try_into()
@@ -165,27 +198,35 @@ impl SearchService {
 
         let searcher = reader.searcher();
 
-        let (path_field, name_field, content_field) =
-            (self.path_field, self.name_field, self.content_field);
+        let (path_field, name_field, content_field) = (self.path_field, self.name_field, self.content_field);
 
         let query_parser = QueryParser::for_index(&self.index, vec![name_field, content_field]);
-        let query = query_parser.parse_query(query_str).map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
+        let query = query_parser
+            .parse_query(query_str)
+            .map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
 
-        let top_docs: Vec<(f32, tantivy::DocAddress)> = searcher.search(&query, &TopDocs::with_limit(20))
+        let top_docs: Vec<(f32, tantivy::DocAddress)> = searcher
+            .search(&query, &TopDocs::with_limit(20))
             .map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
 
         let mut results = Vec::new();
         for (score, doc_address) in top_docs {
-            let retrieved_doc: TantivyDocument = searcher.doc(doc_address).map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
-            
-            let path = retrieved_doc.get_first(path_field).and_then(|v| v.as_str()).unwrap_or_default().to_string();
-            let name = retrieved_doc.get_first(name_field).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            let retrieved_doc: TantivyDocument = searcher
+                .doc(doc_address)
+                .map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
 
-            results.push(SearchResult {
-                path,
-                name,
-                score,
-            });
+            let path = retrieved_doc
+                .get_first(path_field)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+            let name = retrieved_doc
+                .get_first(name_field)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string();
+
+            results.push(SearchResult { path, name, score });
         }
 
         Ok(results)
@@ -212,7 +253,10 @@ pub struct AiTagSearchResult {
 /// Search images containing specified AI tag in database
 // confidence 存進 DB 是 REAL（f64），而 DTO 用 f32 —— 這是刻意的窄化：
 // 信心值域是 0..1，f32 的 ~7 位有效數字遠超過需要的精度。
-#[allow(clippy::cast_possible_truncation, reason = "confidence 值域 0..1，f32 精度綽綽有餘")]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "confidence 值域 0..1，f32 精度綽綽有餘"
+)]
 pub async fn search_by_ai_tag(
     pool: &Pool<Sqlite>,
     tag_query: &str,

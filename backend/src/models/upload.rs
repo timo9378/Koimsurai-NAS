@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 use sqlx::FromRow;
+use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, specta::Type)]
 pub struct InitUploadRequest {
