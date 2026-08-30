@@ -25,30 +25,45 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
         Sqlite::create_database(&database_url).await?;
     }
 
-    let pool = SqlitePoolOptions::new()
-        .max_connections(max_connections)
-        .connect(&database_url)
-        .await?;
-
-    // 啟用 WAL 模式以提升並發效能 (對 Litestream 也是推薦的)
-    // Enable WAL mode for better concurrency (also recommended for Litestream)
-    sqlx::query("PRAGMA journal_mode=WAL").execute(&pool).await?;
-
-    // 設定 synchronous 為 NORMAL (WAL 模式下的推薦設定)
-    // Set synchronous to NORMAL (recommended for WAL mode)
-    sqlx::query("PRAGMA synchronous=NORMAL").execute(&pool).await?;
-
     // 從環境變數讀取 mmap_size (MB)，讓常用資料駐留 RAM
     // Read mmap_size from env (MB), keeps frequently accessed data in RAM
     let mmap_size_mb = env::var("DATABASE_MMAP_SIZE_MB")
         .unwrap_or_else(|_| "256".to_string())
         .parse::<u64>()
         .unwrap_or(256);
-
     let mmap_size_bytes = mmap_size_mb * 1024 * 1024;
-    sqlx::query(&format!("PRAGMA mmap_size={mmap_size_bytes}"))
-        .execute(&pool)
+
+    // ⚠️ `synchronous`、`mmap_size`、`busy_timeout` 都是 **per-connection** 的 pragma。
+    //    先前寫成在 pool 上 `execute` 一次 —— 那只會套用到當下服務那一條連線，
+    //    其餘 max_connections-1 條從來沒設過。必須走 after_connect。
+    //    （`journal_mode=WAL` 不同，它寫在資料庫檔頭、是持久的，設一次就夠。）
+    let pool = SqlitePoolOptions::new()
+        .max_connections(max_connections)
+        .after_connect(move |conn, _meta| {
+            Box::pin(async move {
+                // ⚠️ busy_timeout 是這裡最重要的一條。WAL 下讀不擋寫，但**同時只能有
+                //    一個寫者**，而預設 busy_timeout=0 表示第二個寫者立刻拿到
+                //    SQLITE_BUSY 而不是等待 —— 對外就是一個沒有原因的 500。
+                //    背景的檔案索引掃描與 file watcher 都會與請求同時寫入，
+                //    實測在 CPU 受限時穩定重現（列目錄 500、插入標籤失敗）。
+                sqlx::query("PRAGMA busy_timeout=5000")
+                    .execute(&mut *conn)
+                    .await?;
+                sqlx::query("PRAGMA synchronous=NORMAL")
+                    .execute(&mut *conn)
+                    .await?;
+                sqlx::query(&format!("PRAGMA mmap_size={mmap_size_bytes}"))
+                    .execute(&mut *conn)
+                    .await?;
+                Ok(())
+            })
+        })
+        .connect(&database_url)
         .await?;
+
+    // 啟用 WAL 模式以提升並發效能 (對 Litestream 也是推薦的)
+    // Enable WAL mode for better concurrency (also recommended for Litestream)
+    sqlx::query("PRAGMA journal_mode=WAL").execute(&pool).await?;
 
     info!("Database mmap_size: {}MB", mmap_size_mb);
 

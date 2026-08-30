@@ -16,6 +16,11 @@ pub struct TestApp {
     pub pool: SqlitePool,
     /// 測試需要在磁碟上實際建檔時用（`list_files` 會檢查檔案是否真的存在）
     pub storage_dir: TempDir,
+    /// ⚠️ **必須持有**，否則 `TempDir` 在 `spawn_app` 回傳時就被 drop、目錄被刪掉。
+    /// 既有連線因為檔案 handle 還開著所以照常運作，但 pool **稍後才惰性開啟的
+    /// 新連線**會拿到 `unable to open database file`（SQLite code 14）——
+    /// 表現成毫無來由的 500。CPU 受壓時才會走到那條路徑，所以平常跑不出來。
+    _db_dir: TempDir,
 }
 
 pub async fn spawn_app() -> TestApp {
@@ -58,6 +63,7 @@ pub async fn spawn_app() -> TestApp {
         address,
         pool,
         storage_dir,
+        _db_dir: db_dir,
     }
 }
 
