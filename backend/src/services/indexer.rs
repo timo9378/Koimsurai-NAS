@@ -271,7 +271,7 @@ impl Indexer {
         };
 
         let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
-        let size = metadata.len() as i64;
+        let size = i64::try_from(metadata.len()).unwrap_or(i64::MAX);
         let is_dir = metadata.is_dir();
         let modified = chrono::DateTime::<chrono::Utc>::from(metadata.modified()?).naive_utc();
         

@@ -233,7 +233,7 @@ pub async fn upload_via_link(
             tracing::error!("Chunk read error: {:?}", e);
             AppError::Status(StatusCode::BAD_REQUEST)
         })? {
-            total_bytes += chunk.len() as i64;
+            total_bytes += i64::try_from(chunk.len()).unwrap_or(i64::MAX);
 
             // 檢查檔案大小限制
             if let Some(max_size) = max_file_size {

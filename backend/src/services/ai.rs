@@ -342,7 +342,7 @@ impl AiService {
             .take(self.config.max_tags)
             .collect();
 
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
 
         let result = AiAnalysisResult {
             file_path: image_path.to_string(),
@@ -370,7 +370,7 @@ impl AiService {
 
         // Stub 實作 - 返回空結果
         let tags: Vec<AiTag> = Vec::new();
-        let duration_ms = start.elapsed().as_millis() as u64;
+        let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
 
         let result = AiAnalysisResult {
             file_path: image_path.to_string(),
@@ -428,6 +428,9 @@ impl AiService {
     }
 
     /// 獲取已存在的標籤
+    // confidence 存進 DB 是 REAL（f64），而 DTO 用 f32 —— 這是刻意的窄化：
+    // 信心值域是 0..1，f32 的 ~7 位有效數字遠超過需要的精度。
+    #[allow(clippy::cast_possible_truncation, reason = "confidence 值域 0..1，f32 精度綽綽有餘")]
     async fn get_existing_tags(&self, image_path: &str) -> Result<AiAnalysisResult> {
         let tags = sqlx::query_as::<_, (String, f64)>(
             "SELECT tag_name, confidence FROM image_ai_tags WHERE file_path = ?",
@@ -586,6 +589,9 @@ impl AiService {
     }
 
     /// 獲取圖片的所有標籤
+    // confidence 存進 DB 是 REAL（f64），而 DTO 用 f32 —— 這是刻意的窄化：
+    // 信心值域是 0..1，f32 的 ~7 位有效數字遠超過需要的精度。
+    #[allow(clippy::cast_possible_truncation, reason = "confidence 值域 0..1，f32 精度綽綽有餘")]
     pub async fn get_image_tags(&self, image_path: &str) -> Result<Vec<AiTag>> {
         let tags = sqlx::query_as::<_, (String, f64)>(
             "SELECT tag_name, confidence FROM image_ai_tags WHERE file_path = ? ORDER BY confidence DESC",
@@ -637,10 +643,10 @@ impl AiService {
         .unwrap_or(0);
 
         Ok(AiStats {
-            total_analyzed_images: total_images as u32,
-            total_unique_tags: total_tags as u32,
-            pending_images: pending_images as u32,
-            failed_images: failed_images as u32,
+            total_analyzed_images: u32::try_from(total_images).unwrap_or(0),
+            total_unique_tags: u32::try_from(total_tags).unwrap_or(0),
+            pending_images: u32::try_from(pending_images).unwrap_or(0),
+            failed_images: u32::try_from(failed_images).unwrap_or(0),
             model_name: self.config.model_name.clone(),
             gpu_enabled: self.config.use_gpu,
             #[cfg(feature = "ai")]

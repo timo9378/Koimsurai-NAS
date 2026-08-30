@@ -359,7 +359,7 @@ impl DockerService {
     ) -> Result<(), DockerError> {
         let docker = self.get_docker().await?;
         let options = StopContainerOptionsBuilder::default()
-            .t(timeout_secs.unwrap_or(10) as i32)
+            .t(i32::try_from(timeout_secs.unwrap_or(10)).unwrap_or(10))
             .build();
         docker.stop_container(id, Some(options)).await?;
         Ok(())
@@ -373,7 +373,7 @@ impl DockerService {
     ) -> Result<(), DockerError> {
         let docker = self.get_docker().await?;
         let options = RestartContainerOptionsBuilder::default()
-            .t(timeout_secs.unwrap_or(10) as i32)
+            .t(i32::try_from(timeout_secs.unwrap_or(10)).unwrap_or(10))
             .build();
         docker.restart_container(id, Some(options)).await?;
         Ok(())
@@ -400,7 +400,7 @@ impl DockerService {
             .stdout(true)
             .stderr(true)
             .tail(tail.unwrap_or("100"))
-            .since(since.unwrap_or(0) as i32)
+            .since(i32::try_from(since.unwrap_or(0)).unwrap_or(0))
             .build();
 
         let mut stream = docker.logs(id, Some(options));
@@ -431,6 +431,9 @@ impl DockerService {
     }
 
     /// 獲取容器即時統計
+    // Docker 的 CPU/記憶體百分比：cpu_usage 等欄位是 u64 累計值，算比例必須轉浮點。
+    // 同 handlers/system.rs 的理由 —— 有損是刻意的，且數量級遠低於 f64 尾數上限。
+    #[allow(clippy::cast_precision_loss, reason = "百分比計算，數量級遠低於浮點尾數上限")]
     pub async fn container_stats(&self, id: &str) -> Result<ContainerStats, DockerError> {
         let docker = self.get_docker().await?;
 
@@ -585,7 +588,7 @@ impl DockerService {
             .map(|n| {
                 let container_count = n.containers
                     .as_ref()
-                    .map_or(0, |c| c.len() as i32);
+                    .map_or(0, |c| i32::try_from(c.len()).unwrap_or(i32::MAX));
                 NetworkSummary {
                     id: n.id.unwrap_or_default(),
                     name: n.name.unwrap_or_default(),

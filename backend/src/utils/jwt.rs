@@ -17,9 +17,16 @@ pub fn create_access_token_with_secret(user_id: i64, secret: &str) -> Result<Str
         .ok_or_else(|| jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidKeyFormat))?
         .timestamp();
 
+    // 只有負的時間戳（＝ 1970 之前）才轉不過來，而這裡是 now()+15min。
+    // ⚠️ 刻意不用 unwrap_or fallback：usize::MAX 當 exp 等於「永不過期」，
+    // 真的轉不過去要讓建 token 直接失敗，不能發出一張不會到期的 token。
+    let exp = usize::try_from(expiration).map_err(|_| {
+        jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidKeyFormat)
+    })?;
+
     let claims = Claims {
         sub: user_id.to_string(),
-        exp: expiration as usize,
+        exp,
     };
 
     encode(

@@ -141,6 +141,9 @@ fn get_cpu_temperature() -> Option<f32> {
 }
 
 /// Get top processes (by real, delta-based CPU%) from the shared `System` snapshot.
+// 百分比顯示：u64 位元組轉浮點必然有損，而這正是要的 —— 顯示到小數點後一位，
+// 而 u64 的位元組數在 f32/f64 的尾數範圍內綽綽有餘（f64 可精確表示到 2^53 位元組 = 9 PB）。
+#[allow(clippy::cast_precision_loss, reason = "百分比顯示，位元組數遠低於浮點尾數上限")]
 fn get_top_processes(sys: &System, total_memory: u64) -> Vec<ProcessInfo> {
     // Read CPU% straight from the shared `System` snapshot. Because
     // get_system_status refreshes it twice MINIMUM_CPU_UPDATE_INTERVAL apart,

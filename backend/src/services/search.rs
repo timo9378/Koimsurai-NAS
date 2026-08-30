@@ -200,6 +200,9 @@ pub struct AiTagSearchResult {
 
 /// 在資料庫中搜尋含有指定 AI 標籤的圖片
 /// Search images containing specified AI tag in database
+// confidence 存進 DB 是 REAL（f64），而 DTO 用 f32 —— 這是刻意的窄化：
+// 信心值域是 0..1，f32 的 ~7 位有效數字遠超過需要的精度。
+#[allow(clippy::cast_possible_truncation, reason = "confidence 值域 0..1，f32 精度綽綽有餘")]
 pub async fn search_by_ai_tag(
     pool: &Pool<Sqlite>,
     tag_query: &str,

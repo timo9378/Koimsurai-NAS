@@ -223,7 +223,7 @@ pub async fn get_timeline(
             name,
             path: full_path,
             is_dir,
-            size: size as u64,
+            size: u64::try_from(size).unwrap_or(0),
             modified: modified.and_utc().timestamp().to_string(),
             mime_type,
             metadata: None, // Skip heavy metadata extraction for timeline

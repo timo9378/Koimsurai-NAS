@@ -258,7 +258,7 @@ impl FfmpegCommand {
                    .arg("-c:v").arg("h264_nvenc")
                    .arg("-preset").arg("p4")
                    .arg("-b:v").arg(format!("{}k", quality.video_bitrate_kbps))
-                   .arg("-maxrate").arg(format!("{}k", (quality.video_bitrate_kbps as f32 * 1.2) as u32))
+                   .arg("-maxrate").arg(format!("{}k", quality.video_bitrate_kbps * 12 / 10))
                    .arg("-bufsize").arg(format!("{}k", quality.video_bitrate_kbps * 2));
             }
             GpuAcceleration::Intel => {
@@ -271,7 +271,7 @@ impl FfmpegCommand {
                    .arg("-c:v").arg("libx264")
                    .arg("-preset").arg("fast")
                    .arg("-b:v").arg(format!("{}k", quality.video_bitrate_kbps))
-                   .arg("-maxrate").arg(format!("{}k", (quality.video_bitrate_kbps as f32 * 1.2) as u32))
+                   .arg("-maxrate").arg(format!("{}k", quality.video_bitrate_kbps * 12 / 10))
                    .arg("-bufsize").arg(format!("{}k", quality.video_bitrate_kbps * 2));
             }
         }

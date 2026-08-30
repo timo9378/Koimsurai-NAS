@@ -448,7 +448,7 @@ pub async fn list_files(
             name,
             path: file_db_path.clone(),
             is_dir,
-            size: size as u64,
+            size: u64::try_from(size).unwrap_or(0),
             modified: modified.and_utc().timestamp().to_string(),
             mime_type,
             metadata: Some(metadata),
@@ -629,7 +629,7 @@ pub async fn upload_file(
                 )
                 .bind(&full_relative_path)
                 .bind(&file_name)
-                .bind(metadata.len() as i64)
+                .bind(i64::try_from(metadata.len()).unwrap_or(i64::MAX))
                 .bind(&mime_type)
                 .bind(&parent_path)
                 .bind(false)
@@ -998,7 +998,7 @@ pub async fn list_favorites(
                 name,
                 path,
                 is_dir,
-                size: size as u64,
+                size: u64::try_from(size).unwrap_or(0),
                 modified: modified.and_utc().timestamp().to_string(),
                 mime_type,
                 starred_at: starred_at.and_utc().timestamp().to_string(),

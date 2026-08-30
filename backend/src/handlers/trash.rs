@@ -183,7 +183,7 @@ pub async fn restore_file(
             )
             .bind(&relative_path)
             .bind(&name)
-            .bind(meta.len() as i64)
+            .bind(i64::try_from(meta.len()).unwrap_or(i64::MAX))
             .bind(&mime_type)
             .bind(&parent_path)
             .bind(meta.is_dir())

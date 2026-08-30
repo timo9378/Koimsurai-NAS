@@ -153,7 +153,7 @@ pub async fn upload_chunk(
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|_| AppError::Status(StatusCode::BAD_REQUEST))?;
         file.write_all(&chunk).await.map_err(AppError::from)?;
-        uploaded_bytes += chunk.len() as i64;
+        uploaded_bytes += i64::try_from(chunk.len()).unwrap_or(i64::MAX);
     }
 
     // 3. Update progress

@@ -1,3 +1,8 @@
+// 併發測試失敗時要知道是「哪一個」task 掛的，而 nextest 會在失敗時把輸出秀出來。
+// workspace 的 print_stderr = deny 針對的是正式碼（要走 tracing 才進得了結構化 log），
+// [lints] 是 package 層級所以連 tests/ 一起管到了，這裡明確放行。
+#![allow(clippy::print_stderr, reason = "測試診斷輸出，靠 nextest 呈現")]
+
 //! 併發測試 - 測試文件寫入和轉碼的競爭條件
 
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -342,7 +347,7 @@ async fn test_file_mutex_protection() {
     // 驗證最終值
     let final_content = fs::read_to_string(&file_path).await.unwrap();
     let final_value: i32 = final_content.trim().parse().unwrap();
-    assert_eq!(final_value, num_tasks as i32);
+    assert_eq!(final_value, i32::try_from(num_tasks).unwrap());
 
     cleanup(test_name).await;
 }

@@ -160,6 +160,9 @@ async fn cleanup_empty_dirs(dir: &PathBuf) -> anyhow::Result<u64> {
 }
 
 /// 格式化位元組數量為人類可讀格式
+// 百分比顯示：u64 位元組轉浮點必然有損，而這正是要的 —— 顯示到小數點後一位，
+// 而 u64 的位元組數在 f32/f64 的尾數範圍內綽綽有餘（f64 可精確表示到 2^53 位元組 = 9 PB）。
+#[allow(clippy::cast_precision_loss, reason = "百分比顯示，位元組數遠低於浮點尾數上限")]
 fn format_bytes(bytes: u64) -> String {
     const KB: u64 = 1024;
     const MB: u64 = KB * 1024;

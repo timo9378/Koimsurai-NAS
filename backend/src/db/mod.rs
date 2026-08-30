@@ -20,7 +20,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
     // 如果資料庫檔案不存在，則建立它
     // Create database file if it doesn't exist
     if !Sqlite::database_exists(&database_url).await.unwrap_or(false) {
-        println!("Creating database {database_url}");
+        info!("Creating database {database_url}");
         Sqlite::create_database(&database_url).await?;
     }
 
@@ -334,7 +334,7 @@ pub async fn init_db(database_url: Option<String>) -> Result<Pool<Sqlite>> {
     ensure_column(&pool, "users", "totp_enabled", "INTEGER NOT NULL DEFAULT 0").await?;
     ensure_column(&pool, "users", "totp_backup_codes", "TEXT").await?;
 
-    println!("Database initialized successfully");
+    info!("Database initialized successfully");
     Ok(pool)
 }
 

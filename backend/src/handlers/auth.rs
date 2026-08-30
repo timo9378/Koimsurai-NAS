@@ -36,7 +36,10 @@ fn create_2fa_temp_token(user_id: i64, secret: &str) -> Result<String, AppError>
     let exp = Utc::now()
         .checked_add_signed(Duration::minutes(5))
         .ok_or_else(|| AppError::InternalServerError("time overflow".to_string()))?
-        .timestamp() as usize;
+        .timestamp();
+    // 同 utils/jwt.rs：不用 fallback，轉不過去就讓它失敗（見該處說明）。
+    let exp = usize::try_from(exp)
+        .map_err(|_| AppError::InternalServerError("time overflow".to_string()))?;
     let claims = TwoFactorTempClaims {
         sub: user_id.to_string(),
         purpose: "2fa_pending".to_string(),
