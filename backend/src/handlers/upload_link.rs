@@ -1,7 +1,7 @@
 use crate::error::AppError;
 use crate::models::{CreateUploadLinkRequest, UploadLinkInfoResponse, UploadLinkResponse};
 use crate::state::AppState;
-use crate::utils::hash::{hash_password, verify_password};
+use crate::utils::hash::{hash_password_async, verify_password_async};
 use axum::{
     extract::{Extension, Multipart, Path as AxumPath, Query, State},
     http::StatusCode,
@@ -56,7 +56,7 @@ pub async fn create_upload_link(
 ) -> Result<Json<UploadLinkResponse>, AppError> {
     let id = Uuid::new_v4().to_string();
     let password_hash = if let Some(pwd) = payload.password {
-        Some(hash_password(&pwd).map_err(AppError::from)?)
+        Some(hash_password_async(pwd.clone()).await.map_err(AppError::from)?)
     } else {
         None
     };
@@ -190,7 +190,10 @@ pub async fn upload_via_link(
     if let Some(ref hash) = password_hash {
         match &query.pwd {
             Some(pwd) => {
-                if !verify_password(pwd, hash).map_err(AppError::from)? {
+                if !verify_password_async(pwd.clone(), hash.clone())
+                    .await
+                    .map_err(AppError::from)?
+                {
                     return Err(AppError::Status(StatusCode::UNAUTHORIZED));
                 }
             }

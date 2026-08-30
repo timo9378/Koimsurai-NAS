@@ -1,7 +1,7 @@
 use crate::error::AppError;
 use crate::models::{CreateShareLinkRequest, ShareLinkResponse};
 use crate::state::AppState;
-use crate::utils::hash::{hash_password, verify_password};
+use crate::utils::hash::{hash_password_async, verify_password_async};
 use axum::{
     body::Body,
     extract::{Extension, Path as AxumPath, Query, State},
@@ -61,7 +61,7 @@ pub async fn create_share_link(
 ) -> Result<Json<ShareLinkResponse>, AppError> {
     let id = Uuid::new_v4().to_string();
     let password_hash = if let Some(pwd) = payload.password {
-        Some(hash_password(&pwd).map_err(AppError::from)?)
+        Some(hash_password_async(pwd.clone()).await.map_err(AppError::from)?)
     } else {
         None
     };
@@ -126,7 +126,9 @@ pub async fn access_share_link(
     // Check password
     if let Some(hash) = password_hash {
         let pwd = query.pwd.ok_or(AppError::Status(StatusCode::UNAUTHORIZED))?;
-        let valid = verify_password(&pwd, &hash).map_err(AppError::from)?;
+        let valid = verify_password_async(pwd.clone(), hash.clone())
+            .await
+            .map_err(AppError::from)?;
         if !valid {
             return Err(AppError::Status(StatusCode::UNAUTHORIZED));
         }

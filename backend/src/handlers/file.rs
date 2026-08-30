@@ -12,6 +12,7 @@ use tokio::io::AsyncWriteExt;
 use crate::error::AppError;
 use crate::models::FileInfo;
 use crate::state::AppState;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::path::PathBuf;
 // use crate::utils::image::generate_thumbnails;
@@ -378,8 +379,10 @@ pub async fn list_files(
     let _ = write!(sql, " ORDER BY is_dir DESC, {sort_column} {order}");
 
     // Pagination
-    let limit = query.limit.unwrap_or(50);
-    let offset = (query.page.unwrap_or(1) - 1) * limit;
+    // ⚠️ limit 由查詢字串控制，原本沒有上限 —— 客戶端送 limit=100000 就能讓單一
+    // 請求撈爆整張表。夾在 1..=500，同時也讓下面的 IN 子句參數量有界。
+    let limit = query.limit.unwrap_or(50).clamp(1, 500);
+    let offset = (query.page.unwrap_or(1) - 1).max(0) * limit;
 
     sql.push_str(" LIMIT ? OFFSET ?");
 
@@ -445,39 +448,63 @@ pub async fn list_files(
             format!("{effective_parent}/{name}")
         };
 
-        let tags = sqlx::query_as::<_, (String, Option<String>)>(
-            "SELECT tag_name, color FROM file_tags WHERE user_id = ? AND file_path = ?",
-        )
-        .bind(user_id)
-        .bind(&file_db_path)
-        .fetch_all(&state.pool)
-        .await
-        .map_err(AppError::from)?
-        .into_iter()
-        .map(|(name, color)| crate::models::Tag { name, color })
-        .collect();
-
-        // Query starred status
-        let is_starred = sqlx::query_scalar::<_, bool>(
-            "SELECT EXISTS(SELECT 1 FROM file_stars WHERE user_id = ? AND file_path = ?)",
-        )
-        .bind(user_id)
-        .bind(&file_db_path)
-        .fetch_one(&state.pool)
-        .await
-        .map_err(AppError::from)?;
-
         files.push(FileInfo {
             name,
-            path: file_db_path.clone(),
+            path: file_db_path,
             is_dir,
             size: u64::try_from(size).unwrap_or(0),
             modified: modified.and_utc().timestamp().to_string(),
             mime_type,
             metadata: Some(metadata),
-            tags,
-            is_starred,
+            // 先留空，下面一次撈完再填 —— 見該段說明
+            tags: Vec::new(),
+            is_starred: false,
         });
+    }
+
+    // ── tags 與 stars：一次撈完，不要在迴圈裡逐檔查 ─────────────────────────
+    // 原本這兩個查詢在上面的迴圈內，也就是每個檔案各打兩次 DB：列一個含 N 個項目的
+    // 目錄要 1 + 2N 次 SQLite 查詢（1000 個檔 = 2001 次），而這是整個 NAS 最常走的
+    // 端點。判準很清楚：這些資料「一次查得完」，所以是 N+1 而不是 streaming。
+    // limit 已夾在 500，IN 的參數量有界（SQLite 預設上限 999）。
+    if !files.is_empty() {
+        let paths: Vec<String> = files.iter().map(|f| f.path.clone()).collect();
+        let placeholders = vec!["?"; paths.len()].join(",");
+
+        let tag_sql = format!(
+            "SELECT file_path, tag_name, color FROM file_tags WHERE user_id = ? AND file_path IN ({placeholders})"
+        );
+        let mut tag_q = sqlx::query_as::<_, (String, String, Option<String>)>(&tag_sql).bind(user_id);
+        for path in &paths {
+            tag_q = tag_q.bind(path);
+        }
+        let mut tags_by_path: HashMap<String, Vec<crate::models::Tag>> = HashMap::new();
+        for (file_path, name, color) in tag_q.fetch_all(&state.pool).await.map_err(AppError::from)? {
+            tags_by_path
+                .entry(file_path)
+                .or_default()
+                .push(crate::models::Tag { name, color });
+        }
+
+        let star_sql =
+            format!("SELECT file_path FROM file_stars WHERE user_id = ? AND file_path IN ({placeholders})");
+        let mut star_q = sqlx::query_scalar::<_, String>(&star_sql).bind(user_id);
+        for path in &paths {
+            star_q = star_q.bind(path);
+        }
+        let starred: HashSet<String> = star_q
+            .fetch_all(&state.pool)
+            .await
+            .map_err(AppError::from)?
+            .into_iter()
+            .collect();
+
+        for file in &mut files {
+            if let Some(tags) = tags_by_path.remove(&file.path) {
+                file.tags = tags;
+            }
+            file.is_starred = starred.contains(&file.path);
+        }
     }
 
     // 異步清理不存在的檔案記錄（不阻塞回應）

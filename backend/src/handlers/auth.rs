@@ -5,7 +5,9 @@ use crate::models::{
     TwoFactorVerifySetupResponse, User,
 };
 use crate::state::AppState;
-use crate::utils::hash::{hash_password, verify_password};
+use crate::utils::hash::{
+    find_matching_hash_async, hash_all_async, hash_password_async, verify_password_async,
+};
 use crate::utils::jwt::create_access_token_with_secret;
 use crate::utils::totp::{build_otpauth_uri, generate_backup_codes, generate_secret, verify_code};
 use axum::{extract::State, http::StatusCode, Extension, Json};
@@ -152,7 +154,9 @@ pub async fn register(
         ));
     }
 
-    let password_hash = hash_password(&payload.password).map_err(AppError::from)?;
+    let password_hash = hash_password_async(payload.password.clone())
+        .await
+        .map_err(AppError::from)?;
     sqlx::query("INSERT INTO users (username, password_hash) VALUES (?, ?)")
         .bind(payload.username)
         .bind(password_hash)
@@ -189,7 +193,9 @@ pub async fn login(
         return Err(AppError::AuthError("Invalid credentials".to_string()));
     };
 
-    let is_valid = verify_password(&payload.password, &user.password_hash).map_err(AppError::from)?;
+    let is_valid = verify_password_async(payload.password.clone(), user.password_hash.clone())
+        .await
+        .map_err(AppError::from)?;
     if !is_valid {
         return Err(AppError::AuthError("Invalid credentials".to_string()));
     }
@@ -259,13 +265,11 @@ pub async fn two_factor_login(
         let codes_json = user.totp_backup_codes.as_deref().unwrap_or("[]");
         let mut codes: Vec<String> = serde_json::from_str(codes_json)
             .map_err(|_| AppError::InternalServerError("backup_codes corrupt".to_string()))?;
-        let mut matched_index: Option<usize> = None;
-        for (i, hashed) in codes.iter().enumerate() {
-            if verify_password(&trimmed, hashed).unwrap_or(false) {
-                matched_index = Some(i);
-                break;
-            }
-        }
+        // ⚠️ 整批共用一個 blocking task —— 逐個 verify 的話最壞要跑 8 次 argon2
+        // （實測 8 × 18.5 ms ≈ 148 ms），那段時間 tokio worker 完全卡住。
+        let matched_index = find_matching_hash_async(trimmed.clone(), codes.clone())
+            .await
+            .map_err(AppError::from)?;
         let idx = matched_index.ok_or_else(|| AppError::AuthError("Invalid backup code".to_string()))?;
         codes.remove(idx);
         let new_json = serde_json::to_string(&codes).unwrap_or_else(|_| "[]".to_string());
@@ -454,10 +458,8 @@ pub async fn two_factor_verify_setup(
 
     // 產 8 組 backup codes，hash 後存 DB，明文回傳一次
     let codes = generate_backup_codes();
-    let hashed: Vec<String> = codes
-        .iter()
-        .map(|c| hash_password(c).map_err(AppError::from))
-        .collect::<Result<_, _>>()?;
+    // 8 組 code 共用一個 blocking task（實測 8 × 20 ms ≈ 160 ms）
+    let hashed: Vec<String> = hash_all_async(codes.clone()).await.map_err(AppError::from)?;
     let codes_json =
         serde_json::to_string(&hashed).map_err(|e| AppError::InternalServerError(e.to_string()))?;
 
@@ -502,7 +504,10 @@ pub async fn two_factor_disable(
     }
 
     // 必須 password OK + code OK 才能停用（防止 cookie 被劫持）
-    if !verify_password(&payload.password, &user.password_hash).map_err(AppError::from)? {
+    if !verify_password_async(payload.password.clone(), user.password_hash.clone())
+        .await
+        .map_err(AppError::from)?
+    {
         return Err(AppError::AuthError("Wrong password".to_string()));
     }
 
@@ -515,9 +520,10 @@ pub async fn two_factor_disable(
         // backup code
         let codes_json = user.totp_backup_codes.as_deref().unwrap_or("[]");
         let codes: Vec<String> = serde_json::from_str(codes_json).unwrap_or_default();
-        codes
-            .iter()
-            .any(|h| verify_password(&trimmed, h).unwrap_or(false))
+        find_matching_hash_async(trimmed.clone(), codes)
+            .await
+            .map_err(AppError::from)?
+            .is_some()
     } else {
         verify_code(secret, &trimmed).map_err(|e| AppError::InternalServerError(e.to_string()))?
     };

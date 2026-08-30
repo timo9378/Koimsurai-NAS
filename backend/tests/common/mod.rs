@@ -6,10 +6,16 @@ use Koimsurai_NAS::{create_app, db};
 /// 測試用的邀請碼
 pub const TEST_INVITE_CODE: &str = "test_invite_code_12345";
 
+// ⚠️ `tests/common` 會被編進**每一個**測試 binary，而各測試用到的欄位不同 ——
+// 只有 list_files_batch_tests 需要 pool / storage_dir，於是在其他 binary 裡它們
+// 就是 dead_code。這是 include 模式的固有現象，不是真的沒人用。
+#[allow(dead_code, reason = "tests/common 被每個測試 binary 各編一次，欄位使用者不同")]
 pub struct TestApp {
     pub address: String,
-    pub _pool: SqlitePool,
-    pub _storage_dir: TempDir,
+    /// 測試可直接用它建資料（例如繞過 file watcher 直接插 `files` 列）
+    pub pool: SqlitePool,
+    /// 測試需要在磁碟上實際建檔時用（`list_files` 會檢查檔案是否真的存在）
+    pub storage_dir: TempDir,
 }
 
 pub async fn spawn_app() -> TestApp {
@@ -50,7 +56,7 @@ pub async fn spawn_app() -> TestApp {
 
     TestApp {
         address,
-        _pool: pool,
-        _storage_dir: storage_dir,
+        pool,
+        storage_dir,
     }
 }
