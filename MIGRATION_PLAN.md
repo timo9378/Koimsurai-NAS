@@ -561,7 +561,7 @@ Stryker（前端變異測試）、`@lhci/cli`（效能預算）、schemathesis�
 | `handlers/upload_link.rs` | 0 → **88.7%** | 唯一免身分就能寫檔案的端點 |
 | `middleware/auth.rs` | 48 → **94.6%** | 補測試時抓到一個 CSRF 繞過，見下 |
 | `utils/jwt.rs` | 52 → **90.0%** | 含金鑰輪替後舊 token 失效 |
-| `handlers/terminal.rs` | 0 → **32.4%** | 白名單那半；抓到四個 shell 逃逸，見下 |
+| `handlers/terminal.rs` | 0 → **64.3%** | 白名單 + cd／補全；抓到五個逃逸，見下 |
 | `handlers/upload.rs` | 0 → **87.4%** | 分塊續傳；抓到一個 IDOR，見下 |
 | `utils/image.rs` | 0 → **63.4%** | magic bytes 判斷那半 |
 
@@ -588,6 +588,15 @@ Stryker（前端變異測試）、`@lhci/cli`（效能預算）、schemathesis�
 
 要把它們拿回來的話有兩條路：命令解析改成 quote-aware（shlex 之類），
 或改用容器層級的隔離（seccomp／唯讀 rootfs）而不是命令白名單。
+
+**第五個逃逸（`cd` 的路徑包含檢查）**：`canonical.starts_with(storage_base)`
+用的是**字串**前綴。storage 是 `/data/storage` 時，`/data/storage-backup`
+也「以它開頭」而被判定為在範圍內 —— 跟 CSRF 那次 `starts_with` 完全同一類錯誤，
+在同一個 codebase 裡出現第二次。改用 `Path::starts_with`（比對路徑元件）。
+terminal.rs 裡有三處同樣的寫法，一起抽成 `is_within_storage`。
+
+目前的容器設定下還不可利用（`/data` 底下沒有同前綴的兄弟目錄），
+但只要有人掛一個 `/data/storage-backup` 就成立了。
 
 **補測試時抓到的 IDOR**：`upload_chunk` 與 `get_upload_status` 只用
 `WHERE id = ?` 查工作階段，沒有比對 `user_id`。兩者都在 `require_auth` 後面，

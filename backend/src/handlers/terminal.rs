@@ -691,6 +691,19 @@ async fn execute_command(cmd: &str, current_dir: &mut String, storage_base: &str
 }
 
 /// 處理 cd 命令
+/// 「這個路徑在 storage 底下嗎」。
+///
+/// ⚠️ 一定要用 `Path::starts_with` 而不是字串的 `str::starts_with`。
+/// 後者是**字元前綴**比對：storage 是 `/data/storage` 時，
+/// `/data/storage-backup` 也「以它開頭」而被判定為在範圍內 —— 那是一個完全
+/// 不同的目錄。（同一類錯誤在 middleware/auth.rs 的 CSRF Origin 比對上也發生過。）
+///
+/// `Path::starts_with` 比的是**路徑元件**，`/data/storage-backup` 的第二個元件
+/// 是 `storage-backup` ≠ `storage`，所以正確地回 false。
+fn is_within_storage(path: &str, storage_base: &str) -> bool {
+    std::path::Path::new(path).starts_with(storage_base)
+}
+
 fn handle_cd_command(parts: &[&str], current_dir: &mut String, storage_base: &str) -> String {
     let target = if parts.len() > 1 { parts[1] } else { "~" };
 
@@ -701,7 +714,7 @@ fn handle_cd_command(parts: &[&str], current_dir: &mut String, storage_base: &st
         if let Some(parent) = path.parent() {
             let parent_str = parent.to_string_lossy().to_string();
             // 不允許離開 storage 目錄
-            if parent_str.starts_with(storage_base) {
+            if is_within_storage(&parent_str, storage_base) {
                 parent_str
             } else {
                 return "\x1b[31m錯誤: 無法離開 storage 目錄\x1b[0m".to_string();
@@ -731,7 +744,7 @@ fn handle_cd_command(parts: &[&str], current_dir: &mut String, storage_base: &st
     };
 
     // 確保在 storage 範圍內
-    if !canonical.starts_with(storage_base) {
+    if !is_within_storage(&canonical, storage_base) {
         return "\x1b[31m錯誤: 無法訪問 storage 目錄之外的路徑\x1b[0m".to_string();
     }
 
@@ -811,7 +824,7 @@ async fn execute_external_command(cmd: &str, current_dir: &str, storage_base: &s
                             .parent()
                             .unwrap_or_else(|| std::path::Path::new(current_dir)),
                     ) {
-                        if canonical.to_string_lossy().starts_with(storage_base) {
+                        if is_within_storage(&canonical.to_string_lossy(), storage_base) {
                             if let Err(e) = tokio::fs::write(&target_path, stdout.as_bytes()).await {
                                 return format!("\x1b[31m寫入錯誤: {e}\x1b[0m");
                             }
@@ -975,6 +988,247 @@ mod tests {
 
     /// help 訊息與白名單不同步的話，使用者會照著 help 打然後被擋，
     /// 而錯誤訊息說的是「不在允許列表中」——兩邊互相打臉，很難查。
+    // ══════════════════ cd：路徑不能離開 storage ══════════════════
+    //
+    // ⚠️ 這一組是整支檔案裡最需要釘的：cd 走偏了不會有錯誤訊息，只是後續
+    //    每一個命令都在錯的目錄下執行（而那個目錄可能在 storage 之外）。
+    use std::fs;
+    use tempfile::TempDir;
+
+    /// 準備一個 storage 根，回傳 (`TempDir`, 已 canonicalize 的路徑字串)。
+    ///
+    /// ⚠️ 一定要 canonicalize：`handle_cd_command` 內部會 canonicalize 之後
+    /// 跟 `storage_base` 做字串比對，而 `TempDir` 給的路徑在某些系統上含符號連結
+    /// （macOS 的 /tmp → /private/tmp）。不先正規化的話比對永遠不成立，
+    /// 測試會以「無法訪問 storage 目錄之外的路徑」失敗，而程式其實是對的。
+    fn storage() -> (TempDir, String) {
+        let dir = TempDir::new().expect("tempdir");
+        let base = fs::canonicalize(dir.path())
+            .expect("canonicalize")
+            .to_string_lossy()
+            .to_string();
+        (dir, base)
+    }
+
+    #[test]
+    fn cd_into_a_subdirectory_moves_there() {
+        let (dir, base) = storage();
+        fs::create_dir_all(dir.path().join("照片/2026")).expect("mkdir");
+
+        let mut cwd = base.clone();
+        assert_eq!(handle_cd_command(&["cd", "照片"], &mut cwd, &base), "");
+        assert_eq!(cwd, format!("{base}/照片"));
+
+        assert_eq!(handle_cd_command(&["cd", "2026"], &mut cwd, &base), "");
+        assert_eq!(cwd, format!("{base}/照片/2026"));
+    }
+
+    #[test]
+    fn cd_with_no_argument_and_tilde_both_go_home() {
+        let (dir, base) = storage();
+        fs::create_dir_all(dir.path().join("a")).expect("mkdir");
+
+        for args in [vec!["cd"], vec!["cd", "~"]] {
+            let mut cwd = format!("{base}/a");
+            assert_eq!(handle_cd_command(&args, &mut cwd, &base), "");
+            assert_eq!(cwd, base, "{args:?} 應該回到 storage 根");
+        }
+    }
+
+    #[test]
+    fn cd_dotdot_walks_up_but_stops_at_the_storage_root() {
+        let (dir, base) = storage();
+        fs::create_dir_all(dir.path().join("a/b")).expect("mkdir");
+
+        let mut cwd = format!("{base}/a/b");
+        assert_eq!(handle_cd_command(&["cd", ".."], &mut cwd, &base), "");
+        assert_eq!(cwd, format!("{base}/a"));
+        assert_eq!(handle_cd_command(&["cd", ".."], &mut cwd, &base), "");
+        assert_eq!(cwd, base);
+
+        // ⚠️ 在根目錄再往上必須被擋，而且 cwd 不能被改動
+        let err = handle_cd_command(&["cd", ".."], &mut cwd, &base);
+        assert!(err.contains("無法離開"), "實際訊息：{err}");
+        assert_eq!(cwd, base, "被拒絕時 cwd 不該被改掉");
+    }
+
+    #[test]
+    fn an_absolute_path_is_relative_to_the_storage_root() {
+        let (dir, base) = storage();
+        fs::create_dir_all(dir.path().join("etc")).expect("mkdir");
+
+        // 使用者眼中的 `/etc` 是 NAS 的根目錄底下，不是宿主機的 /etc
+        let mut cwd = base.clone();
+        assert_eq!(handle_cd_command(&["cd", "/etc"], &mut cwd, &base), "");
+        assert_eq!(cwd, format!("{base}/etc"));
+        assert_ne!(cwd, "/etc");
+    }
+
+    #[test]
+    fn cd_to_a_missing_directory_or_a_file_reports_an_error() {
+        let (dir, base) = storage();
+        fs::write(dir.path().join("a.txt"), b"x").expect("write");
+
+        let mut cwd = base.clone();
+        let err = handle_cd_command(&["cd", "沒有這個目錄"], &mut cwd, &base);
+        assert!(err.contains("不存在"), "實際：{err}");
+        assert_eq!(cwd, base);
+
+        let err = handle_cd_command(&["cd", "a.txt"], &mut cwd, &base);
+        assert!(err.contains("不是目錄"), "實際：{err}");
+        assert_eq!(cwd, base);
+    }
+
+    #[test]
+    fn a_symlink_pointing_outside_the_storage_root_is_refused() {
+        // ⚠️ 這是 canonicalize 存在的理由：字串層面 `<base>/escape` 完全正常，
+        //    只有解析完符號連結才看得出它指向 storage 之外。
+        #[cfg(unix)]
+        {
+            let (dir, base) = storage();
+            let outside = TempDir::new().expect("outside");
+            std::os::unix::fs::symlink(outside.path(), dir.path().join("escape")).expect("symlink");
+
+            let mut cwd = base.clone();
+            let err = handle_cd_command(&["cd", "escape"], &mut cwd, &base);
+            assert!(err.contains("storage"), "符號連結逃逸必須被擋，實際：{err}");
+            assert_eq!(cwd, base);
+        }
+    }
+
+    #[test]
+    fn a_sibling_directory_sharing_the_storage_prefix_is_refused() {
+        // ⚠️ storage_base 的比對是**字串前綴**。base 是 `/x/storage` 時，
+        //    `/x/storage-backup` 也「以它開頭」——跟 CSRF 那次 starts_with 的
+        //    繞過完全同一類。
+        #[cfg(unix)]
+        {
+            let parent = TempDir::new().expect("parent");
+            let base_dir = parent.path().join("storage");
+            let sibling = parent.path().join("storage-backup");
+            fs::create_dir_all(&base_dir).expect("mkdir");
+            fs::create_dir_all(&sibling).expect("mkdir");
+            let base = fs::canonicalize(&base_dir)
+                .expect("canonicalize")
+                .to_string_lossy()
+                .to_string();
+
+            let mut cwd = base.clone();
+            let err = handle_cd_command(&["cd", "../storage-backup"], &mut cwd, &base);
+            assert!(
+                !err.is_empty(),
+                "同前綴的兄弟目錄必須被擋，實際卻成功了（cwd = {cwd}）"
+            );
+            assert_eq!(cwd, base);
+        }
+    }
+
+    #[test]
+    fn is_within_storage_compares_path_components_not_characters() {
+        // ⚠️ 這是上面那條 sibling 測試的單元版。字串前綴比對會讓
+        //    `/data/storage-backup` 通過，而它是一個完全不同的目錄。
+        assert!(is_within_storage("/data/storage", "/data/storage"));
+        assert!(is_within_storage("/data/storage/a/b", "/data/storage"));
+
+        assert!(!is_within_storage("/data/storage-backup", "/data/storage"));
+        assert!(!is_within_storage("/data/storageXYZ/secret", "/data/storage"));
+        assert!(!is_within_storage("/etc", "/data/storage"));
+        assert!(
+            !is_within_storage("/data", "/data/storage"),
+            "上層目錄不算在範圍內"
+        );
+    }
+
+    // ══════════════════ 顯示路徑與內建命令 ══════════════════
+
+    #[test]
+    fn the_storage_root_is_displayed_as_a_tilde() {
+        assert_eq!(get_display_path("/data/storage", "/data/storage"), "~");
+        assert_eq!(get_display_path("/data/storage/照片", "/data/storage"), "~/照片");
+        // 不在 storage 底下時原樣顯示（理論上到不了，但不該顯示成 `~something`）
+        assert_eq!(get_display_path("/etc", "/data/storage"), "/etc");
+    }
+
+    #[test]
+    fn builtin_commands_are_handled_without_spawning_a_process() {
+        assert!(handle_builtin_command("help", "/x").is_some());
+        assert_eq!(
+            handle_builtin_command("clear", "/x"),
+            Some("\x1b[2J\x1b[H".to_string())
+        );
+        assert_eq!(
+            handle_builtin_command("pwd", "/data/x"),
+            Some("/data/x".to_string())
+        );
+        assert!(handle_builtin_command("exit", "/x").is_some());
+        assert!(handle_builtin_command("logout", "/x").is_some());
+        // ⚠️ 回 None 代表「這不是內建命令，交給外部執行」——白名單檢查在那條路上。
+        //    誤判成內建的話等於繞過白名單。
+        assert_eq!(handle_builtin_command("ls", "/x"), None);
+        assert_eq!(handle_builtin_command("helpme", "/x"), None);
+    }
+
+    // ══════════════════ Tab 補全 ══════════════════
+
+    #[test]
+    fn completion_of_an_empty_or_partial_word_offers_commands() {
+        let (_dir, base) = storage();
+        let all = get_completions("", &base, &base);
+        assert!(all.contains(&"ls".to_string()));
+
+        let l = get_completions("l", &base, &base);
+        assert!(l.contains(&"ls".to_string()));
+        assert!(!l.contains(&"pwd".to_string()), "不該提示不符前綴的命令");
+    }
+
+    #[test]
+    fn completion_after_a_space_offers_files_in_the_current_directory() {
+        let (dir, base) = storage();
+        fs::write(dir.path().join("note.txt"), b"x").expect("write");
+        fs::create_dir_all(dir.path().join("照片")).expect("mkdir");
+
+        let c = get_completions("cat ", &base, &base);
+        assert!(c.contains(&"note.txt".to_string()));
+        // 目錄要帶結尾斜線，使用者才知道還能繼續往下打
+        assert!(c.contains(&"照片/".to_string()));
+    }
+
+    #[test]
+    fn completion_filters_by_the_partial_file_name() {
+        let (dir, base) = storage();
+        fs::write(dir.path().join("note.txt"), b"x").expect("write");
+        fs::write(dir.path().join("other.txt"), b"x").expect("write");
+
+        let c = get_completions("cat no", &base, &base);
+        assert_eq!(c, vec!["note.txt".to_string()]);
+    }
+
+    #[test]
+    fn completion_descends_into_a_subdirectory_path() {
+        let (dir, base) = storage();
+        fs::create_dir_all(dir.path().join("照片")).expect("mkdir");
+        fs::write(dir.path().join("照片/貓.jpg"), b"x").expect("write");
+
+        let c = get_completions("cat 照片/", &base, &base);
+        assert_eq!(c, vec!["貓.jpg".to_string()]);
+    }
+
+    #[test]
+    fn find_common_prefix_behaves() {
+        assert_eq!(find_common_prefix(&[]), None);
+        assert_eq!(
+            find_common_prefix(&["only".to_string()]),
+            Some("only".to_string())
+        );
+        assert_eq!(
+            find_common_prefix(&["note.txt".to_string(), "nothing".to_string()]),
+            Some("not".to_string())
+        );
+        // ⚠️ 沒有共同前綴時要回 None 而不是空字串 —— 呼叫端用它決定「要不要把
+        //    使用者打到一半的字補上去」，補一個空字串等於把輸入清掉。
+        assert_eq!(find_common_prefix(&["abc".to_string(), "xyz".to_string()]), None);
+    }
+
     #[test]
     fn help_text_only_advertises_whitelisted_commands() {
         let allowed = get_allowed_commands();
