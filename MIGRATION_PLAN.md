@@ -747,9 +747,11 @@ happy path，所以任何 4xx/5xx 都算「未記載」。留著會讓這個 job
 
 ### 程式面的已知債
 
-- `Finder.tsx` 約 1400 行。上一頁/下一頁已抽成 `finder/history.ts`，
-  其餘（選取、拖放、重新命名）仍在同一支裡。
+- `Finder.tsx` 約 1400 行、`FileList.tsx` 約 790 行。已抽出三塊純邏輯並各自
+  有測試：`finder/history.ts`（上一頁/下一頁）、`finder/selection.ts`
+  （點擊選取）、`finder/marquee.ts`（框選幾何）。剩下的（拖放、重新命名、
+  虛擬清單的整合）仍在元件裡。
 - `window-store` 的 `newWindow as WindowState`：判別式聯集的關聯 TS 證不出來，
   呼叫端有泛型簽章擋著，理由寫在該行旁。
-- 前端測試涵蓋 13 個檔案；`FileList` / `DesktopIcons` / `MobileLayout`
+- 前端測試涵蓋 15 個檔案；`DesktopIcons` / `MobileLayout`
   這幾支大元件仍然沒有測試。

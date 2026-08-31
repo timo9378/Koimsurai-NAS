@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MOVE_MIME } from "@/lib/dnd";
+import { itemsInMarquee, type MarqueeBox, type MarqueeLayout } from "./marquee";
 
 const FileIcon = ({ file, currentPath }: { file: FileInfo; currentPath?: string }) => {
   const isImage = file.mime_type?.startsWith("image/");
@@ -233,62 +234,24 @@ export const FileList = ({
   onSelectionChangeRef.current = onSelectionChange;
 
   // ── 座標計算式框選 ──
-  // 不依賴 DOM refs，直接用 Grid/List 的佈局參數推算每個 item 的邏輯位置
+  // 幾何運算全在 finder/marquee.ts（純函式、有測試）。這裡只負責把
+  // 結果轉回檔名並丟給呼叫端。
   const calculateAndApplySelection = React.useCallback(
-    (box: { startX: number; startY: number; currentX: number; currentY: number }) => {
-      if (!containerRef.current || !files?.length || !onSelectionChangeRef.current) return;
+    (box: MarqueeBox) => {
+      const container = containerRef.current;
+      const apply = onSelectionChangeRef.current;
+      if (!container || !files?.length || !apply) return;
 
-      const boxLeft = Math.min(box.startX, box.currentX);
-      const boxTop = Math.min(box.startY, box.currentY);
-      const boxRight = Math.max(box.startX, box.currentX);
-      const boxBottom = Math.max(box.startY, box.currentY);
+      const layout: MarqueeLayout =
+        viewMode === "grid"
+          ? { mode: "grid", containerWidth: container.clientWidth }
+          : { mode: "list" };
 
-      const newSelected = new Set<string>();
+      const names = itemsInMarquee(box, files.length, layout)
+        .map((i) => files[i]?.name)
+        .filter((n): n is string => n !== undefined);
 
-      if (viewMode === "grid") {
-        // Grid 佈局參數（對應 CSS: minmax(100px,1fr), gap-4, p-4）
-        const GAP = 16;
-        const PADDING = 16;
-        const MIN_COL_W = 100;
-        const containerW = containerRef.current.clientWidth;
-        const availableW = containerW - PADDING * 2;
-        // auto-fill 算法：盡可能多的欄位，每欄至少 MIN_COL_W
-        const cols = Math.max(1, Math.floor((availableW + GAP) / (MIN_COL_W + GAP)));
-        const cellW = (availableW - GAP * (cols - 1)) / cols;
-        // 估算每個 cell 高度（icon 48 + text ~20 + padding 16 ≈ 84）
-        const CELL_H = 84;
-
-        files.forEach((file, index) => {
-          const col = index % cols;
-          const row = Math.floor(index / cols);
-          const itemLeft = PADDING + col * (cellW + GAP);
-          const itemTop = PADDING + row * (CELL_H + GAP);
-          const itemRight = itemLeft + cellW;
-          const itemBottom = itemTop + CELL_H;
-
-          const intersects = !(
-            boxLeft > itemRight ||
-            boxRight < itemLeft ||
-            boxTop > itemBottom ||
-            boxBottom < itemTop
-          );
-          if (intersects) newSelected.add(file.name);
-        });
-      } else {
-        // List 佈局：header 36px，每行 32px
-        const HEADER_H = 36;
-        const ROW_H = 32;
-
-        files.forEach((file, index) => {
-          const itemTop = HEADER_H + index * ROW_H;
-          const itemBottom = itemTop + ROW_H;
-
-          const intersects = !(boxTop > itemBottom || boxBottom < itemTop);
-          if (intersects) newSelected.add(file.name);
-        });
-      }
-
-      onSelectionChangeRef.current(newSelected);
+      apply(new Set(names));
     },
     [files, viewMode],
   );
