@@ -1,0 +1,147 @@
+# schemathesis —— 用 OpenAPI spec 對 API 做 fuzz。
+#
+# 為什麼獨立一個 workflow 而不是接在 ci.yml：它要先建出 server binary、起一個
+# 實例、註冊登入拿 cookie，整段大約五到十分鐘。接在主 CI 上等於每次 push 都要
+# 等，而它抓到的東西（panic、未記載的狀態碼）並不需要那麼即時。
+#
+# ⚠️ **只對這裡起的臨時實例跑，絕對不要對 production。** schemathesis 會發
+#    DELETE、清垃圾桶、刪檔案——那是它的工作。這個 job 用自己的 temp DB 與
+#    storage，跑完就跟著 runner 一起消失。
+#
+# 第一次跑（2026-08-31，手動）就撞出 28 個 panic 與兩個使用者日常會踩到的
+# bug，詳見 MIGRATION_PLAN.md §12。
+name: API Fuzz
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 每週日 20:00 UTC = 週一 04:00 Asia/Taipei（跟 mutants 錯開一小時）
+    - cron: '0 20 * * 0'
+  # PR 動到後端才跑——API 的形狀變了才有必要重驗
+  pull_request:
+    paths:
+      - 'backend/**'
+
+concurrency:
+  group: api-fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: schemathesis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # 這些只在這個 job 的臨時實例裡用，不是任何真實環境的值
+      JWT_SECRET: fuzz_only_secret_not_used_anywhere_else
+      REGISTRATION_INVITE_CODE: fuzz_invite
+      COOKIE_SECURE: 'false'
+      PORT: '3099'
+      RUST_LOG: warn
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+      - uses: Swatinem/rust-cache@258712b0b7b1ddf8bddc9fc3b0faca682b2736c3 # v2
+        with:
+          prefix-key: v1-rust
+          shared-key: workspace-lint-test
+          save-if: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+
+      - run: pip install --disable-pip-version-check schemathesis==4.25.2
+
+      # spec 從 binary 產，不是從 /scalar 抓——那個端點現在要登入
+      # （見 routes/mod.rs），從這裡拿的話不必先起伺服器。
+      - name: 產生 OpenAPI spec
+        run: cargo run --locked --bin export_openapi -- "$RUNNER_TEMP/openapi.json"
+
+      - name: 建 server binary
+        run: cargo build --locked --bin Koimsurai_NAS
+
+      # ⚠️ 用 $RUNNER_TEMP 而不是 repo 內的路徑：schemathesis 會建檔、刪檔、
+      #    清垃圾桶，掉在工作目錄裡會污染後續步驟（也會讓 git diff 不乾淨）。
+      - name: 起臨時實例
+        env:
+          DATABASE_URL: sqlite://${{ runner.temp }}/fuzz.db?mode=rwc
+          STORAGE_PATH: ${{ runner.temp }}/fuzz-storage
+        run: |
+          set -euo pipefail
+          mkdir -p "$STORAGE_PATH"
+          ./target/debug/Koimsurai_NAS > "$RUNNER_TEMP/server.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/server.pid"
+          # 等它真的聽得到請求。固定 sleep 會在 runner 忙的時候不夠。
+          for _ in $(seq 1 60); do
+            if curl -sf -o /dev/null "http://127.0.0.1:$PORT/api/nope" \
+               || [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/api/nope")" = "404" ]; then
+              echo "server ready"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::server 起不來"; cat "$RUNNER_TEMP/server.log"; exit 1
+
+      # ⚠️ 大部分端點要登入，不然 schemathesis 只會拿到一堆 401，
+      #    等於什麼都沒測到（第一次手動跑就是這樣，40 個端點全是 401）。
+      #
+      # cookie 認證的寫入類請求還要 Origin（見 middleware/auth.rs 的 CSRF 檢查），
+      # 所以兩個 header 都要帶。
+      - name: 註冊並登入
+        run: |
+          set -euo pipefail
+          U="http://127.0.0.1:$PORT"
+          curl -sf -o /dev/null -X POST "$U/api/auth/register" \
+            -H 'Content-Type: application/json' \
+            -d "{\"username\":\"fuzzer\",\"password\":\"password123\",\"invite_code\":\"$REGISTRATION_INVITE_CODE\"}"
+          curl -sf -D "$RUNNER_TEMP/headers.txt" -o /dev/null -X POST "$U/api/auth/login" \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"fuzzer","password":"password123"}'
+          # ⚠️ 用 python 抓而不是 sed：回應有兩個 Set-Cookie（refresh_token 在前），
+          #    貪婪的 sed 會跨行抓到錯的值——手動跑時就踩過一次，症狀是全部 401。
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import os, pathlib, re
+          h = pathlib.Path(os.environ["RUNNER_TEMP"], "headers.txt").read_text()
+          m = re.search(r"access_token=([^;\s]+)", h)
+          if not m:
+              raise SystemExit("找不到 access_token cookie")
+          print(f"FUZZ_TOKEN={m.group(1)}")
+          PY
+
+      # exclude 的四組各有理由：
+      #   docker        runner 沒有 docker socket，全部會 500
+      #   terminal      WebSocket upgrade，schemathesis 送的是普通 GET
+      #   media/stream  帶 resolution 會叫 ffmpeg 轉碼，會卡住
+      #   media/hls     同上
+      - name: schemathesis
+        run: |
+          set -euo pipefail
+          U="http://127.0.0.1:$PORT"
+          schemathesis run "$RUNNER_TEMP/openapi.json" \
+            --url "$U" \
+            --header "Cookie: access_token=$FUZZ_TOKEN" \
+            --header "Origin: $U" \
+            --exclude-path-regex '^/api/(docker|terminal|media/stream|media/hls)' \
+            --max-examples 20 \
+            --continue-on-failure
+
+      # ⚠️ if 的條件不能是 success()：server 掛掉時最需要看它的 log。
+      - name: server log（有 panic 的話在這裡）
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo '### server log'
+            echo '```'
+            tail -200 "$RUNNER_TEMP/server.log" || true
+            echo '```'
+            echo
+            echo "panic 次數：$(grep -ci panicked "$RUNNER_TEMP/server.log" || echo 0)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 收掉臨時實例
+        if: ${{ always() }}
+        run: kill "$(cat "$RUNNER_TEMP/server.pid")" 2>/dev/null || true
