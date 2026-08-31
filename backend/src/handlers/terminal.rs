@@ -425,7 +425,7 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
 
     // 當前工作目錄（限制在 storage 內）
     let storage_path = state.storage_path.clone();
-    let mut current_dir = storage_path.to_string_lossy().to_string();
+    let mut current_dir = storage_path.as_path().to_string_lossy().to_string();
 
     // 發送歡迎訊息
     let welcome = "\x1b[2J\x1b[H\
@@ -443,7 +443,7 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
     // 發送初始提示符
     let prompt = format!(
         "\x1b[36mnas\x1b[0m:\x1b[34m{}\x1b[0m$ ",
-        get_display_path(&current_dir, &storage_path.to_string_lossy())
+        get_display_path(&current_dir, &storage_path.as_path().to_string_lossy())
     );
     if sender.send(Message::Text(prompt)).await.is_err() {
         return;
@@ -478,9 +478,12 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
                             }
 
                             // 執行命令
-                            let output =
-                                execute_command(&cmd, &mut current_dir, &storage_path.to_string_lossy())
-                                    .await;
+                            let output = execute_command(
+                                &cmd,
+                                &mut current_dir,
+                                &storage_path.as_path().to_string_lossy(),
+                            )
+                            .await;
 
                             if !output.is_empty() {
                                 let _ = sender.send(Message::Text(format!("{output}\r\n"))).await;
@@ -497,14 +500,17 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
                             // 發送新提示符
                             let prompt = format!(
                                 "\x1b[36mnas\x1b[0m:\x1b[34m{}\x1b[0m$ ",
-                                get_display_path(&current_dir, &storage_path.to_string_lossy())
+                                get_display_path(&current_dir, &storage_path.as_path().to_string_lossy())
                             );
                             let _ = sender.send(Message::Text(prompt)).await;
                         }
                         '\t' => {
                             // Tab 鍵 - 自動補全
-                            let completions =
-                                get_completions(&input_buffer, &current_dir, &storage_path.to_string_lossy());
+                            let completions = get_completions(
+                                &input_buffer,
+                                &current_dir,
+                                &storage_path.as_path().to_string_lossy(),
+                            );
 
                             if completions.len() == 1 {
                                 // 唯一匹配：直接補全
@@ -557,7 +563,7 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
                                 // 重新顯示提示符和當前輸入
                                 let prompt = format!(
                                     "\x1b[36mnas\x1b[0m:\x1b[34m{}\x1b[0m$ ",
-                                    get_display_path(&current_dir, &storage_path.to_string_lossy())
+                                    get_display_path(&current_dir, &storage_path.as_path().to_string_lossy())
                                 );
                                 let _ = sender
                                     .send(Message::Text(format!("{prompt}{input_buffer}")))
@@ -593,7 +599,7 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
                             let _ = sender.send(Message::Text("^C\r\n".to_string())).await;
                             let prompt = format!(
                                 "\x1b[36mnas\x1b[0m:\x1b[34m{}\x1b[0m$ ",
-                                get_display_path(&current_dir, &storage_path.to_string_lossy())
+                                get_display_path(&current_dir, &storage_path.as_path().to_string_lossy())
                             );
                             let _ = sender.send(Message::Text(prompt)).await;
                         }

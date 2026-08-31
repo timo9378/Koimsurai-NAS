@@ -23,6 +23,7 @@ pub mod models;
 pub mod routes;
 pub mod services;
 pub mod state;
+pub mod storage;
 pub mod utils;
 
 use crate::services::ai::AiService;
@@ -171,7 +172,7 @@ pub async fn create_app(pool: SqlitePool, storage_path: PathBuf) -> axum::Router
 
     let state = AppState {
         pool,
-        storage_path,
+        storage_path: crate::storage::StorageRoot::new(storage_path),
         queue,
         webdav,
         tx,

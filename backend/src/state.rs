@@ -3,11 +3,11 @@ use crate::services::ai::AiService;
 use crate::services::audit::AuditService;
 use crate::services::docker::DockerService;
 use crate::services::search::SearchService;
+use crate::storage::StorageRoot;
 use crate::utils::queue::JobQueue;
 use dav_server::DavHandler;
 use sqlx::{Pool, Sqlite};
 use std::env;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{broadcast, Semaphore};
 
@@ -36,7 +36,7 @@ pub fn get_ai_enabled() -> bool {
 #[derive(Clone)]
 pub struct AppState {
     pub pool: Pool<Sqlite>,
-    pub storage_path: PathBuf,
+    pub storage_path: StorageRoot,
     pub queue: Arc<JobQueue>,
     pub webdav: DavHandler,
     pub tx: broadcast::Sender<JobUpdate>,

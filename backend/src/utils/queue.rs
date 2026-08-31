@@ -290,10 +290,14 @@ pub async fn worker(
                     }
                 }
             }
-            JobType::CopyFiles { paths, destination } => {
-                let storage_path = std::env::var("STORAGE_PATH").unwrap_or_else(|_| "storage".to_string());
-                let storage_path = PathBuf::from(storage_path);
-                let dest_path = storage_path.join(&destination);
+            JobType::CopyFiles { paths, destination } => 'copy: {
+                // worker 沒有 AppState，自己重建根 —— 但一樣只透過 resolve 取路徑。
+                let storage = crate::storage::StorageRoot::from_env();
+                // 不能用 `return` —— 外層是 `let result = match ...`，
+                // return 會跳出整個 worker 而不只是這個 job。
+                let Ok(dest_path) = storage.resolve(&destination) else {
+                    break 'copy Err(format!("拒絕的目的地路徑：{destination}"));
+                };
 
                 if !dest_path.exists() {
                     let _ = tokio::fs::create_dir_all(&dest_path).await;
@@ -303,7 +307,11 @@ pub async fn worker(
                 let mut error_msg = String::new();
 
                 for path in paths {
-                    let src_path = storage_path.join(&path);
+                    let Ok(src_path) = storage.resolve(&path) else {
+                        success = false;
+                        error_msg = format!("拒絕的來源路徑：{path}");
+                        continue;
+                    };
                     if !src_path.exists() {
                         continue;
                     }
@@ -333,10 +341,11 @@ pub async fn worker(
                     Err(error_msg)
                 }
             }
-            JobType::IndexFile { path } => {
-                let storage_path = std::env::var("STORAGE_PATH").unwrap_or_else(|_| "storage".to_string());
-                let storage_path = PathBuf::from(storage_path);
-                let full_path = storage_path.join(&path);
+            JobType::IndexFile { path } => 'index: {
+                let storage = crate::storage::StorageRoot::from_env();
+                let Ok(full_path) = storage.resolve(&path) else {
+                    break 'index Err(format!("拒絕的索引路徑：{path}"));
+                };
 
                 if full_path.exists() && full_path.is_file() {
                     // Simple text extraction (for now just read to string if possible)

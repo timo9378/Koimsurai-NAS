@@ -200,7 +200,7 @@ pub async fn list_files_by_tag(
         .filter_map(|(path,)| {
             let name = path.rsplit('/').next().unwrap_or(&path).to_string();
             // Check if file exists and get metadata using the correct storage path
-            let full_path = state.storage_path.join(path.trim_start_matches('/'));
+            let full_path = state.storage_path.resolve(&path).ok()?;
             let metadata = full_path.metadata().ok()?;
             let is_dir = metadata.is_dir();
             let size = if is_dir { 0 } else { metadata.len() };

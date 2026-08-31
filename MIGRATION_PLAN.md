@@ -432,6 +432,87 @@ nginx `nas-koimsurai` 的 `location /` 由 `13001` 改指 `127.0.0.1:3000`；
 
 ---
 
+## 9-bis. 附錄：路徑逃逸與 `StorageRoot`
+
+### 起因
+
+Phase 5 討論「哪些手刻 code 該換成套件」時，`cap-std` 排在第二順位 ——
+它的價值是把路徑漏洞從「靠測試守」變成「寫不出來」。實際評估後**沒有採用**：
+
+- `cap-std` 只有同步 API；`cap-tokio` 在 crates.io 上是 `0.0.0` 的空殼
+- 這包後端有 40 處 `tokio::fs`，全包進 `spawn_blocking` 的風險遠大於收益
+
+改成自己實作它的核心想法（`src/storage.rs`）。
+
+### 問題的形狀
+
+在此之前修過的五個路徑漏洞，**沒有一個是 `validate_path` 寫錯** ——
+全部都是 handler 根本沒呼叫它。兩種寫法的型別一模一樣：
+
+```rust
+let p = validate_path(&state.storage_path, &user)?;   // 對
+let p = state.storage_path.join(&user);               // 錯，長得一樣
+```
+
+`batch_copy` 甚至就緊接在**有**驗證的 `batch_move` 正下方，還是漏了。
+
+### 做法
+
+`StorageRoot` 把根路徑收成私有欄位，不實作 `Deref`／`AsRef<Path>`，也沒有
+`join`。`AppState.storage_path` 換成它之後，那些寫法**編譯不過**。
+
+| 方法 | 用途 |
+|---|---|
+| `resolve(&str)` | 唯一的正規入口，會驗證 |
+| `resolve_under(&'static str, &str)` | 內部目錄底下的使用者路徑（`.trash/<檔名>`）；`&'static str` 讓使用者輸入放不進第一個參數 |
+| `internal(&'static str)` | 純字面常數的內部目錄 |
+| `relativize(&Path)` | 轉回相對路徑 |
+| `as_path()` | 逃生口，只給不涉及使用者輸入的地方（`WalkDir`／WebDAV／`strip_prefix`）|
+
+換型別後編譯器報了 **46 個錯誤**，那份清單就是這次的稽核結果。
+
+### 因此發現的漏洞
+
+| 位置 | 攻擊 | 需要什麼 | 後果 |
+|---|---|---|---|
+| `share.rs` 建立＋存取 | `file_path: "../../.."` | 一個一般帳號 | `/api/share/<id>/download` 讓**未登入者**下載／打包整棵上層目錄 —— SQLite（密碼雜湊）、`.env`（JWT secret）|
+| `upload_link.rs` 上傳 | multipart `filename="../../../x"` | **不需要帳號** | 以 server 身分任意寫檔（本機容器掛 docker.sock + `pid: host`）|
+| `upload_link.rs` 建立 | `target_path: ".."` | 一個一般帳號 | 同上 |
+| `file.rs` `batch_copy` | `paths` / `destination` 帶 `..` | 一個一般帳號 | worker 端任意複製 |
+| `trash.rs` `permanent_delete` | `..%2F..%2Fx`（axum 的 `Path` 會解碼 `%2F`）| 一個一般帳號 | 任意刪檔 |
+| `trash.rs` `restore_file` | 同上 | 一個一般帳號 | 把儲存根外的檔案搬進自己的目錄 |
+| `version.rs` `restore_version` | `version_id` 直接 join | —— | 目前被路由參數數量不符擋住（見下），修了以防日後打通 |
+| `tag.rs` / `file.rs:409` / `indexer.rs` | DB 欄位直接 join | 低 | 索引器寫入的路徑不該當可信輸入 |
+
+全部有 `backend/tests/path_escape_tests.rs` 的 PoC，且逐一**反向驗證**過
+（拆掉修正確認會紅）。
+
+⚠️ 兩支 trash 的測試第一次寫出來是**假綠**的 —— `.trash` 目錄不存在時，
+`<storage>/.trash/../../x` 的 stat 在走到穿越之前就先失敗、handler 回 404。
+這是本輪第 5 次踩到「綠得毫無理由」，也是反向驗證唯一一次真的救到。
+
+### 已知的邊界
+
+- `as_path()` 仍然拿得到 `&Path`，拿到就能 `join`。它從「預設行為」降級成
+  「要顯式寫出來的動作」，全專案 28 個呼叫點可以 grep 出來，目前無一接使用者輸入。
+- `StorageRoot` 只保護**根**。從 `resolve()` 拿到的 `PathBuf` 還是有 `join` ——
+  `version.rs` 的 `.versions/<parent>/<version_id>` 就是這樣漏的。
+
+### 順帶發現：`restore_version` 從來沒能用過
+
+路由是 `/versions/restore/:version_id`（一個參數），handler 卻抽
+`Path<(String, String)>`。實測：
+
+```
+POST /api/versions/restore/abc
+→ 500  Wrong number of path arguments for `Path`. Expected 2 but got 1
+```
+
+前端 `useFiles.ts:328` 有在叫它。修它需要決定 API 形狀（檔案路徑要從哪來），
+且要一併改前端，所以**沒有在這次動**。
+
+---
+
 ## 10. 附錄：Phase 2 對拍出來的前後端不一致
 
 手寫型別換成 specta 產生之後，`tsc` 立刻報出 18 個錯 —— 每一個都是真的不一致。

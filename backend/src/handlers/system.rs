@@ -341,7 +341,7 @@ pub struct ConsistencyCheckResult {
     )
 )]
 pub async fn verify_consistency(State(state): State<AppState>) -> Json<ConsistencyCheckResult> {
-    let indexer = Indexer::new(state.pool.clone(), state.storage_path.clone());
+    let indexer = Indexer::new(state.pool.clone(), state.storage_path.as_path().to_path_buf());
 
     match indexer.verify_consistency().await {
         Ok((total, removed)) => Json(ConsistencyCheckResult {
@@ -376,7 +376,7 @@ pub struct RescanResult {
     )
 )]
 pub async fn trigger_rescan(State(state): State<AppState>) -> Json<RescanResult> {
-    let indexer = Indexer::new(state.pool.clone(), state.storage_path.clone());
+    let indexer = Indexer::new(state.pool.clone(), state.storage_path.as_path().to_path_buf());
 
     match indexer.full_scan().await {
         Ok(()) => Json(RescanResult {

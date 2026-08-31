@@ -14,9 +14,8 @@ use crate::models::FileInfo;
 use crate::state::AppState;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
-use std::path::PathBuf;
 // use crate::utils::image::generate_thumbnails;
-use std::path::{Component, Path};
+use std::path::Path;
 use tower::util::ServiceExt; // for oneshot
 use tower_http::services::ServeFile;
 use utoipa::ToSchema;
@@ -75,7 +74,7 @@ pub async fn create_folder(
     }
 
     // 3. 驗證並建立實體路徑
-    let target_path = validate_path(&state.storage_path, &full_relative_path)?;
+    let target_path = state.storage_path.resolve(&full_relative_path)?;
 
     if target_path.exists() {
         return Err(AppError::Status(StatusCode::CONFLICT));
@@ -128,8 +127,8 @@ pub async fn rename_file(
         }
     }
 
-    let old_path = validate_path(&state.storage_path, &path)?;
-    let new_path = validate_path(&state.storage_path, &payload.new_path)?;
+    let old_path = state.storage_path.resolve(&path)?;
+    let new_path = state.storage_path.resolve(&payload.new_path)?;
 
     if !old_path.exists() {
         return Err(AppError::Status(StatusCode::NOT_FOUND));
@@ -255,50 +254,6 @@ pub async fn rename_file(
         .await;
 
     Ok(StatusCode::OK)
-}
-
-// 驗證路徑，防止 Path Traversal
-// Validate path to prevent Path Traversal
-pub fn validate_path(base: &Path, user_path: &str) -> Result<PathBuf, AppError> {
-    // ⚠️ NUL byte 要在這裡就擋掉。
-    //
-    // Rust 的 `Path` 本身容得下 NUL，但真正要碰檔案系統時得轉成 C 字串，
-    // 那一步會失敗並回一個 io::Error。原本的處置是往上丟成 500：
-    //
-    //     POST /api/files/batch/move  destination="\0..."
-    //       → 500 {"error":"file name contained an unexpected NUL byte"}
-    //
-    // 狀態碼是錯的（客戶端送的東西造成的），而且把 OS 的錯誤字串送出去。
-    // 擋在這裡等於一次涵蓋所有吃路徑的端點。（schemathesis 找到的。）
-    if user_path.contains('\0') {
-        return Err(AppError::Status(StatusCode::BAD_REQUEST));
-    }
-
-    let path = Path::new(user_path);
-    let mut full_path = base.to_path_buf();
-
-    // 逐層檢查路徑組件，防止 ".." 回到上一層
-    for component in path.components() {
-        match component {
-            Component::Normal(c) => full_path.push(c),
-            Component::RootDir => {}                                  // 忽略開頭的 /
-            _ => return Err(AppError::Status(StatusCode::FORBIDDEN)), // 遇到 .. 或其他特殊字元直接拒絕
-        }
-    }
-
-    // 雙重保險：檢查最終路徑是否真的在 storage 底下 (防止符號連結攻擊)
-    // 注意：這步只對「已存在」的檔案有效，上傳時要視情況調整
-    if full_path.exists() {
-        if let Ok(canonical_path) = full_path.canonicalize() {
-            if let Ok(canonical_base) = base.canonicalize() {
-                if !canonical_path.starts_with(canonical_base) {
-                    return Err(AppError::Status(StatusCode::FORBIDDEN));
-                }
-            }
-        }
-    }
-
-    Ok(full_path)
 }
 
 #[derive(Deserialize)]
@@ -449,7 +404,15 @@ pub async fn list_files(
 
         // 驗證檔案是否真的存在
         // Verify the file actually exists on disk
-        let file_path = state.storage_path.join(&effective_parent).join(&name);
+        // DB 裡的路徑也要走 resolve —— 索引器寫進去的東西不該被當成可信輸入，
+        // 而且這裡的 `is_search` 分支讀的是**別的列**的 parent_path。
+        let Ok(file_path) = state.storage_path.resolve(&if effective_parent.is_empty() {
+            name.clone()
+        } else {
+            format!("{effective_parent}/{name}")
+        }) else {
+            continue;
+        };
         if !file_path.exists() {
             // 記錄不存在的檔案，稍後清理
             let db_path = if effective_parent.is_empty() {
@@ -596,7 +559,7 @@ pub async fn download_file(
     AxumPath(path): AxumPath<String>,
     req: Request,
 ) -> Result<impl IntoResponse, AppError> {
-    let full_path = validate_path(&state.storage_path, &path)?;
+    let full_path = state.storage_path.resolve(&path)?;
 
     if !full_path.exists() || !full_path.is_file() {
         return Err(AppError::Status(StatusCode::NOT_FOUND));
@@ -631,7 +594,7 @@ pub async fn upload_file(
 ) -> Result<StatusCode, AppError> {
     tracing::info!("upload_file called with path: {:?}", path);
 
-    let target_dir = validate_path(&state.storage_path, &path)?;
+    let target_dir = state.storage_path.resolve(&path)?;
     tracing::info!("Target directory: {:?}", target_dir);
 
     if !target_dir.exists() {
@@ -683,7 +646,9 @@ pub async fn upload_file(
         // Stream write to file to avoid excessive memory usage
         // Versioning: if file exists, move it to versions
         if file_path.exists() {
-            if let Err(e) = crate::utils::versioning::create_version(&file_path, &state.storage_path).await {
+            if let Err(e) =
+                crate::utils::versioning::create_version(&file_path, state.storage_path.as_path()).await
+            {
                 tracing::error!("Failed to create version for {:?}: {:?}", file_path, e);
             }
         }
@@ -831,7 +796,7 @@ pub async fn get_thumbnail(
     req: Request,
 ) -> Result<impl IntoResponse, AppError> {
     // Validate path first
-    let full_path = validate_path(&state.storage_path, &path)?;
+    let full_path = state.storage_path.resolve(&path)?;
 
     // ⚠️ 要 `is_file` 而不是 `exists`。
     //
@@ -846,9 +811,9 @@ pub async fn get_thumbnail(
     // storage/.thumbnails/path/to/file.jpg.small.jpg
 
     let relative_path = full_path
-        .strip_prefix(&state.storage_path)
+        .strip_prefix(state.storage_path.as_path())
         .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
-    let thumb_root = state.storage_path.join(".thumbnails");
+    let thumb_root = state.storage_path.internal(".thumbnails");
     let thumb_dir = thumb_root.join(relative_path.parent().unwrap_or_else(|| Path::new("")));
     let file_name = full_path.file_name().unwrap_or_default().to_string_lossy();
 
@@ -888,18 +853,18 @@ pub async fn get_thumbnail(
 /// 將檔案移動到垃圾桶的共用邏輯
 /// Shared utility: move a file/directory to the .trash folder and record metadata
 pub async fn move_to_trash(
-    storage_path: &std::path::Path,
+    storage_path: &crate::storage::StorageRoot,
     pool: &sqlx::Pool<sqlx::Sqlite>,
     file_path: &str,
     user_id: i64,
 ) -> Result<String, AppError> {
-    let full_path = validate_path(storage_path, file_path)?;
+    let full_path = storage_path.resolve(file_path)?;
 
     if !full_path.exists() {
         return Err(AppError::Status(StatusCode::NOT_FOUND));
     }
 
-    let trash_root = storage_path.join(".trash");
+    let trash_root = storage_path.internal(".trash");
     if !trash_root.exists() {
         fs::create_dir_all(&trash_root).await.map_err(AppError::from)?;
     }
@@ -1035,14 +1000,14 @@ pub async fn batch_move(
     let destination = payload
         .destination
         .ok_or(AppError::Status(StatusCode::BAD_REQUEST))?;
-    let dest_path = validate_path(&state.storage_path, &destination)?;
+    let dest_path = state.storage_path.resolve(&destination)?;
 
     if !dest_path.exists() {
         fs::create_dir_all(&dest_path).await.map_err(AppError::from)?;
     }
 
     for path in payload.paths {
-        let src_path = validate_path(&state.storage_path, &path)?;
+        let src_path = state.storage_path.resolve(&path)?;
         if !src_path.exists() {
             continue;
         }
@@ -1076,6 +1041,14 @@ pub async fn batch_copy(
     let destination = payload
         .destination
         .ok_or(AppError::Status(StatusCode::BAD_REQUEST))?;
+
+    // ⚠️ 這裡的驗證不能省。worker 拿不到 StorageRoot（它自己從環境變數重建
+    // 根路徑），所以型別層的保護到 enqueue 就結束了 —— 邊界在這一行。
+    // 緊接在上面的 batch_move 一直都有驗，batch_copy 沒有。
+    state.storage_path.resolve(&destination)?;
+    for path in &payload.paths {
+        state.storage_path.resolve(path)?;
+    }
 
     // Enqueue copy job
     let job_type = crate::utils::queue::JobType::CopyFiles {

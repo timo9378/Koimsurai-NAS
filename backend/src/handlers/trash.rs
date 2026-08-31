@@ -34,7 +34,7 @@ pub async fn list_trash(
     State(state): State<AppState>,
     Extension(_user_id): Extension<i64>,
 ) -> Result<Json<Vec<TrashFileInfo>>, AppError> {
-    let trash_path = state.storage_path.join(".trash");
+    let trash_path = state.storage_path.internal(".trash");
     if !trash_path.exists() {
         return Ok(Json(vec![]));
     }
@@ -94,7 +94,9 @@ pub async fn restore_file(
     Extension(_user_id): Extension<i64>,
     AxumPath(filename): AxumPath<String>,
 ) -> Result<StatusCode, AppError> {
-    let trash_path = state.storage_path.join(".trash").join(&filename);
+    // ⚠️ filename 是 axum 的 path param，而 Path 抽取器會解 %2F ——
+    // `..%2F..%2Fetc%2Fpasswd` 進得來。之前這裡是直接 join。
+    let trash_path = state.storage_path.resolve_under(".trash", &filename)?;
 
     if !trash_path.exists() {
         return Err(AppError::Status(StatusCode::NOT_FOUND));
@@ -110,10 +112,10 @@ pub async fn restore_file(
 
     let restore_path = if let Some(ref orig) = original_path {
         // Validate the original path to prevent path traversal
-        crate::handlers::file::validate_path(&state.storage_path, orig)?
+        state.storage_path.resolve(orig)?
     } else {
         // Legacy fallback: restore to root
-        state.storage_path.join(&filename)
+        state.storage_path.resolve(&filename)?
     };
 
     // Ensure parent directory exists (it may have been deleted)
@@ -132,7 +134,9 @@ pub async fn restore_file(
             .extension()
             .map(|e| format!(".{}", e.to_string_lossy()))
             .unwrap_or_default();
-        let parent = restore_path.parent().unwrap_or(&state.storage_path);
+        let parent = restore_path
+            .parent()
+            .unwrap_or_else(|| state.storage_path.as_path());
         let mut counter = 1;
         loop {
             let new_name = format!("{stem} ({counter}){ext}");
@@ -159,7 +163,7 @@ pub async fn restore_file(
 
     // Re-index the restored file in the files table
     let relative_path = final_restore_path
-        .strip_prefix(&state.storage_path)
+        .strip_prefix(state.storage_path.as_path())
         .map(|p| p.to_string_lossy().to_string().replace('\\', "/"))
         .unwrap_or_default();
 
@@ -214,7 +218,7 @@ pub async fn empty_trash(
     State(state): State<AppState>,
     Extension(_user_id): Extension<i64>,
 ) -> Result<StatusCode, AppError> {
-    let trash_path = state.storage_path.join(".trash");
+    let trash_path = state.storage_path.internal(".trash");
     if trash_path.exists() {
         fs::remove_dir_all(&trash_path).await.map_err(AppError::from)?;
         fs::create_dir_all(&trash_path).await.map_err(AppError::from)?;
@@ -243,7 +247,9 @@ pub async fn permanent_delete(
     Extension(_user_id): Extension<i64>,
     AxumPath(filename): AxumPath<String>,
 ) -> Result<StatusCode, AppError> {
-    let trash_path = state.storage_path.join(".trash").join(&filename);
+    // ⚠️ filename 是 axum 的 path param，而 Path 抽取器會解 %2F ——
+    // `..%2F..%2Fetc%2Fpasswd` 進得來。之前這裡是直接 join。
+    let trash_path = state.storage_path.resolve_under(".trash", &filename)?;
 
     if !trash_path.exists() {
         return Err(AppError::Status(StatusCode::NOT_FOUND));

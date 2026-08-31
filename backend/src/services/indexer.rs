@@ -21,12 +21,15 @@ pub enum ScanMode {
 
 pub struct Indexer {
     pool: Pool<Sqlite>,
-    storage_path: PathBuf,
+    storage_path: crate::storage::StorageRoot,
 }
 
 impl Indexer {
     pub const fn new(pool: Pool<Sqlite>, storage_path: PathBuf) -> Self {
-        Self { pool, storage_path }
+        Self {
+            pool,
+            storage_path: crate::storage::StorageRoot::new(storage_path),
+        }
     }
 
     /// 取得上次完整掃描時間
@@ -97,11 +100,11 @@ impl Indexer {
 
         // 1. 收集磁碟上所有檔案路徑
         let mut disk_paths: HashSet<String> = HashSet::new();
-        let walker = WalkDir::new(&self.storage_path).into_iter();
+        let walker = WalkDir::new(self.storage_path.as_path()).into_iter();
 
         for entry in walker.filter_map(std::result::Result::ok) {
             let path = entry.path();
-            if path == self.storage_path {
+            if path == self.storage_path.as_path() {
                 continue;
             }
 
@@ -110,7 +113,7 @@ impl Indexer {
                 continue;
             }
 
-            if let Ok(rel) = path.strip_prefix(&self.storage_path) {
+            if let Ok(rel) = path.strip_prefix(self.storage_path.as_path()) {
                 let rel_str = rel.to_string_lossy().replace('\\', "/");
                 if !rel_str.split('/').any(|p| p.starts_with('.')) {
                     disk_paths.insert(rel_str);
@@ -163,12 +166,12 @@ impl Indexer {
         let last_scan_time =
             std::time::SystemTime::from(chrono::DateTime::<Utc>::from_naive_utc_and_offset(last_scan, Utc));
 
-        let walker = WalkDir::new(&self.storage_path).into_iter();
+        let walker = WalkDir::new(self.storage_path.as_path()).into_iter();
         let mut scanned = 0;
 
         for entry in walker.filter_map(std::result::Result::ok) {
             let path = entry.path();
-            if path == self.storage_path {
+            if path == self.storage_path.as_path() {
                 continue;
             }
 
@@ -207,11 +210,11 @@ impl Indexer {
         // 只掃描根目錄一層和最近 24 小時內有修改的目錄
         let threshold = std::time::SystemTime::now() - std::time::Duration::from_hours(24);
 
-        let walker = WalkDir::new(&self.storage_path).max_depth(1).into_iter();
+        let walker = WalkDir::new(self.storage_path.as_path()).max_depth(1).into_iter();
 
         for entry in walker.filter_map(std::result::Result::ok) {
             let path = entry.path();
-            if path == self.storage_path {
+            if path == self.storage_path.as_path() {
                 continue;
             }
 
@@ -261,7 +264,7 @@ impl Indexer {
     }
 
     pub async fn index_file(&self, path: &Path) -> anyhow::Result<()> {
-        let relative_path = match path.strip_prefix(&self.storage_path) {
+        let relative_path = match path.strip_prefix(self.storage_path.as_path()) {
             Ok(p) => p.to_string_lossy().to_string(),
             Err(_) => return Ok(()), // Should not happen if walking storage_path
         };
@@ -322,7 +325,7 @@ impl Indexer {
     }
 
     pub async fn remove_file(&self, path: &Path) -> anyhow::Result<()> {
-        let relative_path = match path.strip_prefix(&self.storage_path) {
+        let relative_path = match path.strip_prefix(self.storage_path.as_path()) {
             Ok(p) => p.to_string_lossy().to_string(),
             Err(_) => return Ok(()),
         };
@@ -351,7 +354,11 @@ impl Indexer {
         let mut removed = 0;
 
         for db_path in db_paths {
-            let full_path = self.storage_path.join(&db_path);
+            // DB 裡的路徑同樣不當可信輸入 —— 解不出來就當成孤兒列處理。
+            let full_path = self.storage_path.resolve(&db_path).unwrap_or_else(|_| {
+                warn!("DB 裡有解析不了的路徑，視為孤兒：{db_path}");
+                PathBuf::new()
+            });
             if !full_path.exists() {
                 sqlx::query("DELETE FROM files WHERE path = ?")
                     .bind(&db_path)
@@ -374,8 +381,8 @@ impl Indexer {
             let _ = watcher_tx.blocking_send(res);
         })?;
 
-        watcher.watch(&self.storage_path, RecursiveMode::Recursive)?;
-        info!("File watcher started on {:?}", self.storage_path);
+        watcher.watch(self.storage_path.as_path(), RecursiveMode::Recursive)?;
+        info!("File watcher started on {:?}", self.storage_path.as_path());
 
         // 使用 debounce 來避免短時間內重複處理同一檔案
         let mut pending_paths: HashSet<PathBuf> = HashSet::new();

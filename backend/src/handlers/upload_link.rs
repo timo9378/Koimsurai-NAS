@@ -54,6 +54,9 @@ pub async fn create_upload_link(
     Extension(user_id): Extension<i64>,
     Json(payload): Json<CreateUploadLinkRequest>,
 ) -> Result<Json<UploadLinkResponse>, AppError> {
+    // 見 create_share_link 的說明；這條的 sink 更糟 —— 是「寫」而不是「讀」。
+    state.storage_path.resolve(&payload.target_path)?;
+
     let id = Uuid::new_v4().to_string();
     let password_hash = if let Some(pwd) = payload.password {
         Some(hash_password_async(pwd.clone()).await.map_err(AppError::from)?)
@@ -246,10 +249,16 @@ pub async fn upload_via_link(
         };
         pending_relative_path = None; // Reset for next iteration
 
-        // 建構完整路徑
-        let clean_target = target_path.strip_prefix('/').unwrap_or(&target_path);
-
-        let full_path = state.storage_path.join(clean_target).join(&save_name);
+        // ⚠️ save_name 在沒有 relative_path 欄位時就是 multipart 的 `filename`，
+        // 一個字元都沒過濾，而這條端點**完全不需要登入**。
+        // `filename="../../../x"` 等於以 server 身分任意寫檔。
+        //
+        // target_path 跟 save_name 一起 resolve，這樣 `a/../..` 這種跨段的
+        // 組合也擋得住。兩者都算請求內容，所以統一回 400。
+        let full_path = state
+            .storage_path
+            .resolve(&format!("{target_path}/{save_name}"))
+            .map_err(|_| AppError::Status(StatusCode::BAD_REQUEST))?;
 
         // 確保目標目錄存在
         if let Some(parent) = full_path.parent() {

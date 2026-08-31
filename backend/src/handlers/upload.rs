@@ -1,5 +1,4 @@
 use crate::error::AppError;
-use crate::handlers::file::validate_path;
 use crate::models::{InitUploadRequest, InitUploadResponse, UploadSession};
 use crate::state::AppState;
 use axum::{
@@ -29,7 +28,7 @@ pub async fn init_upload(
     Extension(user_id): Extension<i64>,
     Json(payload): Json<InitUploadRequest>,
 ) -> Result<Json<InitUploadResponse>, AppError> {
-    let target_dir = validate_path(&state.storage_path, &payload.file_path)?;
+    let target_dir = state.storage_path.resolve(&payload.file_path)?;
 
     // ⚠️ file_path 有過 validate_path，但 file_name **也要**驗 —— 它同樣是
     // 使用者送來的，而完成上傳時會做 `target_dir.join(&file_name)` 再 rename
@@ -143,13 +142,15 @@ pub async fn upload_chunk(
     // For simplicity, we'll assume sequential chunks and append to a temp file
     // In a real Tus implementation, we'd need to handle offsets strictly
 
-    let temp_dir = state.storage_path.join(".temp_uploads");
+    let temp_dir = state.storage_path.internal(".temp_uploads");
     if !temp_dir.exists() {
         tokio::fs::create_dir_all(&temp_dir)
             .await
             .map_err(AppError::from)?;
     }
-    let temp_file_path = temp_dir.join(&id);
+    // id 在上面已經精確命中 DB 的 UUID 才走得到這裡，但那是靠**執行順序**
+    // 撐著的保證 —— 有人把查詢往下搬就沒了。走 resolve 就不依賴順序。
+    let temp_file_path = state.storage_path.resolve_under(".temp_uploads", &id)?;
 
     // If client provided a Content-Range header, validate offset matches session.uploaded_size
     if let Some(range_val) = headers.get("content-range").and_then(|v| v.to_str().ok()) {
@@ -229,12 +230,14 @@ pub async fn upload_chunk(
     // 4. Check completion
     if new_size >= session.total_size {
         // Move to final destination
-        let target_dir = validate_path(&state.storage_path, &session.file_path)?;
+        let target_dir = state.storage_path.resolve(&session.file_path)?;
         let final_path = target_dir.join(&session.file_name);
 
         // Versioning: if file exists, move it to versions
         if final_path.exists() {
-            if let Err(e) = crate::utils::versioning::create_version(&final_path, &state.storage_path).await {
+            if let Err(e) =
+                crate::utils::versioning::create_version(&final_path, state.storage_path.as_path()).await
+            {
                 tracing::error!("Failed to create version for {:?}: {:?}", final_path, e);
             }
         }

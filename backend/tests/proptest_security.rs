@@ -195,7 +195,7 @@ mod edge_cases {
 // 定樁測試只能蓋到想得到的那幾種，性質測試才問得出「任何輸入下都成立嗎」。
 
 use std::path::{Path, PathBuf};
-use Koimsurai_NAS::handlers::file::validate_path as validate_under;
+use Koimsurai_NAS::storage::validate_path as validate_under;
 
 proptest! {
     /// `validate_path(base, x)` 只要回 Ok，結果就一定在 base 底下。

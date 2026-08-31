@@ -49,7 +49,7 @@ pub async fn stream_media(
     //
     // 被拒絕時回 404 而不是 403：拒絕與不存在對外表現要一樣，否則等於提供
     // 一個「這個路徑存在嗎」的探測器。
-    let Ok(file_path) = crate::handlers::file::validate_path(&state.storage_path, &params.path) else {
+    let Ok(file_path) = state.storage_path.resolve(&params.path) else {
         return Response::builder()
             .status(404)
             .body(Body::from("File not found"))
@@ -305,7 +305,7 @@ pub struct HlsParams {
 }
 
 /// 計算檔案的 HLS 快取路徑
-fn get_hls_cache_path(storage_path: &std::path::Path, file_path: &str) -> PathBuf {
+fn get_hls_cache_path(storage_path: &crate::storage::StorageRoot, file_path: &str) -> PathBuf {
     use sha2::{Digest, Sha256};
 
     // 使用檔案路徑的 hash 作為快取目錄名稱
@@ -314,7 +314,8 @@ fn get_hls_cache_path(storage_path: &std::path::Path, file_path: &str) -> PathBu
     let hash = format!("{:x}", hasher.finalize());
     let short_hash = &hash[..16]; // 使用前 16 個字元
 
-    storage_path.join(HLS_CACHE_DIR).join(short_hash)
+    // short_hash 是 SHA-256 的前 16 個十六進位字元，不含分隔符 —— 這裡的 join 安全
+    storage_path.internal(HLS_CACHE_DIR).join(short_hash)
 }
 
 /// 檢查 HLS 是否已經生成
@@ -357,7 +358,7 @@ fn check_hls_ready(cache_path: &std::path::Path, quality: &str) -> (bool, Vec<St
 pub async fn hls_status(State(state): State<AppState>, Query(params): Query<HlsParams>) -> impl IntoResponse {
     // 同 stream_media：不能直接 join（見那裡的說明）。這個端點雖然只回狀態，
     // 但「存在 / 不存在」的回應不同，餵得進任意路徑就是一個存在性探測器。
-    let Ok(file_path) = crate::handlers::file::validate_path(&state.storage_path, &params.path) else {
+    let Ok(file_path) = state.storage_path.resolve(&params.path) else {
         return Response::builder()
             .status(404)
             .header("Content-Type", "application/json")

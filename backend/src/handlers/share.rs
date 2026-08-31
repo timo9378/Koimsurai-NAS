@@ -61,6 +61,12 @@ pub async fn create_share_link(
     Extension(user_id): Extension<i64>,
     Json(payload): Json<CreateShareLinkRequest>,
 ) -> Result<Json<ShareLinkResponse>, AppError> {
+    // ⚠️ 這裡不驗的話，`file_path` 會原封不動進 DB，然後被
+    // `access_share_link` 拿去 join —— 一個一般帳號就能造出讓**任何未登入者**
+    // 下載儲存根之外任意檔案的公開連結。真正的目標是 SQLite（密碼雜湊）
+    // 跟 .env（JWT secret）。存取端也會再驗一次（DB 裡可能有舊資料）。
+    state.storage_path.resolve(&payload.file_path)?;
+
     let id = Uuid::new_v4().to_string();
     let password_hash = if let Some(pwd) = payload.password {
         Some(hash_password_async(pwd.clone()).await.map_err(AppError::from)?)
@@ -144,10 +150,10 @@ pub async fn access_share_link(
         }
     }
 
-    // Strip leading slash for safety
+    // ⚠️ 這裡讀的是 DB 欄位，但那不代表可信 —— 舊資料可能是在建立端加上驗證
+    // 之前寫進去的。`strip_prefix('/')` 對 `..` 完全沒有作用。
     let clean_path = file_path_str.strip_prefix('/').unwrap_or(&file_path_str);
-
-    let full_path = state.storage_path.join(clean_path);
+    let full_path = state.storage_path.resolve(&file_path_str)?;
 
     // Check path exists
     if !full_path.exists() {
@@ -317,7 +323,7 @@ pub async fn get_share_info(
 
     // 獲取文件資訊
     let clean_path = file_path_str.strip_prefix('/').unwrap_or(&file_path_str);
-    let full_path = state.storage_path.join(clean_path);
+    let full_path = state.storage_path.resolve(&file_path_str)?;
 
     if !full_path.exists() {
         tracing::warn!(
