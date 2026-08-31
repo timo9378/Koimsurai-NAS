@@ -131,9 +131,29 @@ export const useInitUpload = () => {
 
 export const useUploadChunk = () => {
   return useMutation({
-    mutationFn: async ({ sessionId, chunk }: { sessionId: string; chunk: Blob }) => {
+    mutationFn: async ({
+      sessionId,
+      chunk,
+      offset,
+    }: {
+      sessionId: string;
+      chunk: Blob;
+      /** 這一塊在檔案裡的起始位元組。 */
+      offset: number;
+    }) => {
+      // ⚠️ 一定要送 X-Upload-Offset。
+      //
+      // 後端有一道「位移對不上就回 409」的檢查（見 backend/src/handlers/upload.rs），
+      // 但客戶端原本**從來沒送過這個 header**，所以那道檢查在正式環境從未被
+      // 觸發過 —— 等於一道不存在的防護。
+      //
+      // 它擋的正是續傳算錯位置的情形：伺服器是 append 模式，多送或少送都
+      // 不會有錯誤，只會得到一個內容錯位的檔案。
       await apiClient.patch<void>(`/upload/session/${sessionId}`, chunk, {
-        headers: { "Content-Type": "application/octet-stream" },
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "X-Upload-Offset": String(offset),
+        },
       });
     },
   });

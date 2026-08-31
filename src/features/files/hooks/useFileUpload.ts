@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useUpload, useInitUpload, useUploadChunk } from "../api/useFiles";
 import { useUploadStore } from "@/store/upload-store";
 import { apiClient } from "@/lib/api-client";
+import { planChunks } from "../chunk-plan";
 import type { FileInfo, UploadSession } from "@/types/api";
 import {
   getApiErrorBody,
@@ -128,7 +129,6 @@ export const useFileUpload = () => {
     resumeUploadId?: string,
     startOffset = 0,
   ) => {
-    const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
     let upload_id = resumeUploadId;
 
     try {
@@ -172,20 +172,19 @@ export const useFileUpload = () => {
         }
       }
 
-      const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-      const startChunkIndex = Math.floor(startOffset / CHUNK_SIZE);
-
-      for (let i = startChunkIndex; i < totalChunks; i++) {
-        const start = i * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, file.size);
-        const chunk = file.slice(start, end);
-
+      // ⚠️ 從 startOffset 這個**位元組**開始，不是從它所在的分塊開始。
+      // 舊寫法用 `Math.floor(startOffset / CHUNK_SIZE)` 退回分塊開頭，
+      // 斷在分塊中間時會把已經寫進伺服器的那段重送一次（append 模式 →
+      // 檔案變長且錯位）。理由與邊界見 features/files/chunk-plan.ts。
+      for (const { start, end } of planChunks(file.size, startOffset)) {
         await uploadChunk.mutateAsync({
           sessionId: upload_id,
-          chunk,
+          chunk: file.slice(start, end),
+          offset: start,
         });
 
-        const progress = Math.round((end / file.size) * 100);
+        // file.size 為 0 時不要除以零 —— 空檔案送完就是 100%
+        const progress = file.size === 0 ? 100 : Math.round((end / file.size) * 100);
         updateTask(taskId, { progress });
       }
 

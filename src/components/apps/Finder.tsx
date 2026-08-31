@@ -41,6 +41,7 @@ import { FileList } from "./finder/FileList";
 import { ShareDialog, UploadLinkDialog, TagDialog } from "@/components/dialogs";
 import { X, Plus } from "lucide-react";
 import { activateOnKey } from "@/lib/a11y";
+import { selectOnClick } from "./finder/selection";
 import {
   currentPath as currentHistoryPath,
   goBack,
@@ -674,37 +675,23 @@ export const Finder = ({ windowId }: FinderProps) => {
   const handleForward = () => applyNav(goForward(navHistory));
 
   // 記錄最後一次點擊的檔案索引（用於 Shift+Click 範圍選取）
-  const lastClickedIndexRef = React.useRef<number>(-1);
+  // Shift 範圍選取的錨點。放 ref 而不是 state：它不影響畫面，
+  // 用 state 只會多一次 render。
+  const anchorIndexRef = React.useRef<number>(-1);
 
   const handleFileClick = (file: FileInfo, e: React.MouseEvent) => {
-    const fileIndex = currentFiles?.findIndex((f) => f.name === file.name) ?? -1;
+    const fileNames = currentFiles?.map((f) => f.name) ?? [];
+    const clickedIndex = fileNames.indexOf(file.name);
 
-    if (e.shiftKey && lastClickedIndexRef.current >= 0 && currentFiles) {
-      // Shift+Click → 範圍選取（從 lastClickedIndex 到當前 index 的所有檔案）
-      const start = Math.min(lastClickedIndexRef.current, fileIndex);
-      const end = Math.max(lastClickedIndexRef.current, fileIndex);
-      const newSelected = new Set(selectedFiles); // 保留既有選取（配合 Ctrl+Shift 使用）
-      for (let i = start; i <= end; i++) {
-        const f = currentFiles[i];
-        if (f) newSelected.add(f.name);
-      }
-      setSelectedFiles(newSelected);
-      // 不更新 lastClickedIndex，允許連續 Shift+Click 延伸範圍
-    } else if (e.metaKey || e.ctrlKey) {
-      // Ctrl/Cmd+Click → 切換單一檔案
-      const newSelected = new Set(selectedFiles);
-      if (newSelected.has(file.name)) {
-        newSelected.delete(file.name);
-      } else {
-        newSelected.add(file.name);
-      }
-      setSelectedFiles(newSelected);
-      lastClickedIndexRef.current = fileIndex;
-    } else {
-      // 普通點擊 → 只選取該檔案
-      setSelectedFiles(new Set([file.name]));
-      lastClickedIndexRef.current = fileIndex;
-    }
+    const next = selectOnClick(
+      { selected: selectedFiles, anchorIndex: anchorIndexRef.current },
+      fileNames,
+      clickedIndex,
+      { shift: e.shiftKey, toggle: e.metaKey || e.ctrlKey },
+    );
+
+    anchorIndexRef.current = next.anchorIndex;
+    setSelectedFiles(new Set(next.selected));
   };
 
   const handleFileDoubleClick = (file: FileInfo) => {

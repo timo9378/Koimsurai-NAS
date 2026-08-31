@@ -230,6 +230,31 @@ async fn init_conflicts_when_the_file_already_exists() {
 }
 
 #[tokio::test]
+async fn a_zero_byte_file_completes() {
+    // ⚠️ 前端對空檔案會送**一塊空的** chunk（見 features/files/chunk-plan.ts），
+    //    因為不送的話 `new_size >= total_size` 永遠不成立，工作階段會一直開著、
+    //    檔案卡在 .temp_uploads，而畫面上顯示上傳成功。
+    //    這條釘住後端確實接受那一塊並完成。
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "empty_file_uploader").await;
+
+    let (_, body) = init(&app, &client, "", "empty.txt", 0).await;
+    let id = body["upload_id"].as_str().expect("id").to_string();
+
+    assert!(send_chunk(&app, &client, &id, Some(0), b"").await.is_success());
+    assert!(
+        app.storage_dir.path().join("empty.txt").exists(),
+        "空檔案也要落到磁碟上"
+    );
+    assert_eq!(
+        std::fs::read(app.storage_dir.path().join("empty.txt"))
+            .expect("read")
+            .len(),
+        0
+    );
+}
+
+#[tokio::test]
 async fn unknown_session_is_404() {
     let app = spawn_app().await;
     let client = register_and_login(&app, "lost").await;

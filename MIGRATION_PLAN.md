@@ -724,11 +724,32 @@ happy path，所以任何 4xx/5xx 都算「未記載」。留著會讓這個 job
 → `500 {"error":"Is a directory (os error 21)"}`。狀態碼錯，而且把 OS 錯誤
 字串送給客戶端。
 
+### 續傳的客戶端算錯位置（而伺服器的防護從沒被觸發過）
+
+補前端測試時抽出 `features/files/chunk-plan.ts` 才發現的，兩個問題互相掩蓋：
+
+1. **客戶端從來沒送過 `X-Upload-Offset`。** 後端有一道「位移對不上就回 409」
+   的檢查（`handlers/upload.rs`），而且有測試蓋著 —— 但正式環境的前端不送那個
+   header，所以那道防護**從未被觸發過**。
+2. **續傳會退回分塊邊界。** 原本是
+   `Math.floor(startOffset / CHUNK_SIZE)` 之後從 `i * CHUNK_SIZE` 開始送，
+   而那個位置早於 `startOffset`。`startOffset` 不是分塊大小整數倍時
+   （也就是**上一次剛好斷在分塊中間**，正是續傳會發生的情境），已經寫進
+   伺服器的那段會被**重送一次**。伺服器是 append 模式，結果是一個比原檔更長、
+   內容錯位的檔案，而上傳回報成功。
+
+有 (1) 的話 (2) 就是靜默的。修法：`planChunks` 從 `startOffset` 這個**位元組**
+開始切，並且每一塊都帶上自己的 offset 送出去。
+
+順帶修掉空檔案：`planChunks(0)` 會回一塊空的 chunk。不送的話伺服器的
+`new_size >= total_size` 永遠不成立，工作階段一直開著、檔案卡在
+`.temp_uploads`，而畫面上顯示上傳成功。前後端各有一條測試蓋這個。
+
 ### 程式面的已知債
 
 - `Finder.tsx` 約 1400 行。上一頁/下一頁已抽成 `finder/history.ts`，
   其餘（選取、拖放、重新命名）仍在同一支裡。
 - `window-store` 的 `newWindow as WindowState`：判別式聯集的關聯 TS 證不出來，
   呼叫端有泛型簽章擋著，理由寫在該行旁。
-- 前端測試涵蓋 10 個檔案；`Finder` / `FileList` / `DesktopIcons` / `MobileLayout`
+- 前端測試涵蓋 13 個檔案；`FileList` / `DesktopIcons` / `MobileLayout`
   這幾支大元件仍然沒有測試。
