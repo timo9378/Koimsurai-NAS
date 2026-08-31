@@ -949,8 +949,53 @@ schemathesis 之後可以直接吃它，不必先起伺服器也不必偽造登�
 
 ### schemathesis（API fuzz）目前狀態
 
-2026-08-31 最後一次：**50 個 operation、1492/1492 通過，綠燈。**
-（接 tus 之前是 44 個 operation。）
+2026-08-31 最後一次：**50 個 operation、1610/1610 通過，綠燈。**
+（接 tus 之前是 44 個 operation、1427 個案例。）
+
+#### 讓 fuzz 真的打進去
+
+綠燈不等於打進去了。schemathesis 自己的警告說得很清楚：
+
+    Missing test data: 9 operations repeatedly returned 404 Not Found,
+    preventing tests from reaching your API's core logic
+
+「有被測到」跟「測進去了」是兩件事，而報告上看起來一樣。兩個原因、兩個修法：
+
+1. **tus 的請求標頭不在 spec 裡。** schemathesis 不知道要送 `Tus-Resumable`，
+   五個 operation 打出來幾乎全是 412，一次都沒進到 handler 本體。
+   補上標頭參數，並且**用單一變體的 enum** 讓 spec 產出 `enum: ["1.0.0"]` ——
+   標成自由字串的話它會亂產版本號，結果一樣全 412。
+   **spec 要說出真正的約束，fuzz 才打得進去。**
+
+2. **路徑參數是 UUID 與檔名，隨機產的一律不存在。**
+   `scripts/fuzz_seed.py` 用真的 API 建出資源，把 ID 寫成 schemathesis 的
+   `[dictionaries.*]` + `[[operations]] parameters`。
+   破壞性的 operation（restore / delete / terminate）第一次呼叫就把資源消耗掉，
+   所以每一種種 **25 份**（`--max-examples 20` 用得完）。
+
+| | 之前 | 之後 |
+|---|---|---|
+| 產生的案例 | 1427 | **1610** |
+| fuzzing 階段耗時 | 6.9s | **19.1s** |
+| schema 約束對不上 | 16 | 13 |
+| 拿不到有效資料 | 9 | 8 |
+
+⚠️ **剩下的 8 個是有狀態 fuzz 的固有上限，不打算再追。** fuzzer 自己會用
+DELETE/restore/terminate 把種好的資源打壞，之後的案例就一路 404。要歸零得在
+各階段之間重新種資料或做逐 operation 的隔離，schemathesis CLI 做不到，
+而投入報酬已經明顯遞減 —— 耗時翻近三倍代表真正進到 handler 的量已經上去了。
+
+#### 種子腳本導入當天抓到的 bug
+
+`POST /api/tags/add/{path}` 重複加同一個標籤 → **500**，而且把 SQLite 的原始
+錯誤字串原封不動送出去：
+
+    {"error":"... UNIQUE constraint failed: file_tags.user_id, ..."}
+
+狀態碼是錯的（客戶端造成的，不是伺服器壞了），還洩漏資料表與欄位名稱。
+而重複加標籤是使用者一定會做的事（點兩下、兩個分頁各點一次）。
+改成 `ON CONFLICT DO NOTHING` —— 「把標籤加上去」本來就該是冪等的。
+`tag.rs` 先前是 0% 覆蓋率，一併補了 `tests/tag_tests.rs`。
 
 補上 tus 的 utoipa 標註之後第一次跑就打出兩個 `status_code_conformance`
 失敗，兩個都是**標註寫錯**不是伺服器 bug：
