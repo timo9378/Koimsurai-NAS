@@ -117,11 +117,11 @@ Koimsurai-NAS/                    # monorepo root（就是這個 repo）
 | CSS Format/Lint | biome 2.5 | `javascript`/`json` formatter 關掉 |
 | TypeScript | 6.0 | |
 | 單元測試 | vitest 4 + testing-library + jsdom + **fast-check** | property-based |
-| 覆蓋率 | `@vitest/coverage-v8`、`v8-to-istanbul`、`@bcoe/v8-coverage` | 合併 dump 一定要用 `mergeScriptCovs` |
-| 突變測試 | Stryker 9 | 本機工具，**不接 CI** |
-| E2E | Playwright + `@axe-core/playwright` | |
-| 效能預算 | `@lhci/cli` | |
-| 死碼 | knip 6 | |
+| 覆蓋率 | `@vitest/coverage-v8` ✅ 已接 CI | ⚠️ `v8-to-istanbul` / `@bcoe/v8-coverage` **沒有安裝** —— 它們只有在要把 E2E 的覆蓋率併進單元測試報告時才需要，而那個沒做（見下）|
+| 突變測試 | Stryker 10 | ✅ `mutation.yml`（dispatch + 每週）。⚠️ 盤點原本寫「本機工具，不接 CI」—— 反過來了：開發機就是 NAS 本體，**不能**在本機跑，只能在 Actions 上 |
+| E2E | Playwright + `@axe-core/playwright` | ✅ `e2e.yml`（push / PR）|
+| 效能預算 | `@lhci/cli` | ✅ `e2e.yml` 的第二個 job |
+| 死碼 | knip 6 | ✅ 已接 CI |
 
 ### 2.2 後端
 
@@ -639,6 +639,15 @@ history / selection / marquee、`chunk-plan`、`errors`、`file-icons`、`a11y`�
 兩個 store）與三支元件；`Finder` / `FileList` / `DesktopIcons` / `MobileLayout`
 這四支（合計約 3600 行）仍然沒有測試，而那正是分母的大宗。
 | `cargo llvm-cov` | ✅ 已接 CI，門檻 `--fail-under-regions 46` | — |
+
+### 工具鏈盤點的完成度
+
+盤點表列的工具**全部引入並接上 CI**，只有兩項例外，兩項都是刻意的：
+
+| 未做 | 為什麼 |
+|---|---|
+| `v8-to-istanbul` / `@bcoe/v8-coverage` | 這兩個只有在要把 **E2E 的覆蓋率併進單元測試報告**時才需要（盤點的備註「合併 dump 一定要用 `mergeScriptCovs`」講的就是那件事）。合併需要對 production bundle 做 instrumentation、從 Chromium 的 CDP 收 v8 dump、再合併 —— 而目前真正有用的訊號（**哪些檔案一條測試都沒有**）逐檔表已經看得到了。要一個「合併後比較好看的數字」不值得這些工。|
+| `dnd-kit` 只用在桌面圖示 | Finder 的檔案拖放仍是 HTML5 原生 DnD，因為它跟「從 OS 拖檔進來上傳」交織在一起，後者需要 `dataTransfer.files`，dnd-kit 拿不到。硬換會弄壞上傳。要做得先把「內部搬移」與「OS 上傳」兩條路徑拆開，那是獨立的一次重構。|
 
 ### 工具鏈盤點列的東西已全部引入
 
