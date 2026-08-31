@@ -112,11 +112,25 @@ describe("性質（fast-check）", () => {
 
           expect(chunks[0]?.start).toBe(offset);
           expect(chunks.at(-1)?.end).toBe(fileSize);
+
+          // ⚠️ 迴圈裡**不要**用 expect。chunkSize 可以小到 1、fileSize 到 10 萬，
+          // 單一 case 就有 10 萬塊，乘上 fast-check 的 100 次 run 是數千萬次
+          // expect 呼叫 —— 開發機跑得完，CI runner 就撞上 5 秒逾時（實際發生過）。
+          // 純算術先收斂成一個描述，最後只斷言一次；失敗時 fast-check 本來就會
+          // 印出反例的輸入，訊息不會變難讀。
+          let bad = "";
           for (const [i, c] of chunks.entries()) {
-            expect(c.end).toBeGreaterThan(c.start);
-            expect(c.end - c.start).toBeLessThanOrEqual(chunkSize);
-            if (i > 0) expect(c.start).toBe(chunks[i - 1]?.end); // 首尾相接
+            const prev = chunks[i - 1];
+            if (c.end <= c.start) {
+              bad = `第 ${i} 塊是空的或反向：${c.start}–${c.end}`;
+            } else if (c.end - c.start > chunkSize) {
+              bad = `第 ${i} 塊比 chunkSize 大：${c.end - c.start} > ${chunkSize}`;
+            } else if (i > 0 && prev !== undefined && c.start !== prev.end) {
+              bad = `第 ${i} 塊跟前一塊之間有洞或重疊：${prev.end} → ${c.start}`;
+            }
+            if (bad !== "") break;
           }
+          expect(bad).toBe("");
         },
       ),
     );
@@ -132,8 +146,13 @@ describe("性質（fast-check）", () => {
         fc.integer({ min: 1, max: 10_000 }),
         (fileSize, rawOffset, chunkSize) => {
           const offset = Math.min(rawOffset, fileSize);
-          for (const c of planChunks(fileSize, offset, chunkSize)) {
-            expect(c.start).toBeGreaterThanOrEqual(offset);
+          // 同上：迴圈裡不用 expect，先算出最小的 start 再斷言一次。
+          const earliest = planChunks(fileSize, offset, chunkSize).reduce(
+            (min, c) => Math.min(min, c.start),
+            Number.POSITIVE_INFINITY,
+          );
+          if (earliest !== Number.POSITIVE_INFINITY) {
+            expect(earliest).toBeGreaterThanOrEqual(offset);
           }
         },
       ),
