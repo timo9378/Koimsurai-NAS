@@ -131,6 +131,22 @@ jobs:
       # `format: date-time`（RFC 3339）。那不只是文件問題：JS 的 `new Date()`
       # 對「有 T、無位移」的字串按本地時間解析，畫面上的時間整個偏一個時區。
       #
+      # ⚠️ **已知的間歇性紅燈**：偶爾會有 1 個 `Network Error`
+      # （"Connection aborted. Remote end closed connection without response"），
+      # 出現在 Coverage 階段對 `QUERY` 這種非常規方法的探測上。
+      #
+      # 已經排除的假設（本機逐一試過，全部拿到乾淨的 405）：
+      #   - schemathesis 給的重現指令（curl -X QUERY 帶 JSON body）
+      #   - keep-alive 連線重用（405 未讀取 body 之後再送一個請求 → 200）
+      #   - Transfer-Encoding: chunked
+      #   - Expect: 100-continue
+      # 而且 server log 沒有任何 panic 或 error，同一輪 1348 個案例全部通過。
+      #
+      # **沒有結論。** 留著不抑制，是因為「伺服器關閉連線但不回應」正是 panic
+      # 會有的表徵 —— 抑制掉就等於把最該知道的那種故障也一起蓋住。
+      # 判讀方式：看下面那步印出來的 panic 次數。0 且案例全過 = 大概是這個
+      # 已知現象；非 0 = 真的出事了。
+      #
       # ⚠️ 不跑 stateful 階段。它自己就佔掉 422 秒（總共 435 秒），而且產生
       # 420 個「Connection aborted. Remote end closed connection without
       # response」——連線層級的錯誤，不是回應層級的。

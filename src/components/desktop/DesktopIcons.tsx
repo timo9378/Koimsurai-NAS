@@ -13,13 +13,9 @@ import { useWindowStore } from "@/store/window-store";
 import { useQueryClient } from "@tanstack/react-query";
 import type { FileInfo } from "@/types/api";
 import { DraggableDesktopIcon } from "./DraggableDesktopIcon";
+import { defaultIconPosition, type IconPosition } from "./icon-grid";
 
 // Type for storing icon positions
-interface IconPosition {
-  row: number;
-  col: number;
-}
-
 // Default positions will be calculated based on order
 
 export const DesktopIcons = () => {
@@ -63,13 +59,8 @@ export const DesktopIcons = () => {
     const saved = iconPositions.get(file.path);
     if (saved) return saved;
 
-    // Calculate default position based on index
-    // Icons flow top to bottom, then left to right
-    const iconsPerColumn = 8; // Adjust based on screen height
-    const col = Math.floor(index / iconsPerColumn);
-    const row = index % iconsPerColumn;
-
-    return { row, col };
+    // 排列方向與邊界見 desktop/icon-grid.ts（純函式、有測試）
+    return defaultIconPosition(index);
   };
 
   const handlePositionChange = (filePath: string, newPosition: IconPosition) => {

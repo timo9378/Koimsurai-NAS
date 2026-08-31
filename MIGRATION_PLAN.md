@@ -756,6 +756,15 @@ workaround —— 它比對 `"YYYY-MM-DD HH:mm:ss"`（空格分隔）然後補 Z
 `allow_header_conformance`（7，伺服器誠實列出 PUT 但 spec 少了那個 operation）、
 `missing_required_header`。
 
+⚠️ **已知的間歇性紅燈**：偶爾（不是每次）會有 1 個 `Network Error`，出現在
+Coverage 階段對 `QUERY` 這種非常規方法的探測上。本機逐一試過並排除：
+schemathesis 給的重現指令、keep-alive 連線重用、`Transfer-Encoding: chunked`、
+`Expect: 100-continue` —— 全部拿到乾淨的 405；server log 也沒有任何 panic，
+同一輪 1348 個案例全過。**沒有結論。**
+
+留著不抑制的理由：「伺服器關閉連線但不回應」正是 panic 會有的表徵，抑制掉
+就等於把最該知道的那種故障一起蓋住。判讀看 job summary 印出來的 panic 次數。
+
 ⚠️ **stateful 階段暫時關掉**，理由與上面同一條：它產生 420 個
 「Connection aborted. Remote end closed connection without response」——
 連線層級而不是回應層級的錯誤。本機用同樣的請求（含 schemathesis 給的
@@ -792,11 +801,11 @@ workaround —— 它比對 `"YYYY-MM-DD HH:mm:ss"`（空格分隔）然後補 Z
 
 ### 程式面的已知債
 
-- `Finder.tsx` 約 1400 行、`FileList.tsx` 約 790 行。已抽出三塊純邏輯並各自
-  有測試：`finder/history.ts`（上一頁/下一頁）、`finder/selection.ts`
-  （點擊選取）、`finder/marquee.ts`（框選幾何）。剩下的（拖放、重新命名、
-  虛擬清單的整合）仍在元件裡。
+- 已抽出四塊純邏輯並各自有測試：`finder/history.ts`（上一頁/下一頁）、
+  `finder/selection.ts`（點擊選取）、`finder/marquee.ts`（框選幾何）、
+  `desktop/icon-grid.ts`（桌面圖示的網格座標）。剩下的（拖放、重新命名、
+  虛擬清單的整合、`MobileLayout`）仍在元件裡。
+- `MobileLayout.tsx` 約 975 行，還沒抽也還沒測。
 - `window-store` 的 `newWindow as WindowState`：判別式聯集的關聯 TS 證不出來，
   呼叫端有泛型簽章擋著，理由寫在該行旁。
-- 前端測試涵蓋 15 個檔案；`DesktopIcons` / `MobileLayout`
-  這幾支大元件仍然沒有測試。
+- 前端測試涵蓋 17 個檔案；`MobileLayout` 仍然沒有測試。

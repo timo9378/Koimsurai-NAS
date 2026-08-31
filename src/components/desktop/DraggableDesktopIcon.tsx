@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import type { FileInfo } from "@/types/api";
 import { FileTypeIcon } from "@/lib/file-icons";
 import { activateOnKey } from "@/lib/a11y";
+import { gridToPixels, snapToGrid } from "./icon-grid";
 
 interface DraggableDesktopIconProps {
   file: FileInfo;
@@ -20,8 +21,6 @@ interface DraggableDesktopIconProps {
   onPositionChange: (newPosition: { row: number; col: number }) => void;
 }
 
-const GRID_SIZE = 100; // Size of each grid cell (matches the icon width)
-const GRID_GAP = 8; // Gap between icons
 const DRAG_THRESHOLD = 5; // Minimum pixels to move before drag starts
 
 export const DraggableDesktopIcon = ({
@@ -103,20 +102,8 @@ export const DraggableDesktopIcon = ({
 
     const handleMouseUp = (e: MouseEvent) => {
       if (hasDragStarted && isDragging) {
-        // Calculate the nearest grid position
-        const desktopPadding = 16;
-        const topBarHeight = 48;
-
-        const relativeX = e.clientX - desktopPadding;
-        const relativeY = e.clientY - topBarHeight - desktopPadding;
-
-        const col = Math.round(relativeX / (GRID_SIZE + GRID_GAP));
-        const row = Math.round(relativeY / (GRID_SIZE + GRID_GAP));
-
-        const newCol = Math.max(0, col);
-        const newRow = Math.max(0, row);
-
-        onPositionChange({ row: newRow, col: newCol });
+        // 落點計算與「不能是負的」的理由見 desktop/icon-grid.ts
+        onPositionChange(snapToGrid(e.clientX, e.clientY));
       }
 
       // Reset all drag state
@@ -135,8 +122,7 @@ export const DraggableDesktopIcon = ({
   }, [mouseDownPos, hasDragStarted, isDragging, dragOffset, onPositionChange]);
 
   // Calculate the actual position based on grid
-  const gridX = position.col * (GRID_SIZE + GRID_GAP);
-  const gridY = position.row * (GRID_SIZE + GRID_GAP);
+  const { x: gridX, y: gridY } = gridToPixels(position);
 
   return (
     <div
