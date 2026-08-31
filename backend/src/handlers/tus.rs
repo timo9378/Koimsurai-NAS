@@ -135,7 +135,10 @@ fn id_of(raw: &str) -> Result<UploadId, Box<AxumResponse>> {
     path = "/api/tus",
     tag = "tus",
     responses(
-        (status = 204, description = "伺服器支援的 tus 版本與擴充（Tus-Version / Tus-Extension 標頭）")
+        // ⚠️ 是 200 不是 204。tus 規格說 SHOULD 回 204 或 200，而
+        // tus-protocol 選了 200 —— 標註要照**實際行為**寫，不是照規格抄。
+        // （schemathesis 的 status_code_conformance 抓到的。）
+        (status = 200, description = "伺服器支援的 tus 版本與擴充（Tus-Version / Tus-Extension 標頭）")
     )
 )]
 pub async fn options(State(state): State<AppState>) -> AxumResponse {
@@ -231,7 +234,10 @@ pub async fn status(State(state): State<AppState>, AxumPath(id): AxumPath<String
     params(("id" = String, Path, description = "上傳 ID")),
     responses(
         (status = 204, description = "已刪除"),
-        (status = 404, description = "不存在")
+        (status = 404, description = "不存在"),
+        // tus 規定 OPTIONS 以外的每個請求都要帶 Tus-Resumable。
+        // 這條原本漏標，schemathesis 直接打出來了。
+        (status = 412, description = "缺少或不支援的 Tus-Resumable")
     )
 )]
 pub async fn terminate(

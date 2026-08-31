@@ -57,6 +57,17 @@ jobs:
 
       - run: pip install --disable-pip-version-check schemathesis==4.25.2
 
+      # ⚠️ tus 的 body 是 `application/offset+octet-stream`，schemathesis 不認得，
+      # 會對兩個 operation 報 `Serialization not possible` 並讓整個 run 變成
+      # error —— 那不是伺服器的問題也不是規格漂移，是工具不知道怎麼產那種 body。
+      # hook 把它 alias 到內建的 octet-stream，兩個 operation 才會真的被 fuzz。
+      - name: 設定 schemathesis hook
+        run: |
+          {
+            echo "PYTHONPATH=$GITHUB_WORKSPACE/scripts"
+            echo "SCHEMATHESIS_HOOKS=schemathesis_hooks"
+          } >> "$GITHUB_ENV"
+
       # spec 從 binary 產，不是從 /scalar 抓——那個端點現在要登入
       # （見 routes/mod.rs），從這裡拿的話不必先起伺服器。
       - name: 產生 OpenAPI spec
