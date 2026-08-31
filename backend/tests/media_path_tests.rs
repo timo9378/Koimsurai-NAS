@@ -228,3 +228,33 @@ async fn a_thumbnail_request_for_a_directory_is_a_clean_404() {
         .expect("目錄的縮圖請求不該讓連線斷掉");
     assert_eq!(res.status(), StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn an_empty_multipart_filename_is_rejected_without_leaking_os_errors() {
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "empty_namer").await;
+
+    // ⚠️ `filename=""` 在 multipart 裡是合法編碼。`target_dir.join("")` 會等於
+    //    目錄**本身**，接著 File::create 對目錄執行 → EISDIR，原本回
+    //    `500 {"error":"Is a directory (os error 21)"}`。
+    //    狀態碼是錯的，而且把 OS 錯誤字串送給客戶端。
+    let form = reqwest::multipart::Form::new().part(
+        "file",
+        reqwest::multipart::Part::bytes(b"x".to_vec()).file_name(""),
+    );
+    let res = client
+        .post(format!("{}/api/upload", app.address))
+        .header("Origin", app.origin_header())
+        .multipart(form)
+        .send()
+        .await
+        .expect("upload");
+
+    assert!(
+        !res.status().is_server_error(),
+        "不該是 5xx，實際 {}",
+        res.status()
+    );
+    let body = res.text().await.unwrap_or_default();
+    assert!(!body.contains("os error"), "不該把 OS 錯誤字串送出去：{body}");
+}

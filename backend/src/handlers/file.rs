@@ -639,7 +639,30 @@ pub async fn upload_file(
             continue;
         }
 
+        // ⚠️ 空檔名要擋掉。`target_dir.join("")` 會等於 `target_dir` **本身**，
+        // 接著 `File::create` 對著一個目錄執行 → EISDIR，而原本的處置是把
+        // io::Error 往上丟，客戶端拿到
+        // `500 {"error":"Is a directory (os error 21)"}`：狀態碼是錯的
+        // （這是客戶端送的東西造成的），而且把 OS 的錯誤字串原封不動送出去。
+        // multipart 的 `filename=""` 是合法的編碼，所以這條真的到得了。
+        // （schemathesis 找到的。）
+        if file_name.is_empty() {
+            return Err(AppError::Status(StatusCode::BAD_REQUEST));
+        }
+
         let file_path = target_dir.join(&file_name);
+
+        // ⚠️ 目標已經是一個**目錄**的話，下面的 `File::create` 會失敗，
+        // 而原本的處置是把 io::Error 往上丟 —— 客戶端拿到的是
+        // `500 {"error":"Is a directory (os error 21)"}`：
+        //   - 500 是錯的，這是客戶端送的東西造成的
+        //   - 而且把 OS 的錯誤字串原封不動送出去
+        // 回 409，跟 upload/init 對「檔案已存在」的處置一致。
+        // （schemathesis 找到的。）
+        if file_path.is_dir() {
+            return Err(AppError::Status(StatusCode::CONFLICT));
+        }
+
         tracing::info!("Processing file: {} -> {:?}", file_name, file_path);
 
         // 串流寫入檔案，避免佔用過多記憶體

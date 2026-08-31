@@ -701,9 +701,20 @@ DELETE、清垃圾桶、刪檔。
 不符 7、宣告了伺服器不支援的方法 6）——那是文件品質問題，不是 bug，
 之後補 utoipa 的 `responses(...)` 標註即可。
 
-**還沒接 CI。** 要接的話需要：起一個獨立實例 → 註冊登入拿 cookie →
-餵 spec 給 schemathesis。exclude 掉 docker（CI 沒有 docker socket）、
-terminal（WebSocket）、media/stream 與 media/hls（會叫 ffmpeg）。
+**已接 CI**（`.github/workflows/api-fuzz.yml`）：workflow_dispatch + 每週日
+20:00 UTC + PR 動到 `backend/` 時。
+
+⚠️ CI 上關掉了六條**規格漂移**的檢查（未記載的狀態碼 45、`Allow` header、
+宣告了伺服器不支援的方法…）。那些不是 bug —— utoipa 的 `responses(...)` 只標了
+happy path，所以任何 4xx/5xx 都算「未記載」。留著會讓這個 job **永遠是紅的**，
+而永遠紅的排程 job 等於沒有 job。現在留下的是「真的出事才會紅」的那幾條
+（`server_error`、`not_a_server_error`、`ensure_resource_availability`）。
+**補完 utoipa 標註之後要把那行 `--exclude-checks` 拿掉。**
+
+第一次在 CI 上跑又抓到一個：`POST /api/upload` 帶 `filename=""`（multipart
+的合法編碼）→ `target_dir.join("")` 等於目錄本身 → `File::create` 對目錄執行
+→ `500 {"error":"Is a directory (os error 21)"}`。狀態碼錯，而且把 OS 錯誤
+字串送給客戶端。
 
 ### 程式面的已知債
 
