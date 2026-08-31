@@ -39,8 +39,18 @@ pub struct Job {
     pub job_type: String,
     pub status: String,
     pub progress: i32,
-    pub created_at: chrono::NaiveDateTime,
-    pub updated_at: chrono::NaiveDateTime,
+    // ⚠️ 一定要 `DateTime<Utc>` 而不是 `NaiveDateTime`。
+    //
+    // `NaiveDateTime` 序列化成 `"2026-08-31T04:53:47"` —— 沒有時區。而
+    // JS 的 `new Date()` 對「有 T、無位移」的字串是按**本地時間**解析的
+    // （ES2015 起的規範），於是畫面上的時間會整個偏掉一個時區
+    // （這台是 Asia/Taipei，差 8 小時）。
+    // `DateTime<Utc>` 序列化成 `"...Z"`，兩邊就一致了。
+    //
+    // schemathesis 的 response_schema_conformance 抓到的：
+    // spec 標的是 `format: date-time`（RFC 3339），而無時區的字串不符合。
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
     pub error: Option<String>,
 }
 

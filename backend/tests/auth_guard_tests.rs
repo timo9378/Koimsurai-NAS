@@ -334,3 +334,41 @@ fn a_token_is_not_accepted_after_the_secret_is_rotated() {
         "輪替後舊 token 必須失效"
     );
 }
+
+#[tokio::test]
+async fn timestamps_are_rfc3339_with_a_timezone() {
+    // ⚠️ `NaiveDateTime` 會序列化成 `"2026-08-31T04:53:47"` —— 沒有時區。
+    //    而 JS 的 `new Date()` 對「有 T、無位移」的字串是按**本地時間**解析的
+    //    （ES2015 起的規範），畫面上的時間就整個偏一個時區。
+    //    這條釘住送出去的一定帶 Z 或 ±HH:MM。
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "clock_watcher").await;
+
+    // 做一件會寫稽核紀錄的事
+    let _ = client
+        .post(format!("{}/api/files/folder", app.address))
+        .header("Origin", app.origin_header())
+        .json(&serde_json::json!({ "path": "", "folder_name": "稽核用" }))
+        .send()
+        .await
+        .expect("create folder");
+
+    let logs: Vec<serde_json::Value> = client
+        .get(format!("{}/api/audit/logs", app.address))
+        .send()
+        .await
+        .expect("logs")
+        .json()
+        .await
+        .expect("json");
+
+    for log in &logs {
+        let ts = log["created_at"].as_str().expect("created_at 應為字串");
+        assert!(
+            ts.ends_with('Z') || ts.contains('+') || ts[10..].contains('-'),
+            "時間戳必須帶時區，實際：{ts}"
+        );
+        // 一定要真的解析得動 —— 只看有沒有 Z 的話，隨便一個結尾是 Z 的字串也會過
+        chrono::DateTime::parse_from_rfc3339(ts).unwrap_or_else(|e| panic!("{ts} 不是合法的 RFC 3339：{e}"));
+    }
+}

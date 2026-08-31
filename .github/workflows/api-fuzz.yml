@@ -112,7 +112,7 @@ jobs:
           print(f"FUZZ_TOKEN={m.group(1)}")
           PY
 
-      # ⚠️ `--exclude-checks` 關掉的六條是**規格漂移**，不是 bug：spec 少寫了
+      # ⚠️ `--exclude-checks` 關掉的五條是**規格漂移**，不是 bug：spec 少寫了
       # 伺服器實際支援的東西（`Allow` header 誠實地列出 PUT，是 spec 少了那個
       # operation），或 schema 的約束跟實際驗證對不上。那是文件品質，
       # 要補是去補標註，不是改程式。
@@ -123,8 +123,13 @@ jobs:
       #
       # 留著會讓這個 job **永遠是紅的**——而一個永遠紅的排程 job 等於沒有 job，
       # 沒有人會再看它。現在守著的是：server_error（5xx / panic）、
-      # not_a_server_error、status_code_conformance、ensure_resource_availability。
-      # 剩下六條每清完一條就從這裡拿掉一個。
+      # not_a_server_error、status_code_conformance、response_schema_conformance、
+      # ensure_resource_availability。剩下五條每清完一條就從這裡拿掉一個。
+      #
+      # `response_schema_conformance` 是第二條放回來的：原本 3 個失敗，全是
+      # 同一個根因 —— `NaiveDateTime` 序列化成無時區的字串，不符合 spec 標的
+      # `format: date-time`（RFC 3339）。那不只是文件問題：JS 的 `new Date()`
+      # 對「有 T、無位移」的字串按本地時間解析，畫面上的時間整個偏一個時區。
       #
       # ⚠️ 不跑 stateful 階段。它自己就佔掉 422 秒（總共 435 秒），而且產生
       # 420 個「Connection aborted. Remote end closed connection without
@@ -153,7 +158,7 @@ jobs:
             --header "Cookie: access_token=$FUZZ_TOKEN" \
             --header "Origin: $U" \
             --exclude-path-regex '^/api/(docker|terminal|media/stream|media/hls)' \
-            --exclude-checks response_schema_conformance,positive_data_acceptance,negative_data_rejection,unsupported_method,missing_required_header,allow_header_conformance \
+            --exclude-checks positive_data_acceptance,negative_data_rejection,unsupported_method,missing_required_header,allow_header_conformance \
             --phases examples,coverage,fuzzing \
             --max-examples 20 \
             --continue-on-failure

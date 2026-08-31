@@ -32,7 +32,7 @@ pub struct UploadSession {
     #[specta(type = specta_typescript::Number)]
     pub uploaded_size: i64,
     #[schema(value_type = String, format = DateTime)]
-    pub created_at: chrono::NaiveDateTime,
+    pub created_at: chrono::DateTime<chrono::Utc>,
     #[schema(value_type = String, format = DateTime)]
-    pub updated_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
 }

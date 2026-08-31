@@ -736,8 +736,22 @@ CI 上守著的檢查：`server_error`（5xx / panic）、`not_a_server_error`�
 沒寫的狀態碼」，多寫不會誤報，少寫會讓 45 個真實回應被當成失敗而淹掉真問題。
 要更精確得在 modifier 裡維護一份公開路徑清單，那份清單本身又會跟路由走鐘。
 
-還關著的六條（每清完一條就從 workflow 拿掉一個）：`response_schema_conformance`
-（3，回應 body 與記載的 schema 不符）、`positive_data_acceptance`（8）、
+**`response_schema_conformance` 也放回來了**（原本 3 個失敗）。三個是同一個根因：
+`NaiveDateTime` 序列化成 `"2026-08-31T04:53:47"` —— 沒有時區，不符合 spec 標的
+`format: date-time`（RFC 3339）。
+
+⚠️ 那不只是文件問題。JS 的 `new Date()` 對「有 T、無位移」的字串是按**本地時間**
+解析的（ES2015 起的規範），所以稽核紀錄的時間在畫面上整個偏一個時區
+（這台是 Asia/Taipei，差 8 小時）。而 `TopBar.tsx` 裡本來就有一段針對這個症狀的
+workaround —— 它比對 `"YYYY-MM-DD HH:mm:ss"`（空格分隔）然後補 Z，但後端送的是
+**T 分隔**，那個 regex **從來沒有命中過**。也就是有人發現過這個問題、寫了補救，
+而補救打偏了。
+
+處置：`AuditLog` / `Job` / `UploadSession` / `User` 的時間欄位全部改成
+`DateTime<Utc>`（一律送帶 Z 的 RFC 3339），前端的 workaround 直接刪掉。
+後端補一條測試釘住「送出去的時間戳一定解析得動且帶時區」。
+
+還關著的五條（每清完一條就從 workflow 拿掉一個）：`positive_data_acceptance`（8）、
 `negative_data_rejection`（3）、`unsupported_method`（6）、
 `allow_header_conformance`（7，伺服器誠實列出 PUT 但 spec 少了那個 operation）、
 `missing_required_header`。

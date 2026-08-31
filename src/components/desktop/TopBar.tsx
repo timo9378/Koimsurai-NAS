@@ -168,17 +168,16 @@ interface AuditLog {
   created_at: string;
 }
 
-const parseAuditLogDate = (value: string): Date => {
-  if (!value) return new Date();
-
-  // Backend may return "YYYY-MM-DD HH:mm:ss" (SQLite UTC without timezone).
-  // Force UTC interpretation to avoid local timezone offset errors (e.g. 8 hours ago).
-  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) {
-    return new Date(value.replace(" ", "T") + "Z");
-  }
-
-  return new Date(value);
-};
+// ⚠️ 這裡原本有一段 workaround，比對 `"YYYY-MM-DD HH:mm:ss"`（空格分隔）
+// 然後補上 Z。但後端當時送的是 `"2026-08-31T04:53:47"`（**T** 分隔、無時區）
+// —— 那個 regex 從來沒有命中過，於是一路掉到 `new Date(value)`，
+// 而 JS 對「有 T、無位移」的字串是按**本地時間**解析的。
+// 結果就是那段註解自己描述的症狀：時間差一個時區（這台差 8 小時）。
+//
+// 現在後端的 AuditLog.created_at 是 `DateTime<Utc>`，一律送 RFC 3339 帶 Z，
+// 所以直接 new Date() 就是對的，不需要任何補救。
+// （是 schemathesis 的 response_schema_conformance 把後端那半指出來的。）
+const parseAuditLogDate = (value: string): Date => (value ? new Date(value) : new Date());
 
 // Map action types to display info
 const getActionInfo = (action: string) => {

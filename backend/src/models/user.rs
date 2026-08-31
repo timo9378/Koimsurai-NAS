@@ -1,4 +1,3 @@
-use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use utoipa::ToSchema;
@@ -10,7 +9,7 @@ pub struct User {
     pub username: String,
     #[serde(skip)]
     pub password_hash: String,
-    pub created_at: NaiveDateTime,
+    pub created_at: chrono::DateTime<chrono::Utc>,
     /// base32 secret，None = 未啟用過 2FA；Some + `totp_enabled=0` = setup 中尚未驗證
     #[serde(skip)]
     pub totp_secret: Option<String>,
@@ -102,7 +101,7 @@ pub struct RefreshToken {
     pub id: i64,
     pub user_id: i64,
     pub token: String,
-    pub expires_at: NaiveDateTime,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
     pub revoked: bool,
-    pub created_at: NaiveDateTime,
+    pub created_at: chrono::DateTime<chrono::Utc>,
 }
