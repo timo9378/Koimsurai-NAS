@@ -95,8 +95,34 @@ pub async fn create_folder(
         )
         .await;
 
-    // 資料夾會由 file watcher 自動索引到資料庫
-    // Folder will be automatically indexed by file watcher
+    // ⚠️ 這裡**必須**同步寫進 files 表，不能只靠 file watcher。
+    //
+    // 原本的註解說「資料夾會由 file watcher 自動索引到資料庫」—— 那是真的，
+    // 但那是**非同步**的。`list_files` 讀的是 files 表而不是檔案系統，
+    // 於是建完資料夾之後前端立刻重新列目錄，很可能還看不到它：
+    // 使用者按下「新增資料夾」，畫面上什麼也沒發生，過一下才冒出來。
+    //
+    // 上傳那條路徑一直都有寫（見 upload_file 的 INSERT INTO files），
+    // 只有建資料夾漏了，兩者不一致。
+    //
+    // 這個 race 在 E2E 上表現成間歇性的紅：建完資料夾後等 15 秒仍然找不到
+    // 桌面圖示。本機幾乎不會發生，CI runner 忙的時候就會。
+    //
+    // ON CONFLICT DO NOTHING：watcher 可能比這裡先跑到，那不是錯誤。
+    let modified = chrono::Utc::now();
+    let _ = sqlx::query(
+        r"
+        INSERT INTO files (path, name, size, mime_type, parent_path, is_dir, modified)
+        VALUES (?, ?, 0, NULL, ?, 1, ?)
+        ON CONFLICT(path) DO NOTHING
+        ",
+    )
+    .bind(&full_relative_path)
+    .bind(&payload.folder_name)
+    .bind(&parent_path)
+    .bind(modified)
+    .execute(&state.pool)
+    .await;
 
     Ok(StatusCode::CREATED)
 }
