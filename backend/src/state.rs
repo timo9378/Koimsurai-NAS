@@ -27,6 +27,25 @@ pub fn get_docker_enabled() -> bool {
     env::var("ENABLE_DOCKER_MANAGER").is_ok_and(|v| v.to_lowercase() == "true" || v == "1")
 }
 
+/// 允許管理 Docker 的使用者 id（`DOCKER_MANAGER_USER_IDS`，逗號分隔）。
+///
+/// ⚠️ **沒設就是空集合，也就是全部拒絕。**
+///
+/// 這裡刻意 fail-closed。Docker 管理不是普通功能：容器掛著
+/// `/var/run/docker.sock`，能對任意容器 exec 就等於**主機 root**
+/// （還能起一個特權容器掛 `/`）。部署時漏設環境變數的後果，
+/// 「功能不能用」遠比「每個註冊使用者都拿到主機 root」好。
+///
+/// 稽核時實測：production 有三個帳號，而在加上這道檢查之前，
+/// 三個都能 exec 進任何容器。
+pub fn get_docker_manager_user_ids() -> std::collections::HashSet<i64> {
+    env::var("DOCKER_MANAGER_USER_IDS")
+        .unwrap_or_default()
+        .split(',')
+        .filter_map(|s| s.trim().parse::<i64>().ok())
+        .collect()
+}
+
 /// 從環境變數取得是否啟用 AI 圖片標籤功能
 /// Get whether AI image labelling is enabled from env
 pub fn get_ai_enabled() -> bool {

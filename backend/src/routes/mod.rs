@@ -294,6 +294,12 @@ pub async fn create_router(state: AppState) -> Router {
         .route("/images/{id}", delete(docker::remove_image))
         // 網絡操作
         .route("/networks", get(docker::list_networks))
+        // ⚠️ 順序：layer 是**由外往內**套的，寫在後面的先執行。
+        // require_auth 必須先跑（它把 user_id 放進 extensions），
+        // require_docker_admin 才讀得到 —— 所以 admin 那道寫在前面。
+        .layer(middleware::from_fn(
+            crate::middleware::docker_admin::require_docker_admin,
+        ))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth)); // Protect docker routes
 
     // Configure CORS for direct frontend-to-backend requests (e.g., file uploads)
