@@ -6,7 +6,7 @@
 
 mod common;
 
-use common::spawn_app_with_static;
+use common::{spawn_app, spawn_app_with_static};
 use reqwest::{redirect::Policy, Client};
 
 fn client() -> Client {
@@ -121,4 +121,26 @@ async fn missing_assets_return_404_not_index_html() {
             "{path} 不該回 HTML"
         );
     }
+}
+
+/// ⚠️ 這條**刻意用 `spawn_app`（沒有 STATIC_DIR）**。
+///
+/// 沒有 SPA fallback 時，未知的 `/api/*` 要回 404 而不是 401。
+/// 接 tus 時用 `.layer()` 而不是 `.route_layer()` 把 require_auth 掛到一個
+/// merge 進根層的 router 上，middleware 連 fallback 一起包住，所有未知的
+/// `/api/*` 就從 404 變成 401。
+///
+/// 那個回歸在有 STATIC_DIR 時看不見（會先被 SPA fallback 接走），所以
+/// E2E 全綠 —— 是 api-fuzz 的 readiness 探測等了 60 秒失敗才暴露出來。
+#[tokio::test]
+async fn unmatched_api_paths_are_404_even_without_a_spa() {
+    let app = spawn_app().await;
+    let res = reqwest::get(format!("{}/api/definitely-not-a-route", app.address))
+        .await
+        .expect("request");
+    assert_eq!(
+        res.status(),
+        reqwest::StatusCode::NOT_FOUND,
+        "未知的 API 路徑要回 404；401 表示有 middleware 連 fallback 一起包住了"
+    );
 }

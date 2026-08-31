@@ -375,7 +375,20 @@ pub async fn create_router(state: AppState) -> Router {
                         .patch(tus::append)
                         .delete(tus::terminate),
                 )
-                .layer(middleware::from_fn_with_state(state.clone(), require_auth))
+                // ⚠️ `route_layer` 而不是 `layer`。
+                //
+                // `layer` 會把 middleware 套到這個 router 的**所有請求**上，
+                // 包含它的 fallback —— 而這個 router 是 merge 到根層的，
+                // 於是「沒對到任何路由」的請求也會走 require_auth，
+                // 所有未知的 /api/* 從 404 變成 401。
+                //
+                // 那個回歸只在**沒設 STATIC_DIR** 時看得見（有 SPA fallback 時
+                // 會先被它接走），所以 E2E 是綠的，卻讓 api-fuzz 的
+                // readiness 探測（等 /api/nope 回 404）整整等了 60 秒然後失敗。
+                //
+                // `route_layer` 只套在**有對到**的路由上，正是 auth middleware
+                // 該有的行為。
+                .route_layer(middleware::from_fn_with_state(state.clone(), require_auth))
                 .layer(DefaultBodyLimit::max(10 * 1024 * 1024 * 1024)),
         )
         .layer(session_layer)
