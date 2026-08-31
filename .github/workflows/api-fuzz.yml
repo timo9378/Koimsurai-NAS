@@ -143,10 +143,12 @@ jobs:
             --base "http://127.0.0.1:$PORT" \
             --cookie "access_token=$FUZZ_TOKEN" \
             --out "$RUNNER_TEMP/schemathesis.toml"
-          echo '### 種好的參數' >> "$GITHUB_STEP_SUMMARY"
-          echo '```toml' >> "$GITHUB_STEP_SUMMARY"
-          cat "$RUNNER_TEMP/schemathesis.toml" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo '### 種好的參數'
+            echo '```toml'
+            cat "$RUNNER_TEMP/schemathesis.toml"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # ⚠️ `--exclude-checks` 關掉的五條是**規格漂移**，不是 bug：spec 少寫了
       # 伺服器實際支援的東西（`Allow` header 誠實地列出 PUT，是 spec 少了那個
