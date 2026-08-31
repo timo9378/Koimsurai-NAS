@@ -436,7 +436,7 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
          \x1b[36m║\x1b[0m  輸入 \x1b[33mhelp\x1b[0m 查看可用命令                            \x1b[36m║\x1b[0m\r\n\
          \x1b[36m╚════════════════════════════════════════════════════╝\x1b[0m\r\n\r\n".to_string();
 
-    if sender.send(Message::Text(welcome)).await.is_err() {
+    if sender.send(Message::Text(welcome.into())).await.is_err() {
         return;
     }
 
@@ -445,7 +445,7 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
         "\x1b[36mnas\x1b[0m:\x1b[34m{}\x1b[0m$ ",
         get_display_path(&current_dir, &storage_path.as_path().to_string_lossy())
     );
-    if sender.send(Message::Text(prompt)).await.is_err() {
+    if sender.send(Message::Text(prompt.into())).await.is_err() {
         return;
     }
 
@@ -470,7 +470,7 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
                     match ch {
                         '\r' | '\n' => {
                             // Enter 鍵 - 執行命令
-                            let _ = sender.send(Message::Text("\r\n".to_string())).await;
+                            let _ = sender.send(Message::Text("\r\n".to_string().into())).await;
 
                             let cmd = input_buffer.trim().to_string();
                             if !cmd.is_empty() {
@@ -486,7 +486,7 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
                             .await;
 
                             if !output.is_empty() {
-                                let _ = sender.send(Message::Text(format!("{output}\r\n"))).await;
+                                let _ = sender.send(Message::Text(format!("{output}\r\n").into())).await;
                             }
 
                             // 檢查是否是 exit 命令
@@ -502,7 +502,7 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
                                 "\x1b[36mnas\x1b[0m:\x1b[34m{}\x1b[0m$ ",
                                 get_display_path(&current_dir, &storage_path.as_path().to_string_lossy())
                             );
-                            let _ = sender.send(Message::Text(prompt)).await;
+                            let _ = sender.send(Message::Text(prompt.into())).await;
                         }
                         '\t' => {
                             // Tab 鍵 - 自動補全
@@ -533,11 +533,11 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
 
                                 if !to_add.is_empty() {
                                     input_buffer.push_str(to_add);
-                                    let _ = sender.send(Message::Text(to_add.to_string())).await;
+                                    let _ = sender.send(Message::Text(to_add.to_string().into())).await;
                                 }
                             } else if completions.len() > 1 {
                                 // 多個匹配：顯示所有選項
-                                let _ = sender.send(Message::Text("\r\n".to_string())).await;
+                                let _ = sender.send(Message::Text("\r\n".to_string().into())).await;
 
                                 // 格式化輸出（類似 bash）
                                 let max_len = completions
@@ -550,14 +550,14 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
 
                                 for (i, comp) in completions.iter().enumerate() {
                                     let padded = format!("{comp:<max_len$}");
-                                    let _ = sender.send(Message::Text(padded)).await;
+                                    let _ = sender.send(Message::Text(padded.into())).await;
                                     if (i + 1) % cols == 0 {
-                                        let _ = sender.send(Message::Text("\r\n".to_string())).await;
+                                        let _ = sender.send(Message::Text("\r\n".to_string().into())).await;
                                     }
                                 }
 
                                 if !completions.len().is_multiple_of(cols) {
-                                    let _ = sender.send(Message::Text("\r\n".to_string())).await;
+                                    let _ = sender.send(Message::Text("\r\n".to_string().into())).await;
                                 }
 
                                 // 重新顯示提示符和當前輸入
@@ -566,7 +566,7 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
                                     get_display_path(&current_dir, &storage_path.as_path().to_string_lossy())
                                 );
                                 let _ = sender
-                                    .send(Message::Text(format!("{prompt}{input_buffer}")))
+                                    .send(Message::Text(format!("{prompt}{input_buffer}").into()))
                                     .await;
 
                                 // 嘗試補全共同前綴
@@ -581,7 +581,7 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
                                     if common.len() > last_part.len() {
                                         let to_add = &common[last_part.len()..];
                                         input_buffer.push_str(to_add);
-                                        let _ = sender.send(Message::Text(to_add.to_string())).await;
+                                        let _ = sender.send(Message::Text(to_add.to_string().into())).await;
                                     }
                                 }
                             }
@@ -590,25 +590,25 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
                             // Backspace
                             if !input_buffer.is_empty() {
                                 input_buffer.pop();
-                                let _ = sender.send(Message::Text("\x08 \x08".to_string())).await;
+                                let _ = sender.send(Message::Text("\x08 \x08".to_string().into())).await;
                             }
                         }
                         '\x03' => {
                             // Ctrl+C
                             input_buffer.clear();
-                            let _ = sender.send(Message::Text("^C\r\n".to_string())).await;
+                            let _ = sender.send(Message::Text("^C\r\n".to_string().into())).await;
                             let prompt = format!(
                                 "\x1b[36mnas\x1b[0m:\x1b[34m{}\x1b[0m$ ",
                                 get_display_path(&current_dir, &storage_path.as_path().to_string_lossy())
                             );
-                            let _ = sender.send(Message::Text(prompt)).await;
+                            let _ = sender.send(Message::Text(prompt.into())).await;
                         }
                         '\x1b' => {
                             // Escape sequence (arrow keys, etc.) - skip for now
                         }
                         _ if ch.is_ascii_graphic() || ch == ' ' => {
                             input_buffer.push(ch);
-                            let _ = sender.send(Message::Text(ch.to_string())).await;
+                            let _ = sender.send(Message::Text(ch.to_string().into())).await;
                         }
                         _ => {}
                     }
@@ -616,11 +616,12 @@ async fn handle_terminal_socket(socket: WebSocket, state: AppState, _query: Term
             }
             Message::Binary(data) => {
                 // 處理二進位資料（同文字處理）
-                if let Ok(text) = String::from_utf8(data) {
+                // axum 0.8 的 Message::Binary 帶的是 `Bytes` 而不是 `Vec<u8>`
+                if let Ok(text) = String::from_utf8(data.to_vec()) {
                     for ch in text.chars() {
                         if ch.is_ascii_graphic() || ch == ' ' {
                             input_buffer.push(ch);
-                            let _ = sender.send(Message::Text(ch.to_string())).await;
+                            let _ = sender.send(Message::Text(ch.to_string().into())).await;
                         }
                     }
                 }

@@ -207,26 +207,26 @@ pub async fn create_router(state: AppState) -> Router {
         .route("/files/batch/copy", post(file::batch_copy))
         .route("/upload/init", post(upload::init_upload))
         .route(
-            "/upload/session/:id",
+            "/upload/session/{id}",
             axum::routing::patch(upload::upload_chunk).get(upload::get_upload_status),
         )
         .route("/upload", post(file::upload_file_root))
-        .route("/upload/*path", post(file::upload_file))
-        .route("/download/*path", get(file::download_file))
-        .route("/thumbnail/:size/*path", get(file::get_thumbnail))
+        .route("/upload/{*path}", post(file::upload_file))
+        .route("/download/{*path}", get(file::download_file))
+        .route("/thumbnail/{size}/{*path}", get(file::get_thumbnail))
         // Tags
         .route("/tags", get(tag::list_tags))
-        .route("/tags/:tag_name/files", get(tag::list_files_by_tag))
-        .route("/tags/add/*path", post(tag::add_tag))
+        .route("/tags/{tag_name}/files", get(tag::list_files_by_tag))
+        .route("/tags/add/{*path}", post(tag::add_tag))
         .route(
-            "/tags/remove/:tag_name/*path",
+            "/tags/remove/{tag_name}/{*path}",
             axum::routing::delete(tag::remove_tag),
         )
-        .route("/star/file/*path", post(tag::toggle_star))
-        .route("/versions/file/*path", get(version::list_file_versions))
-        .route("/versions/restore/:version_id", post(version::restore_version))
+        .route("/star/file/{*path}", post(tag::toggle_star))
+        .route("/versions/file/{*path}", get(version::list_file_versions))
+        .route("/versions/restore/{version_id}", post(version::restore_version))
         .route(
-            "/files/*path",
+            "/files/{*path}",
             get(file::list_files)
                 .delete(file::delete_file)
                 .put(file::rename_file),
@@ -247,7 +247,7 @@ pub async fn create_router(state: AppState) -> Router {
         // 其他
         .route("/trash", get(trash::list_trash))
         .route(
-            "/trash/:filename",
+            "/trash/{filename}",
             post(trash::restore_file).delete(trash::permanent_delete),
         )
         .route("/trash", axum::routing::delete(trash::empty_trash))
@@ -259,7 +259,7 @@ pub async fn create_router(state: AppState) -> Router {
             "/audit/logs",
             get(audit::list_audit_logs).delete(audit::clear_audit_logs),
         )
-        .route("/audit/logs/:id", axum::routing::delete(audit::delete_audit_log))
+        .route("/audit/logs/{id}", axum::routing::delete(audit::delete_audit_log))
         .route("/search", get(search::search_files))
         .route("/search/ai-tags", get(search::search_ai_tags))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth)) // Protect file routes
@@ -273,19 +273,19 @@ pub async fn create_router(state: AppState) -> Router {
         // 容器操作
         .route("/containers", get(docker::list_containers))
         .route(
-            "/containers/:id",
+            "/containers/{id}",
             get(docker::inspect_container).delete(docker::remove_container),
         )
-        .route("/containers/:id/start", post(docker::start_container))
-        .route("/containers/:id/stop", post(docker::stop_container))
-        .route("/containers/:id/restart", post(docker::restart_container))
-        .route("/containers/:id/logs", get(docker::container_logs))
-        .route("/containers/:id/stats", get(docker::container_stats))
-        .route("/containers/:id/exec", get(docker::container_exec)) // WebSocket route
+        .route("/containers/{id}/start", post(docker::start_container))
+        .route("/containers/{id}/stop", post(docker::stop_container))
+        .route("/containers/{id}/restart", post(docker::restart_container))
+        .route("/containers/{id}/logs", get(docker::container_logs))
+        .route("/containers/{id}/stats", get(docker::container_stats))
+        .route("/containers/{id}/exec", get(docker::container_exec)) // WebSocket route
         // 鏡像操作
         .route("/images", get(docker::list_images))
         .route("/images/pull", post(docker::pull_image))
-        .route("/images/:id", delete(docker::remove_image))
+        .route("/images/{id}", delete(docker::remove_image))
         // 網絡操作
         .route("/networks", get(docker::list_networks))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth)); // Protect docker routes
@@ -323,19 +323,19 @@ pub async fn create_router(state: AppState) -> Router {
         .nest("/api/auth", auth_routes)
         .nest("/api", file_routes)
         .nest("/api/docker", docker_routes)
-        .route("/api/share/:id/download", get(share::access_share_link)) // Public share link - download
-        .route("/api/share/:id/info", get(share::get_share_info)) // Public share link - info
+        .route("/api/share/{id}/download", get(share::access_share_link)) // Public share link - download
+        .route("/api/share/{id}/info", get(share::get_share_info)) // Public share link - info
         .merge(
             Router::new()
-                .route("/api/upload-link/:id/upload", post(upload_link::upload_via_link))
+                .route("/api/upload-link/{id}/upload", post(upload_link::upload_via_link))
                 .layer(DefaultBodyLimit::max(10 * 1024 * 1024 * 1024)), // 10GB for public uploads
         )
         .route(
-            "/api/upload-link/:id/info",
+            "/api/upload-link/{id}/info",
             get(upload_link::get_upload_link_info),
         ) // Public upload link - info
         .route("/webdav", any(webdav::webdav_handler))
-        .route("/webdav/*path", any(webdav::webdav_handler))
+        .route("/webdav/{*path}", any(webdav::webdav_handler))
         // Public health check for uptime monitoring (no auth, returns 200)
         .route("/health", get(|| async { "OK" }))
         // 前端錯誤回報的轉發端點（Sentry SDK 的 tunnel 目的地）。

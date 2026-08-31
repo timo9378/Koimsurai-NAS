@@ -95,7 +95,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                         Ok(job) => {
                             let msg = WsServerMessage::JobUpdate(job);
                             if let Ok(json) = serde_json::to_string(&msg) {
-                                if sender.send(Message::Text(json)).await.is_err() {
+                                if sender.send(Message::Text(json.into())).await.is_err() {
                                     break;
                                 }
                             }
@@ -106,7 +106,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                 // 處理 Docker 統計訊息
                 Some(msg) = ws_rx.recv() => {
                     if let Ok(json) = serde_json::to_string(&msg) {
-                        if sender.send(Message::Text(json)).await.is_err() {
+                        if sender.send(Message::Text(json.into())).await.is_err() {
                             break;
                         }
                     }

@@ -4,18 +4,22 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-axum = { version = "0.7", features = ["multipart", "ws"] }
+axum = { version = "0.8", features = ["multipart", "ws"] }
 tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tower-http = { version = "0.5", features = ["fs", "cors", "trace", "limit", "util"] }
+tower-http = { version = "0.7", features = ["fs", "cors", "trace", "limit", "util"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio-rustls", "macros", "chrono"] }
 argon2 = "0.5"
 jsonwebtoken = "9.3"
-tower-sessions = "0.12"
-axum-extra = { version = "0.9", features = ["cookie"] }
+# ⚠️ 要跟 tower-sessions-sqlx-store 用同一個 tower-sessions-core。
+# store 0.15 依賴的是 core **0.14**；配 tower-sessions 0.15（core 0.15）的話
+# `SqliteStore: SessionStore` 不成立 —— 那是兩個不同的 trait，
+# 錯誤訊息只說「trait 沒實作」，看不出是版本錯配。
+tower-sessions = "0.14"
+axum-extra = { version = "0.12", features = ["cookie"] }
 anyhow = "1.0"
 dotenvy = "0.15"
 futures = "0.3"
@@ -23,14 +27,14 @@ tokio-util = { version = "0.7", features = ["io"] }
 rand = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 utoipa = { version = "5.0", features = ["axum_extras", "chrono"] }
-utoipa-scalar = { version = "0.2", features = ["axum"] }
-tower = { version = "0.4", features = ["util"] }
-tower-sessions-sqlx-store = { version = "0.13", features = ["sqlite"] }
+utoipa-scalar = { version = "0.3", features = ["axum"] }
+tower = { version = "0.5", features = ["util"] }
+tower-sessions-sqlx-store = { version = "0.15", features = ["sqlite"] }
 mime_guess = "2.0"
 image = "0.25.9"
 sysinfo = "0.33.0"
 uuid = { version = "1.18.1", features = ["v4", "serde"] }
-dav-server = { version = "0.8.0", features = ["localfs"] }
+dav-server = { version = "0.11.0", features = ["localfs"] }
 notify = "8.2.0"
 walkdir = "2.5.0"
 exif = { package = "kamadak-exif", version = "0.6.1" }

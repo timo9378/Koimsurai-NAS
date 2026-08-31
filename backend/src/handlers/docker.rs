@@ -586,7 +586,7 @@ async fn handle_exec_socket(socket: WebSocket, state: AppState, exec_id: String)
         Ok(res) => res,
         Err(e) => {
             let _ = ws_sender
-                .send(Message::Text(format!("Failed to start exec: {e}")))
+                .send(Message::Text(format!("Failed to start exec: {e}").into()))
                 .await;
             return;
         }
@@ -616,7 +616,7 @@ async fn handle_exec_socket(socket: WebSocket, state: AppState, exec_id: String)
                             // However, `into_bytes` returns `Bytes`.
 
                             // Using Binary for xterm-addon-attach
-                            // if ws_sender.send(Message::Binary(payload.to_vec())).await.is_err() {
+                            // if ws_sender.send(Message::Binary(payload.to_vec().into())).await.is_err() {
                             //    break;
                             // }
 
@@ -625,7 +625,12 @@ async fn handle_exec_socket(socket: WebSocket, state: AppState, exec_id: String)
                             // Actually standard is usually text for simple shell.
                             // Let's safe-bet on Binary?
                             // Update: xterm.js attach addon handles both. Binary is safer for raw TTY.
-                            if ws_sender.send(Message::Binary(payload.to_vec())).await.is_err() {
+                            // axum 0.8 的 Message::Binary 要 `Bytes` 而不是 `Vec<u8>`
+                            if ws_sender
+                                .send(Message::Binary(payload.to_vec().into()))
+                                .await
+                                .is_err()
+                            {
                                 break;
                             }
                         }
@@ -662,7 +667,7 @@ async fn handle_exec_socket(socket: WebSocket, state: AppState, exec_id: String)
         }
         bollard::exec::StartExecResults::Detached => {
             let _ = ws_sender
-                .send(Message::Text("Detached mode not supported".to_string()))
+                .send(Message::Text("Detached mode not supported".to_string().into()))
                 .await;
         }
     }
