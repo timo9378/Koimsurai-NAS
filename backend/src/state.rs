@@ -59,6 +59,18 @@ pub struct AppState {
     pub queue: Arc<JobQueue>,
     /// tus 1.0.0 的協定 handle（見 handlers/tus.rs）。
     pub tus: Arc<crate::handlers::tus::TusHandle>,
+    /// 全站維護作業（rescan、一致性檢查）的單一併發鎖。
+    ///
+    /// ⚠️ 這兩個端點會走訪**整棵儲存樹**。本專案的紀錄是 320k 個檔案掃一次
+    /// 超過 90 秒 —— `create_app` 刻意把初始掃描丟到背景，就是因為
+    /// 「掃描期間整個站是掛的」。但那兩個端點是**同步**跑的，而且完全沒有
+    /// 併發保護：前端在右鍵選單與 `TopBar` 兩個地方都放了 rescan 按鈕，
+    /// 使用者連點兩下、或兩個人同時按，就是兩個並行的全站掃描。
+    ///
+    /// 用 `try_lock`：已經在跑就回 409，而不是排隊等（排隊只是把 NAS
+    /// 榨得更久）。Mutex 的 guard 在 drop 時自動釋放，所以 handler panic
+    /// 也不會把鎖卡死。
+    pub maintenance_lock: Arc<tokio::sync::Mutex<()>>,
     pub webdav: DavHandler,
     pub tx: broadcast::Sender<JobUpdate>,
     pub audit: Arc<AuditService>,

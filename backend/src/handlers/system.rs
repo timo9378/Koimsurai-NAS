@@ -1,6 +1,7 @@
+use crate::error::AppError;
 use crate::services::indexer::Indexer;
 use crate::state::AppState;
-use axum::{extract::State, Json};
+use axum::{extract::State, http::StatusCode, Json};
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 use sysinfo::{Components, Disks, ProcessesToUpdate, System, MINIMUM_CPU_UPDATE_INTERVAL};
@@ -337,13 +338,20 @@ pub struct ConsistencyCheckResult {
     post,
     path = "/api/system/verify-consistency",
     responses(
-        (status = 200, description = "Consistency check completed", body = ConsistencyCheckResult)
+        (status = 200, description = "Consistency check completed", body = ConsistencyCheckResult),
+        (status = 409, description = "已經有一個維護作業在跑")
     )
 )]
-pub async fn verify_consistency(State(state): State<AppState>) -> Json<ConsistencyCheckResult> {
+pub async fn verify_consistency(
+    State(state): State<AppState>,
+) -> Result<Json<ConsistencyCheckResult>, AppError> {
+    // 見 AppState::maintenance_lock 的說明：已經在跑就拒絕，不排隊。
+    let Ok(_guard) = state.maintenance_lock.try_lock() else {
+        return Err(AppError::Status(StatusCode::CONFLICT));
+    };
     let indexer = Indexer::new(state.pool.clone(), state.storage_path.as_path().to_path_buf());
 
-    match indexer.verify_consistency().await {
+    Ok(match indexer.verify_consistency().await {
         Ok((total, removed)) => Json(ConsistencyCheckResult {
             total_db_entries: total,
             removed_orphans: removed,
@@ -356,7 +364,7 @@ pub async fn verify_consistency(State(state): State<AppState>) -> Json<Consisten
             removed_orphans: 0,
             message: format!("Consistency check failed: {e}"),
         }),
-    }
+    })
 }
 
 /// 重新掃描結果
@@ -372,13 +380,17 @@ pub struct RescanResult {
     post,
     path = "/api/system/rescan",
     responses(
-        (status = 200, description = "Rescan completed", body = RescanResult)
+        (status = 200, description = "Rescan completed", body = RescanResult),
+        (status = 409, description = "已經有一個維護作業在跑")
     )
 )]
-pub async fn trigger_rescan(State(state): State<AppState>) -> Json<RescanResult> {
+pub async fn trigger_rescan(State(state): State<AppState>) -> Result<Json<RescanResult>, AppError> {
+    let Ok(_guard) = state.maintenance_lock.try_lock() else {
+        return Err(AppError::Status(StatusCode::CONFLICT));
+    };
     let indexer = Indexer::new(state.pool.clone(), state.storage_path.as_path().to_path_buf());
 
-    match indexer.full_scan().await {
+    Ok(match indexer.full_scan().await {
         Ok(()) => Json(RescanResult {
             success: true,
             message: "Full rescan completed successfully.".to_string(),
@@ -387,5 +399,5 @@ pub async fn trigger_rescan(State(state): State<AppState>) -> Json<RescanResult>
             success: false,
             message: format!("Rescan failed: {e}"),
         }),
-    }
+    })
 }
