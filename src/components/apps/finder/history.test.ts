@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
   canGoBack,
@@ -97,5 +98,64 @@ describe("currentPath", () => {
 
   it("index 越界回 undefined", () => {
     expect(currentPath({ entries: ["/"], index: 5 })).toBeUndefined();
+  });
+});
+
+describe("性質（fast-check）", () => {
+  /** 依一串操作建出歷史。 */
+  type Op = { kind: "push"; path: string } | { kind: "back" } | { kind: "forward" };
+  const opArb = fc.oneof(
+    fc.string({ minLength: 1, maxLength: 4 }).map((path): Op => ({ kind: "push", path })),
+    fc.constant<Op>({ kind: "back" }),
+    fc.constant<Op>({ kind: "forward" }),
+  );
+  const apply = (ops: Op[]) =>
+    ops.reduce(
+      (h, op) =>
+        op.kind === "push" ? pushPath(h, op.path) : op.kind === "back" ? goBack(h) : goForward(h),
+      initialHistory("/"),
+    );
+
+  it("index 永遠落在 entries 的範圍內", () => {
+    // ⚠️ 這是整支模組的核心不變式。破了就是 `history[index]` 為 undefined，
+    //    而 currentPath 變 undefined 之後 useFiles 會去打 /files/undefined。
+    fc.assert(
+      fc.property(fc.array(opArb, { maxLength: 40 }), (ops) => {
+        const h = apply(ops);
+        expect(h.index).toBeGreaterThanOrEqual(0);
+        expect(h.index).toBeLessThan(h.entries.length);
+        expect(currentPath(h)).toBeDefined();
+      }),
+    );
+  });
+
+  it("能上一頁時，上一頁再下一頁回到原位", () => {
+    fc.assert(
+      fc.property(fc.array(opArb, { maxLength: 40 }), (ops) => {
+        const h = apply(ops);
+        if (!canGoBack(h)) return;
+        expect(goForward(goBack(h)).index).toBe(h.index);
+      }),
+    );
+  });
+
+  it("到邊界時回傳的是同一個物件（呼叫端用 === 判斷有沒有動）", () => {
+    fc.assert(
+      fc.property(fc.array(opArb, { maxLength: 40 }), (ops) => {
+        const h = apply(ops);
+        if (!canGoBack(h)) expect(goBack(h)).toBe(h);
+        if (!canGoForward(h)) expect(goForward(h)).toBe(h);
+      }),
+    );
+  });
+
+  it("pushPath 之後一定停在剛推入的那一筆", () => {
+    fc.assert(
+      fc.property(fc.array(opArb, { maxLength: 20 }), fc.string({ minLength: 1 }), (ops, path) => {
+        const h = pushPath(apply(ops), path);
+        expect(currentPath(h)).toBe(path);
+        expect(canGoForward(h)).toBe(false); // 前進的那一段被截掉了
+      }),
+    );
   });
 });

@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
   GRID_CELL_HEIGHT,
@@ -109,5 +110,66 @@ describe("list 框選", () => {
 
   it("停在 header 區域不會選到任何列", () => {
     expect(itemsInMarquee(box(0, 0, 100, LIST_HEADER_HEIGHT - 1), 5, list)).toEqual([]);
+  });
+});
+
+describe("性質（fast-check）", () => {
+  const coord = fc.integer({ min: -500, max: 2000 });
+  const boxArb = fc.tuple(coord, coord, coord, coord).map(([a, b, c, d]) => box(a, b, c, d));
+  const count = fc.integer({ min: 0, max: 30 });
+
+  it("回傳的索引一定在範圍內、遞增、且不重複", () => {
+    fc.assert(
+      fc.property(boxArb, count, fc.boolean(), (b, n, isGrid) => {
+        const hit = itemsInMarquee(b, n, isGrid ? grid : list);
+        expect(new Set(hit).size).toBe(hit.length);
+        expect([...hit].sort((x, y) => x - y)).toEqual(hit);
+        for (const i of hit) {
+          expect(i).toBeGreaterThanOrEqual(0);
+          expect(i).toBeLessThan(n);
+        }
+      }),
+    );
+  });
+
+  it("框往外擴之後，選取只會增加不會減少（單調性）", () => {
+    // ⚠️ 這是使用者對框選最直接的期待：拖大一點不該讓已經框到的東西掉出來。
+    //    定樁測試很難蓋到這件事，因為它是「兩次呼叫之間的關係」而不是單一輸出。
+    fc.assert(
+      fc.property(boxArb, count, fc.nat({ max: 300 }), fc.boolean(), (b, n, grow, isGrid) => {
+        const layout = isGrid ? grid : list;
+        const inner = itemsInMarquee(b, n, layout);
+        const outer = itemsInMarquee(
+          box(
+            Math.min(b.startX, b.currentX) - grow,
+            Math.min(b.startY, b.currentY) - grow,
+            Math.max(b.startX, b.currentX) + grow,
+            Math.max(b.startY, b.currentY) + grow,
+          ),
+          n,
+          layout,
+        );
+        for (const i of inner) expect(outer).toContain(i);
+      }),
+    );
+  });
+
+  it("框的兩個角互換不影響結果（方向無關）", () => {
+    fc.assert(
+      fc.property(boxArb, count, fc.boolean(), (b, n, isGrid) => {
+        const layout = isGrid ? grid : list;
+        expect(itemsInMarquee(box(b.currentX, b.currentY, b.startX, b.startY), n, layout)).toEqual(
+          itemsInMarquee(b, n, layout),
+        );
+      }),
+    );
+  });
+
+  it("容器寬度不足時 grid 一律回空的，不會變成全選", () => {
+    fc.assert(
+      fc.property(boxArb, count, fc.integer({ min: -100, max: 32 }), (b, n, width) => {
+        expect(itemsInMarquee(b, n, { mode: "grid", containerWidth: width })).toEqual([]);
+      }),
+    );
   });
 });

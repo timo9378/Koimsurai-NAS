@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { emptySelection, selectOnClick, type SelectionState } from "./selection";
 
@@ -121,5 +122,72 @@ describe("邊界", () => {
     const after = selectOnClick(before, FILES, 2, ctrl);
     expect(names(before)).toEqual(["a.txt"]);
     expect(names(after)).toEqual(["a.txt", "c.txt"]);
+  });
+});
+
+describe("性質（fast-check）", () => {
+  const idx = fc.integer({ min: -2, max: FILES.length + 1 });
+  const mods = fc.record({ shift: fc.boolean(), toggle: fc.boolean() });
+  const stepArb = fc.tuple(idx, mods);
+  const applyAll = (steps: [number, { shift: boolean; toggle: boolean }][]) =>
+    steps.reduce((s, [i, m]) => selectOnClick(s, FILES, i, m), emptySelection);
+
+  it("選取的內容永遠是清單裡真實存在的檔名", () => {
+    fc.assert(
+      fc.property(fc.array(stepArb, { maxLength: 30 }), (steps) => {
+        for (const name of applyAll(steps).selected) expect(FILES).toContain(name);
+      }),
+    );
+  });
+
+  it("anchorIndex 要嘛是 -1，要嘛指向清單裡的有效位置", () => {
+    // ⚠️ 越界的錨點會讓下一次 Shift+Click 從垃圾位置起算。
+    fc.assert(
+      fc.property(fc.array(stepArb, { maxLength: 30 }), (steps) => {
+        const { anchorIndex } = applyAll(steps);
+        expect(anchorIndex === -1 || (anchorIndex >= 0 && anchorIndex < FILES.length)).toBe(true);
+      }),
+    );
+  });
+
+  it("Ctrl+Click 同一個位置兩次會回到原本的選取（自我反轉）", () => {
+    fc.assert(
+      fc.property(
+        fc.array(stepArb, { maxLength: 20 }),
+        fc.integer({ min: 0, max: FILES.length - 1 }),
+        (steps, i) => {
+          const before = applyAll(steps);
+          const twice = selectOnClick(selectOnClick(before, FILES, i, ctrl), FILES, i, ctrl);
+          expect([...twice.selected].sort()).toEqual([...before.selected].sort());
+        },
+      ),
+    );
+  });
+
+  it("一般點擊之後恰好只選一個", () => {
+    fc.assert(
+      fc.property(
+        fc.array(stepArb, { maxLength: 20 }),
+        fc.integer({ min: 0, max: FILES.length - 1 }),
+        (steps, i) => {
+          const s = selectOnClick(applyAll(steps), FILES, i, plain);
+          expect([...s.selected]).toEqual([FILES[i]]);
+        },
+      ),
+    );
+  });
+
+  it("Shift+Click 只會增加選取，不會拿掉既有的", () => {
+    fc.assert(
+      fc.property(
+        fc.array(stepArb, { maxLength: 20 }),
+        fc.integer({ min: 0, max: FILES.length - 1 }),
+        (steps, i) => {
+          const before = applyAll(steps);
+          const after = selectOnClick(before, FILES, i, shift);
+          for (const name of before.selected) expect(after.selected.has(name)).toBe(true);
+        },
+      ),
+    );
   });
 });

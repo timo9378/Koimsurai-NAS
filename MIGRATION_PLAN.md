@@ -539,7 +539,7 @@ VITE_RELEASE=$(git -C Koimsurai-NAS rev-parse --short HEAD) \
 
 | 工具 | 現況 | 接上要做什麼 |
 |---|---|---|
-| `fast-check` | 已安裝，**0 條** property test | 前端目前只有定樁測試；路徑正規化、file-icons 的解析順序適合 property |
+| `fast-check` | ✅ 已用（5 個純函式模組各有 property test） | 見下 |
 | `knip` | ✅ 已接 CI（`knip.json` + `pnpm knip`） | 導入時掃出 4 個沒人 import 的檔案與 5 個沒用到的套件 |
 | `@vitest/coverage-v8` | ✅ 已接 CI，門檻 statements/lines 8、functions 7、branches 6 | 見下 |
 
@@ -798,6 +798,30 @@ schemathesis 給的重現指令、keep-alive 連線重用、`Transfer-Encoding: 
 順帶修掉空檔案：`planChunks(0)` 會回一塊空的 chunk。不送的話伺服器的
 `new_size >= total_size` 永遠不成立，工作階段一直開著、檔案卡在
 `.temp_uploads`，而畫面上顯示上傳成功。前後端各有一條測試蓋這個。
+
+### Property testing（fast-check / proptest）
+
+⚠️ 這兩個工具**先前是裝了但沒用**（`fast-check` 0 次、`proptest` 只有 1 處），
+而這輪抽出的五個純函式模組每一個都是 property 的教科書題目。最諷刺的是
+`chunk-plan.test.ts` 裡那條「每一塊都不超過分塊大小、首尾相接沒有洞」——
+那本來就是一個 property，卻只餵了一組輸入。
+
+現在補上的不變式（定樁測試很難蓋到的那種，因為它們是「輸入空間全體」或
+「兩次呼叫之間的關係」）：
+
+| 模組 | 不變式 |
+|---|---|
+| `chunk-plan` | 分塊剛好鋪滿 `[offset, size)`，不重疊也沒有洞；續傳不重送任何已傳的位元組 |
+| `finder/history` | `index` 永遠落在 `entries` 範圍內（破了就是 `/files/undefined`）；上一頁再下一頁回到原位；邊界回傳同一個物件 |
+| `finder/selection` | 選取內容永遠是清單裡真實存在的檔名；`anchorIndex` 不越界；Ctrl+Click 兩次自我反轉；Shift 只增不減 |
+| `finder/marquee` | **框變大時選取只增不減**（單調性）；兩角互換結果相同；索引遞增不重複 |
+| `desktop/icon-grid` | `snapToGrid ∘ gridToPixels = id`；永不回負值；不同 index 不落同格 |
+| 後端 `validate_path` | 回 Ok 就一定在 base 底下且結果不含 `ParentDir`；任何含 NUL 一律拒絕；一般相對路徑一定通過 |
+
+後端那組是針對這輪五個路徑類漏洞補的 —— 它們的共同特徵是「只有特定形狀的
+輸入才會破」（同前綴的兄弟目錄、元件前綴通過但解析後跑出去、NUL 要碰檔案
+系統才炸），定樁測試只蓋得到想得到的那幾種。NUL 那條有反向驗證過
+（退回修正之前會紅）。
 
 ### 程式面的已知債
 

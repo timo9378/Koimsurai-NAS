@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
   defaultIconPosition,
@@ -74,5 +75,45 @@ describe("snapToGrid", () => {
       const { x, y } = gridToPixels(pos);
       expect(snapToGrid(x + DESKTOP_PADDING, y + TOP_BAR_HEIGHT + DESKTOP_PADDING)).toEqual(pos);
     }
+  });
+});
+
+describe("性質（fast-check）", () => {
+  it("gridToPixels 之後 snapToGrid 一定回到原格（往返恆等）", () => {
+    fc.assert(
+      fc.property(fc.nat({ max: 200 }), fc.nat({ max: 200 }), (col, row) => {
+        const { x, y } = gridToPixels({ col, row });
+        expect(snapToGrid(x + DESKTOP_PADDING, y + TOP_BAR_HEIGHT + DESKTOP_PADDING)).toEqual({
+          col,
+          row,
+        });
+      }),
+    );
+  });
+
+  it("snapToGrid 永遠不會回負值 —— 負的座標會讓圖示跑到畫面外再也點不到", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: -50_000, max: 50_000 }),
+        fc.integer({ min: -50_000, max: 50_000 }),
+        (x, y) => {
+          const p = snapToGrid(x, y);
+          expect(p.col).toBeGreaterThanOrEqual(0);
+          expect(p.row).toBeGreaterThanOrEqual(0);
+        },
+      ),
+    );
+  });
+
+  it("不同的 index 一定落在不同格", () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 1, max: 20 }), fc.nat({ max: 300 }), (perColumn, count) => {
+        const cells = Array.from({ length: count }, (_, i) => {
+          const p = defaultIconPosition(i, perColumn);
+          return `${p.col},${p.row}`;
+        });
+        expect(new Set(cells).size).toBe(count);
+      }),
+    );
   });
 });

@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { planChunks } from "./chunk-plan";
 
@@ -80,5 +81,62 @@ describe("planChunks", () => {
     // start += 0 會是一個永遠不結束的迴圈
     expect(() => planChunks(100, 0, 0)).toThrow(RangeError);
     expect(() => planChunks(100, 0, -1)).toThrow(RangeError);
+  });
+});
+
+describe("性質（fast-check）", () => {
+  /**
+   * ⚠️ 上面那條「首尾相接沒有洞」本來就是一個性質，卻只餵了一組輸入。
+   * 分塊計畫的正確性只有一句話：**它必須剛好鋪滿 [startOffset, fileSize)**。
+   * 少一塊 = 檔案截斷；多一塊或重疊 = 伺服器 append 模式下檔案變長且錯位。
+   * 兩種都不會有錯誤訊息。
+   */
+  it("分塊剛好鋪滿 [startOffset, fileSize)，不重疊也沒有洞", () => {
+    fc.assert(
+      fc.property(
+        fc.nat({ max: 100_000 }),
+        fc.nat({ max: 100_000 }),
+        fc.integer({ min: 1, max: 10_000 }),
+        (fileSize, rawOffset, chunkSize) => {
+          const offset = Math.min(rawOffset, fileSize);
+          const chunks = planChunks(fileSize, offset, chunkSize);
+
+          if (fileSize === 0) {
+            expect(chunks).toEqual(offset > 0 ? [] : [{ start: 0, end: 0 }]);
+            return;
+          }
+          if (offset >= fileSize) {
+            expect(chunks).toEqual([]);
+            return;
+          }
+
+          expect(chunks[0]?.start).toBe(offset);
+          expect(chunks.at(-1)?.end).toBe(fileSize);
+          for (const [i, c] of chunks.entries()) {
+            expect(c.end).toBeGreaterThan(c.start);
+            expect(c.end - c.start).toBeLessThanOrEqual(chunkSize);
+            if (i > 0) expect(c.start).toBe(chunks[i - 1]?.end); // 首尾相接
+          }
+        },
+      ),
+    );
+  });
+
+  it("續傳不會重送任何已經傳過的位元組", () => {
+    // 這正是修掉的那個 bug：`Math.floor(offset / chunkSize)` 會讓第一塊
+    // 從 offset **之前**開始。
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 100_000 }),
+        fc.nat({ max: 100_000 }),
+        fc.integer({ min: 1, max: 10_000 }),
+        (fileSize, rawOffset, chunkSize) => {
+          const offset = Math.min(rawOffset, fileSize);
+          for (const c of planChunks(fileSize, offset, chunkSize)) {
+            expect(c.start).toBeGreaterThanOrEqual(offset);
+          }
+        },
+      ),
+    );
   });
 });
