@@ -540,8 +540,23 @@ VITE_RELEASE=$(git -C Koimsurai-NAS rev-parse --short HEAD) \
 | 工具 | 現況 | 接上要做什麼 |
 |---|---|---|
 | `fast-check` | 已安裝，**0 條** property test | 前端目前只有定樁測試；路徑正規化、file-icons 的解析順序適合 property |
-| `knip` | 已安裝，沒有 script 也沒進 CI | 加 `knip.json` + `pnpm knip` script |
-| `@vitest/coverage-v8` | 有 `test:coverage`，但**沒有門檻也沒進 CI** | `--coverage.thresholds.*` + CI 一道 |
+| `knip` | ✅ 已接 CI（`knip.json` + `pnpm knip`） | 導入時掃出 4 個沒人 import 的檔案與 5 個沒用到的套件 |
+| `@vitest/coverage-v8` | ✅ 已接 CI，門檻 statements/lines 8、functions 7、branches 6 | 見下 |
+
+**⚠️ 前端覆蓋率的數字差了 5.6 倍，取決於怎麼設定。**
+
+v8 預設只把**被測試碰到的檔案**列入分母 —— 那樣顯示 **51.84%**，也就是
+「已測檔案的品質」。當棘輪用毫無意義：新增一整支沒有測試的檔案，分母根本不會動。
+
+加上 `all: true` **還不夠**，必須同時給 `coverage.include`，否則它仍然只列出
+被 import 到的那些（實測少了 `components/desktop`、`components/mobile`、
+`features`、`hooks` 整整四個目錄）。兩者都設定之後的誠實數字是 **9.26%**
+（statements 408/4402）。
+
+該看的是分佈而不是總數：有測的集中在抽出來的純邏輯（`finder` 的
+history / selection / marquee、`chunk-plan`、`errors`、`file-icons`、`a11y`、
+兩個 store）與三支元件；`Finder` / `FileList` / `DesktopIcons` / `MobileLayout`
+這四支（合計約 3600 行）仍然沒有測試，而那正是分母的大宗。
 | `cargo llvm-cov` | ✅ 已接 CI，門檻 `--fail-under-regions 24` | — |
 
 ### 未安裝（工具鏈盤點列了但還沒引入）

@@ -21,7 +21,7 @@ export interface MarqueeBox {
 
 export const GRID_GAP = 16;
 export const GRID_PADDING = 16;
-export const GRID_MIN_COL_WIDTH = 100;
+const GRID_MIN_COL_WIDTH = 100;
 /** icon 48 + 文字 ~20 + padding 16 */
 export const GRID_CELL_HEIGHT = 84;
 export const LIST_HEADER_HEIGHT = 36;

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": [
+        "src/routes/**/*.tsx",
+        "public/sw.js",
+        "src/components/ui/**"
+      ],
+      "project": [
+        "src/**/*.{ts,tsx}",
+        "*.config.ts"
+      ]
+    }
+  },
+  "ignoreDependencies": [
+    "@fontsource-variable/geist",
+    "@fontsource-variable/geist-mono",
+    "tailwindcss",
+    "tw-animate-css",
+    "@sentry/cli",
+    "fast-check"
+  ]
+}

@@ -66,8 +66,22 @@ jobs:
         run: pnpm lint:css
 
       # --passWithNoTests 已經拿掉：測試存在了，空跑就該是錯誤。
-      - name: vitest
-        run: pnpm test
+      #
+      # ⚠️ 跑 coverage 版而不是 `pnpm test`：一次拿到「測試有沒有過」與
+      # 「涵蓋了多少」兩個訊號，分兩道會把整包跑兩次。門檻與 `all`/`include`
+      # 的說明見 vitest.config.ts。
+      - name: vitest + 覆蓋率
+        run: pnpm test:coverage
+
+      # 死碼與未使用的相依。
+      #
+      # ⚠️ 只看檔案與相依，不看 exports（`--exclude exports,types,…`）：
+      # features/*/api 底下那些 hook 是刻意留著的 API 表面（對應真實端點，
+      # 只是目前沒有呼叫端），把它們一個個報出來只會變成每次都要略過的雜訊。
+      # 檔案與相依才是真正會累積的那種 —— 導入這道時就掃出 4 個沒人 import 的
+      # 檔案與 5 個沒用到的套件。
+      - name: knip（死碼與未使用相依）
+        run: pnpm knip
 
       - name: build
         run: pnpm exec vite build

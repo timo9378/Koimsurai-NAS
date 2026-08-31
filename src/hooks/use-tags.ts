@@ -79,16 +79,3 @@ export function useRemoveTag() {
     },
   });
 }
-
-export function useToggleStar() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (path: string) => {
-      await apiClient.post(`/star/file/${path}`);
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["files"] });
-    },
-  });
-}

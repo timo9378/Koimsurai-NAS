@@ -300,5 +300,3 @@ export function FileTypeIcon({
     />
   );
 }
-
-export default FileTypeIcon;

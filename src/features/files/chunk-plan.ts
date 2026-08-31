@@ -1,5 +1,5 @@
 /** 分塊上傳的預設大小（5 MiB）。 */
-export const CHUNK_SIZE = 5 * 1024 * 1024;
+const CHUNK_SIZE = 5 * 1024 * 1024;
 
 export interface Chunk {
   /** 這一塊在檔案裡的起始位元組（也就是要送給伺服器的 offset）。 */
