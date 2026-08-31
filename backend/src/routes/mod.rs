@@ -22,7 +22,7 @@ use axum::{
 use tower_http::cors::{Any, CorsLayer};
 use tower_sessions::{Expiry, SessionManagerLayer};
 use tower_sessions_sqlx_store::SqliteStore;
-use utoipa::OpenApi;
+use utoipa::{Modify, OpenApi};
 use utoipa_scalar::{Scalar, Servable};
 
 use crate::handlers::media::TimelineGroup;
@@ -37,6 +37,68 @@ use crate::models::{
 use crate::services::audit::AuditLog;
 use crate::services::search::SearchResult;
 use crate::utils::versioning::FileVersion;
+
+/// 把每個端點都可能回的錯誤狀態碼補進 `OpenAPI` spec。
+///
+/// ⚠️ 為什麼用 `Modify` 而不是逐支加 `responses(...)`：46 個 operation 裡只有
+/// 6 個記載了 401、**0 個記載 500**，而這些不是各端點特有的行為 ——
+/// 它們來自共用的機制：
+///   - `require_auth` 可以讓**任何**受保護的端點回 401／403
+///   - `AppError` 的 `IntoResponse` 可以讓任何 handler 回 400／404／500
+///
+/// 逐支複製同一組標註，只會變成 46 份會各自走鐘的重複。
+///
+/// ⚠️ 這是**超集**：公開端點（登入、註冊、分享連結）其實不會回 401。
+/// 之所以接受這個不精確，是因為反方向的代價比較大 —— schemathesis 檢查的是
+/// 「收到了文件沒寫的狀態碼」，多寫不會誤報，少寫會讓 45 個真實回應被當成
+/// 失敗，而那會淹掉真正的問題。要更精確的話得在這裡維護一份公開路徑清單，
+/// 那份清單本身又會跟路由走鐘。
+struct CommonErrorResponses;
+
+impl Modify for CommonErrorResponses {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        use utoipa::openapi::{RefOr, ResponseBuilder};
+
+        let common: [(&str, &str); 7] = [
+            ("400", "請求格式錯誤"),
+            // ⚠️ 422 是 axum 的 `Json<T>` extractor 在 body 反序列化失敗時回的
+            // ——跟 400 一樣是框架層級、每個吃 JSON 的端點都可能回。
+            ("422", "請求內容無法解析"),
+            ("401", "未登入或憑證無效"),
+            ("403", "沒有權限（含 CSRF 檢查未通過）"),
+            ("404", "找不到"),
+            // ⚠️ 405 由 axum 的路由器產生（路徑存在但方法沒註冊），
+            // 不是任何 handler 寫出來的。
+            ("405", "方法不被支援"),
+            ("500", "伺服器內部錯誤"),
+        ];
+
+        for item in openapi.paths.paths.values_mut() {
+            // utoipa 5 的 PathItem 是每個方法一個 Option<Operation> 的欄位，
+            // 沒有可以直接走訪的集合。
+            let operations = [
+                item.get.as_mut(),
+                item.put.as_mut(),
+                item.post.as_mut(),
+                item.delete.as_mut(),
+                item.patch.as_mut(),
+                item.head.as_mut(),
+                item.options.as_mut(),
+                item.trace.as_mut(),
+            ];
+            for operation in operations.into_iter().flatten() {
+                for (code, description) in common {
+                    // 已經逐支寫過的不要蓋掉 —— 那些描述比這裡的通用文字精確
+                    operation
+                        .responses
+                        .responses
+                        .entry(code.to_string())
+                        .or_insert_with(|| RefOr::T(ResponseBuilder::new().description(description).build()));
+                }
+            }
+        }
+    }
+}
 
 #[derive(OpenApi)]
 #[openapi(
@@ -99,7 +161,8 @@ use crate::utils::versioning::FileVersion;
         (name = "audit", description = "Audit log endpoints"),
         (name = "search", description = "Search endpoints"),
         (name = "tags", description = "Tag management endpoints")
-    )
+    ),
+    modifiers(&CommonErrorResponses)
 )]
 pub struct ApiDoc;
 

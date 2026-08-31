@@ -51,7 +51,9 @@ pub struct ShareInfoResponse {
     path = "/api/share",
     request_body = CreateShareLinkRequest,
     responses(
-        (status = 201, description = "Share link created", body = ShareLinkResponse)
+        // ⚠️ 實際回的是 200 不是 201（handler 回 `Json<T>`，axum 的預設狀態碼是 200）。
+        // schemathesis 的 status_code_conformance 抓到的。
+        (status = 200, description = "Share link created", body = ShareLinkResponse)
     )
 )]
 pub async fn create_share_link(

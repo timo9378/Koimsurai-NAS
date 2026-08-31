@@ -260,6 +260,20 @@ pub async fn rename_file(
 // 驗證路徑，防止 Path Traversal
 // Validate path to prevent Path Traversal
 pub fn validate_path(base: &Path, user_path: &str) -> Result<PathBuf, AppError> {
+    // ⚠️ NUL byte 要在這裡就擋掉。
+    //
+    // Rust 的 `Path` 本身容得下 NUL，但真正要碰檔案系統時得轉成 C 字串，
+    // 那一步會失敗並回一個 io::Error。原本的處置是往上丟成 500：
+    //
+    //     POST /api/files/batch/move  destination="\0..."
+    //       → 500 {"error":"file name contained an unexpected NUL byte"}
+    //
+    // 狀態碼是錯的（客戶端送的東西造成的），而且把 OS 的錯誤字串送出去。
+    // 擋在這裡等於一次涵蓋所有吃路徑的端點。（schemathesis 找到的。）
+    if user_path.contains('\0') {
+        return Err(AppError::Status(StatusCode::BAD_REQUEST));
+    }
+
     let path = Path::new(user_path);
     let mut full_path = base.to_path_buf();
 
@@ -1051,7 +1065,8 @@ pub async fn batch_move(
     path = "/api/files/batch/copy",
     request_body = BatchOperationRequest,
     responses(
-        (status = 200, description = "Batch copy initiated")
+        // ⚠️ 實際回 202（非同步進行中），不是 200。schemathesis 抓到的。
+        (status = 202, description = "Batch copy initiated")
     )
 )]
 pub async fn batch_copy(

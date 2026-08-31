@@ -704,12 +704,28 @@ DELETE、清垃圾桶、刪檔。
 **已接 CI**（`.github/workflows/api-fuzz.yml`）：workflow_dispatch + 每週日
 20:00 UTC + PR 動到 `backend/` 時。
 
-⚠️ CI 上關掉了七條**規格漂移**的檢查（未記載的狀態碼 45、`Allow` header 7、
-宣告了伺服器不支援的方法 6…）。那些不是 bug —— utoipa 的 `responses(...)` 只標了
-happy path，所以任何 4xx/5xx 都算「未記載」。留著會讓這個 job **永遠是紅的**，
-而永遠紅的排程 job 等於沒有 job。現在留下的是「真的出事才會紅」的那幾條
-（`server_error`、`not_a_server_error`、`ensure_resource_availability`）。
-**補完 utoipa 標註之後要把那行 `--exclude-checks` 拿掉。**
+CI 上守著的檢查：`server_error`（5xx / panic）、`not_a_server_error`、
+`status_code_conformance`、`ensure_resource_availability`。
+
+**`status_code_conformance` 已經放回來了**（原本 45 個失敗）。做法不是逐支補
+`responses(...)` —— 46 個 operation 裡只有 6 個記載 401、**0 個記載 500**，而
+那些不是各端點特有的行為，是共用機制的產物（`require_auth` 可以讓任何受保護的
+端點回 401／403、`AppError` 可以讓任何 handler 回 400／404／500、axum 的路由器
+產生 405、`Json<T>` extractor 產生 422）。逐支複製只會變成 46 份會各自走鐘的
+重複。改用 `routes/mod.rs` 的 `CommonErrorResponses` modifier 一次補上，再修掉
+三處真的標錯的碼（share 與 upload/init 寫 201 但實際回 200、batch/copy 寫 200
+但實際回 202、upload/init 漏了 409）。現在 1380 個測試案例全過。
+
+⚠️ 那份共用清單是**超集**：公開端點（登入、註冊、分享連結）其實不會回 401。
+接受這個不精確是因為反方向的代價比較大 —— schemathesis 檢查的是「收到了文件
+沒寫的狀態碼」，多寫不會誤報，少寫會讓 45 個真實回應被當成失敗而淹掉真問題。
+要更精確得在 modifier 裡維護一份公開路徑清單，那份清單本身又會跟路由走鐘。
+
+還關著的六條（每清完一條就從 workflow 拿掉一個）：`response_schema_conformance`
+（3，回應 body 與記載的 schema 不符）、`positive_data_acceptance`（8）、
+`negative_data_rejection`（3）、`unsupported_method`（6）、
+`allow_header_conformance`（7，伺服器誠實列出 PUT 但 spec 少了那個 operation）、
+`missing_required_header`。
 
 ⚠️ **stateful 階段暫時關掉**，理由與上面同一條：它產生 420 個
 「Connection aborted. Remote end closed connection without response」——

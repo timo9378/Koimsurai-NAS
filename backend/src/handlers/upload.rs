@@ -18,7 +18,10 @@ use uuid::Uuid;
     path = "/api/upload/init",
     request_body = InitUploadRequest,
     responses(
-        (status = 201, description = "Upload session initialized", body = InitUploadResponse)
+        // ⚠️ 同 share：回 `Json<T>` 就是 200。
+        (status = 200, description = "Upload session initialized", body = InitUploadResponse),
+        // 目標檔案已存在（前端據此問使用者要不要覆蓋），或工作階段衝突
+        (status = 409, description = "檔案已存在或工作階段衝突")
     )
 )]
 pub async fn init_upload(
