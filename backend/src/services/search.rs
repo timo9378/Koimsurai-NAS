@@ -201,9 +201,22 @@ impl SearchService {
         let (path_field, name_field, content_field) = (self.path_field, self.name_field, self.content_field);
 
         let query_parser = QueryParser::for_index(&self.index, vec![name_field, content_field]);
-        let query = query_parser
-            .parse_query(query_str)
-            .map_err(|e| AppError::Anyhow(anyhow::anyhow!(e)))?;
+
+        // ⚠️ 用 lenient 版本，不要用 `parse_query`。
+        //
+        // tantivy 把輸入當成**查詢語言**解析（`"`、`(`、`)`、`+`、`-`、`AND`…
+        // 都是運算子）。使用者在搜尋框裡打一個引號或括號就會 parse 失敗，
+        // 原本的處置是往上丟成 500，而且錯誤訊息會原封不動回給客戶端：
+        //
+        //     GET /api/search?q=Ð}(  →  500 {"error":"Syntax Error: Ð}("}
+        //
+        // 兩個問題：使用者正常的輸入不該回 500，而且不該把解析器的內部訊息
+        // 送出去。lenient 版會盡量解析、把錯誤收集起來而不是失敗。
+        // （schemathesis 找到的。）
+        let (query, parse_errors) = query_parser.parse_query_lenient(query_str);
+        if !parse_errors.is_empty() {
+            tracing::debug!(?parse_errors, query_str, "搜尋語法有問題，已盡量解析");
+        }
 
         let top_docs: Vec<(f32, tantivy::DocAddress)> = searcher
             .search(&query, &TopDocs::with_limit(20))

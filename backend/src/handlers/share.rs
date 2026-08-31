@@ -66,9 +66,13 @@ pub async fn create_share_link(
         None
     };
 
+    // ⚠️ `Duration::seconds` 在超出範圍時會 **panic**（不是回 Err）——
+    // 而 expires_in_seconds 直接來自請求 body。送一個夠大的數字就能讓這個
+    // handler 掛掉、連線被斷。這個跟整數溢位不同：release build 也一樣會 panic。
+    // 用 try_seconds，超範圍就當成「沒有設定過期時間」。
     let expires_at = payload
         .expires_in_seconds
-        .map(|s| Utc::now() + Duration::seconds(s));
+        .and_then(|s| Duration::try_seconds(s).map(|d| Utc::now() + d));
 
     sqlx::query(
         "INSERT INTO share_links (id, file_path, password_hash, expires_at, creator_id) VALUES (?, ?, ?, ?, ?)"

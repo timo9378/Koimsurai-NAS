@@ -34,8 +34,25 @@ pub async fn list_audit_logs(
     Extension(_user_id): Extension<i64>, // Ensure user is authenticated, maybe check for admin role later
     Query(query): Query<AuditLogQuery>,
 ) -> Result<Json<Vec<AuditLog>>, AppError> {
-    let limit = query.limit.unwrap_or(50);
-    let offset = (query.page.unwrap_or(1) - 1) * limit;
+    // ⚠️ page 與 limit 都由查詢字串控制，兩者都必須夾範圍。
+    //
+    // 原本寫成 `(page - 1) * limit`：
+    //   - page = i64::MIN 時，`- 1` 就先 underflow（`.max(0)` 來不及救，
+    //     它在減法**之後**才執行）
+    //   - page 很大時 `* limit` overflow
+    // debug build 會 panic（連線直接斷），release 預設是 wrapping ——
+    // 那更糟：不會有任何症狀，只是算出一個荒謬的 offset。
+    // schemathesis 對 /api/audit/logs 與 /api/files 各撞出這兩種。
+    //
+    // limit 這裡原本也**完全沒有上限** —— file.rs 早先修過同一件事
+    // （送 limit=100000 就能讓單一請求撈爆整張表），但這支被漏掉了。
+    let limit = query.limit.unwrap_or(50).clamp(1, 500);
+    let offset = query
+        .page
+        .unwrap_or(1)
+        .clamp(1, i64::from(u32::MAX))
+        .saturating_sub(1)
+        * limit;
 
     let mut sql = String::from("SELECT * FROM audit_logs WHERE 1=1");
     let mut params = Vec::new();

@@ -670,6 +670,41 @@ schemathesis 之後可以直接吃它，不必先起伺服器也不必偽造登�
 內容也拿得到錯誤；後者還要 fsync 到實體磁碟（防斷電），對 10GB 級的上傳
 代價太大，那是另一個層次的取捨。
 
+### schemathesis（API fuzz）第一次跑的結果
+
+用 `export_openapi` 產的 spec，對一個**獨立的測試實例**（PORT=3099、
+自己的 temp DB 與 storage）跑。⚠️ 絕對不要對 production 跑 —— 它會發
+DELETE、清垃圾桶、刪檔。
+
+第一次跑就撞出 **28 個 panic**（3 種）：
+
+| 位置 | 觸發 | 說明 |
+|---|---|---|
+| `audit.rs:38` | `page` 或 `limit` 是大整數 | `(page - 1) * limit`：`page=i64::MIN` 時減法先 underflow，大 page 時乘法 overflow。limit 這裡還**完全沒有上限**（file.rs 早先修過同一件事，這支被漏掉） |
+| `file.rs:385` | 同上 | `.max(0)` 在減法**之後**才執行，救不到 underflow |
+| `chrono` | `expires_in_seconds` 很大 | `Duration::seconds` 超範圍是 **panic** 不是回 Err，而那個值直接來自 body。這條 release build 也會 panic |
+
+⚠️ 前兩個在 release build 的整數溢位預設是 **wrapping** —— 不會 panic，
+只是算出一個荒謬的 offset。那比 panic 更難查。
+
+修完 panic 之後剩下兩個真的問題：
+
+- **`GET /api/search?q="` → 500**，而且錯誤訊息原封不動回給客戶端
+  （`{"error":"Syntax Error: ..."}`）。tantivy 把輸入當**查詢語言**解析，
+  `"` `(` `)` `+` `-` `:` 都是運算子 —— 使用者在搜尋框打一個引號就 500。
+  改用 `parse_query_lenient`。
+- **`GET /api/thumbnail/{size}/{path}` 對目錄會讓連線中斷**。目錄也「存在」，
+  交給 `ServeFile` 之後會宣告 chunked encoding 卻送不出任何 chunk。
+  改成檢查 `is_file`。
+
+剩下的 failure 幾乎都是 **spec 漂移**（沒有記載的狀態碼 43、`Allow` header
+不符 7、宣告了伺服器不支援的方法 6）——那是文件品質問題，不是 bug，
+之後補 utoipa 的 `responses(...)` 標註即可。
+
+**還沒接 CI。** 要接的話需要：起一個獨立實例 → 註冊登入拿 cookie →
+餵 spec 給 schemathesis。exclude 掉 docker（CI 沒有 docker socket）、
+terminal（WebSocket）、media/stream 與 media/hls（會叫 ffmpeg）。
+
 ### 程式面的已知債
 
 - `Finder.tsx` 約 1400 行。上一頁/下一頁已抽成 `finder/history.ts`，

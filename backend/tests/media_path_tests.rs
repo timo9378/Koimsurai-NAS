@@ -117,3 +117,114 @@ async fn a_normal_file_name_still_works() {
         .expect("init");
     assert_eq!(res.status(), StatusCode::OK, "一般檔名不該被誤擋");
 }
+
+// ══════════════ 大整數參數不能讓 handler panic（schemathesis 找到的）══════════════
+
+/// ⚠️ 這一組全是「已登入使用者送一個大整數就能讓連線被斷」。
+/// debug build 會 panic；release 的整數溢位預設是 wrapping，那更難查 ——
+/// 不會有症狀，只是算出一個荒謬的 offset。
+#[tokio::test]
+async fn pagination_survives_extreme_page_and_limit_values() {
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "paginator").await;
+
+    for (endpoint, params) in [
+        ("/api/files", "page=9223372036854775807&limit=9223372036854775807"),
+        ("/api/files", "page=-9223372036854775808"),
+        ("/api/files", "page=0&limit=0"),
+        ("/api/files", "limit=100000"),
+        (
+            "/api/audit/logs",
+            "page=9223372036854775807&limit=9223372036854775807",
+        ),
+        ("/api/audit/logs", "page=-9223372036854775808"),
+        ("/api/audit/logs", "limit=100000"),
+    ] {
+        let res = client
+            .get(format!("{}{endpoint}?{params}", app.address))
+            .send()
+            .await
+            .unwrap_or_else(|e| panic!("{endpoint}?{params} 連線斷掉（handler panic）：{e}"));
+        assert!(
+            res.status().is_success() || res.status().is_client_error(),
+            "{endpoint}?{params} 應該正常回應，實際 {}",
+            res.status()
+        );
+    }
+}
+
+#[tokio::test]
+async fn an_out_of_range_expiry_does_not_panic_the_handler() {
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "expiry_abuser").await;
+
+    // ⚠️ `chrono::Duration::seconds` 超出範圍時是 **panic** 而不是回 Err，
+    //    而這個值直接來自請求 body。這條跟整數溢位不同：release 也會 panic。
+    for endpoint in ["/api/share", "/api/upload-link"] {
+        let body = if endpoint == "/api/share" {
+            json!({ "file_path": "a.txt", "expires_in_seconds": i64::MAX })
+        } else {
+            json!({ "target_path": "/", "expires_in_seconds": i64::MAX })
+        };
+        let res = client
+            .post(format!("{}{endpoint}", app.address))
+            .header("Origin", app.origin_header())
+            .json(&body)
+            .send()
+            .await
+            .unwrap_or_else(|e| panic!("{endpoint} 連線斷掉（handler panic）：{e}"));
+        assert!(
+            res.status().is_success() || res.status().is_client_error(),
+            "{endpoint} 應該正常回應，實際 {}",
+            res.status()
+        );
+    }
+}
+
+#[tokio::test]
+async fn search_survives_query_syntax_characters() {
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "searcher").await;
+
+    // ⚠️ tantivy 把輸入當查詢語言解析，`"` `(` `)` `+` `-` `:` 都是運算子。
+    //    使用者在搜尋框打一個引號就 500 —— 而且錯誤訊息會原封不動回給前端。
+    //    這些全是正常會打進搜尋框的字元。
+    for q in [
+        "\"",
+        "(",
+        "a)b",
+        "+-",
+        "檔案:名稱",
+        "AND",
+        "報告 (最終版)",
+        "50% off",
+    ] {
+        let res = client
+            .get(format!("{}/api/search", app.address))
+            .query(&[("q", q)])
+            .send()
+            .await
+            .unwrap_or_else(|e| panic!("q={q:?} 連線斷掉：{e}"));
+        assert!(
+            !res.status().is_server_error(),
+            "q={q:?} 不該回 5xx，實際 {}",
+            res.status()
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_thumbnail_request_for_a_directory_is_a_clean_404() {
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "thumber").await;
+    std::fs::create_dir_all(app.storage_dir.path().join("資料夾")).expect("mkdir");
+
+    // ⚠️ 目錄也「存在」，交給 ServeFile 的話會宣告 chunked encoding 然後
+    //    送不出任何 chunk —— 客戶端拿到「連線中斷」而不是乾淨的 404。
+    let res = client
+        .get(format!("{}/api/thumbnail/small/資料夾", app.address))
+        .send()
+        .await
+        .expect("目錄的縮圖請求不該讓連線斷掉");
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+}

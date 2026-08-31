@@ -40,9 +40,14 @@ async fn main() {
 
     let app = create_app(pool, storage_path).await;
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
+    // ⚠️ 連接埠可用 PORT 覆寫。預設 3000 是容器裡的固定值（compose 對外
+    // 映射 127.0.0.1:3000），但本機要另外起一個實例（例如跑 schemathesis
+    // 對 API 做 fuzz）時，寫死的話會直接撞到正在服務的那個。
+    let port = env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    let bind_addr = format!("0.0.0.0:{port}");
+    let listener = tokio::net::TcpListener::bind(&bind_addr)
         .await
-        .expect("無法綁定 0.0.0.0:3000（連接埠被佔用或權限不足）");
-    tracing::info!("RustNAS Server running on http://0.0.0.0:3000");
+        .unwrap_or_else(|e| panic!("無法綁定 {bind_addr}（連接埠被佔用或權限不足）：{e}"));
+    tracing::info!("RustNAS Server running on http://{bind_addr}");
     axum::serve(listener, app).await.expect("HTTP server 異常結束");
 }
