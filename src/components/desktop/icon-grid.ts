@@ -59,3 +59,26 @@ export function snapToGrid(clientX: number, clientY: number): IconPosition {
     row: Math.max(0, Math.round(relativeY / (GRID_SIZE + GRID_GAP))),
   };
 }
+
+/** 一格的間距（含格線）—— 拖曳一步、鍵盤一步都是這個距離。 */
+export const GRID_STEP = GRID_SIZE + GRID_GAP;
+
+/**
+ * 拖曳結束時的落點：**原位置 + 位移**，而不是游標所在的格子。
+ *
+ * ⚠️ 這是修掉的一個 bug。原本手刻的版本在 mouseup 時直接
+ * `snapToGrid(e.clientX, e.clientY)` —— 用的是**游標**位置。抓著圖示的左上角
+ * 拖沒問題，但抓右下角拖的話，落點會比圖示實際看到的位置偏移將近一格，
+ * 放手瞬間圖示自己跳走。用位移就沒有這個問題：圖示落在它看起來該在的地方，
+ * 跟抓在哪裡無關。
+ */
+export function movePositionBy(
+  position: IconPosition,
+  delta: { readonly x: number; readonly y: number },
+): IconPosition {
+  const { x, y } = gridToPixels(position);
+  return {
+    col: Math.max(0, Math.round((x + delta.x) / GRID_STEP)),
+    row: Math.max(0, Math.round((y + delta.y) / GRID_STEP)),
+  };
+}

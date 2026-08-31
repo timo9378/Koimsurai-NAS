@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
-import { INVITE_CODE, uniqueUser } from "./helpers";
+import { registerAndLogin } from "./helpers";
 
 // axe 掃的是「規則能自動判定」的那一小部分可及性（大約 30–40%）——
 // 掃過不等於可用，但掃出來的都是真的。所以這裡只擋 serious/critical，
@@ -55,20 +55,7 @@ test("登入畫面的可及性沒有比現況更差", async ({ page }) => {
 });
 
 test("桌面版面的可及性沒有比現況更差", async ({ page }) => {
-  const user = uniqueUser("a11y");
-  await page.goto("/");
-  await page.getByRole("button", { name: "Create an account" }).click();
-  await page.getByPlaceholder("Username").fill(user);
-  await page.getByPlaceholder("Password", { exact: true }).fill("password123");
-  await page.getByPlaceholder("Confirm Password").fill("password123");
-  await page.getByPlaceholder("Invite Code").fill(INVITE_CODE);
-  await page.getByPlaceholder("Invite Code").press("Enter");
-  await expect(page.getByText("Registration successful!")).toBeVisible();
-
-  await page.getByPlaceholder("Username").fill(user);
-  await page.getByPlaceholder("Password", { exact: true }).fill("password123");
-  await page.getByPlaceholder("Password", { exact: true }).press("Enter");
-  await expect(page.getByPlaceholder("Username")).toBeHidden({ timeout: 15_000 });
+  await registerAndLogin(page, "a11y");
 
   const { violations } = await scan(page);
   const blocking = violations.filter((v) => BLOCKING.includes(v.impact ?? ""));

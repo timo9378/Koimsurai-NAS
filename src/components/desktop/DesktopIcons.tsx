@@ -12,8 +12,35 @@ import { getApiErrorStatus } from "@/lib/errors";
 import { useWindowStore } from "@/store/window-store";
 import { useQueryClient } from "@tanstack/react-query";
 import type { FileInfo } from "@/types/api";
+import {
+  DndContext,
+  type DragEndEvent,
+  KeyboardSensor,
+  type KeyboardCoordinateGetter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
 import { DraggableDesktopIcon } from "./DraggableDesktopIcon";
-import { defaultIconPosition, type IconPosition } from "./icon-grid";
+import { defaultIconPosition, GRID_STEP, type IconPosition, movePositionBy } from "./icon-grid";
+
+/**
+ * 鍵盤拖曳時，方向鍵一次走**一整格**而不是 dnd-kit 預設的 25px。
+ *
+ * 預設值對自由定位的介面才合理；這裡是網格，走 25px 的話要按四次才移動一格，
+ * 而中間三次的視覺回饋是「圖示卡在格線之間」。
+ */
+const moveByOneCell: KeyboardCoordinateGetter = (event, { currentCoordinates }) => {
+  const step = {
+    ArrowRight: { x: GRID_STEP, y: 0 },
+    ArrowLeft: { x: -GRID_STEP, y: 0 },
+    ArrowDown: { x: 0, y: GRID_STEP },
+    ArrowUp: { x: 0, y: -GRID_STEP },
+  }[event.code];
+  if (!step) return undefined;
+  event.preventDefault();
+  return { x: currentCoordinates.x + step.x, y: currentCoordinates.y + step.y };
+};
 
 // Type for storing icon positions
 // Default positions will be calculated based on order
@@ -62,6 +89,22 @@ export const DesktopIcons = () => {
     // 排列方向與邊界見 desktop/icon-grid.ts（純函式、有測試）
     return defaultIconPosition(index);
   };
+
+  // ⚠️ PointerSensor 而不是 MouseSensor —— 手刻的版本只聽 mousedown/mousemove，
+  // 觸控裝置上桌面圖示**完全不能移動**。pointer 事件把滑鼠、觸控、觸控筆
+  // 一次涵蓋。
+  //
+  // distance: 5 沿用原本的 DRAG_THRESHOLD：沒有它的話，單純點一下也會被
+  // 當成拖曳的開始，選取與開啟都會失靈。
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: moveByOneCell,
+      // Enter 留給「開啟」（見 DraggableDesktopIcon 的 onKeyDown），
+      // 所以拿起／放下只綁空白鍵。
+      keyboardCodes: { start: ["Space"], cancel: ["Escape"], end: ["Space"] },
+    }),
+  );
 
   const handlePositionChange = (filePath: string, newPosition: IconPosition) => {
     setIconPositions((prev) => {
@@ -370,8 +413,18 @@ export const DesktopIcons = () => {
 
   if (!files) return null;
 
+  // 拖曳結束：用**位移**算落點，不是游標位置（理由見 icon-grid.ts 的 movePositionBy）
+  const handleDragEnd = (event: DragEndEvent) => {
+    const path = String(event.active.id);
+    const index = files.findIndex((f) => f.path === path);
+    if (index < 0) return;
+    const file = files[index];
+    if (!file) return;
+    handlePositionChange(path, movePositionBy(getFilePosition(file, index), event.delta));
+  };
+
   return (
-    <>
+    <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
       <div className="absolute top-12 left-0 right-0 bottom-0 p-4 z-0 pointer-events-none">
         {files.map((file, index) => {
           const position = getFilePosition(file, index);
@@ -388,12 +441,11 @@ export const DesktopIcons = () => {
                 onRenameChange={setRenameValue}
                 onRenameSubmit={() => void handleRenameSubmit()}
                 onRenameCancel={() => setRenamingFile(null)}
-                onPositionChange={(newPos) => handlePositionChange(file.path, newPos)}
               />
             </div>
           );
         })}
       </div>
-    </>
+    </DndContext>
   );
 };

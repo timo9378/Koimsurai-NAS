@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
+import { useDraggable } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
 import type { FileInfo } from "@/types/api";
 import { FileTypeIcon } from "@/lib/file-icons";
-import { activateOnKey } from "@/lib/a11y";
-import { gridToPixels, snapToGrid } from "./icon-grid";
+import { gridToPixels } from "./icon-grid";
 
 interface DraggableDesktopIconProps {
   file: FileInfo;
@@ -18,10 +18,7 @@ interface DraggableDesktopIconProps {
   onRenameChange: (value: string) => void;
   onRenameSubmit: () => void;
   onRenameCancel: () => void;
-  onPositionChange: (newPosition: { row: number; col: number }) => void;
 }
-
-const DRAG_THRESHOLD = 5; // Minimum pixels to move before drag starts
 
 export const DraggableDesktopIcon = ({
   file,
@@ -34,15 +31,15 @@ export const DraggableDesktopIcon = ({
   onRenameChange,
   onRenameSubmit,
   onRenameCancel,
-  onPositionChange,
 }: DraggableDesktopIconProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
-  const iconRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
-  const [mouseDownPos, setMouseDownPos] = useState<{ x: number; y: number } | null>(null);
-  const [hasDragStarted, setHasDragStarted] = useState(false);
+
+  // ⚠️ 重新命名時要停用拖曳 —— 否則在 <input> 裡按方向鍵移動游標會被
+  // KeyboardSensor 攔走，變成在移動圖示。
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: file.path,
+    disabled: isRenaming,
+  });
 
   useEffect(() => {
     if (isRenaming && inputRef.current) {
@@ -62,102 +59,71 @@ export const DraggableDesktopIcon = ({
     );
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (isRenaming || e.button !== 0) return;
-
-    const rect = iconRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    // Store the initial mouse position for drag threshold check
-    setMouseDownPos({ x: e.clientX, y: e.clientY });
-    setDragOffset({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    });
-    setDragPosition({ x: rect.left, y: rect.top });
-    setHasDragStarted(false);
-    // Don't set isDragging yet - wait for threshold
-  };
-
-  useEffect(() => {
-    if (!mouseDownPos) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const distance = Math.sqrt(
-        Math.pow(e.clientX - mouseDownPos.x, 2) + Math.pow(e.clientY - mouseDownPos.y, 2),
-      );
-
-      // Only start dragging if we've moved past the threshold
-      if (distance >= DRAG_THRESHOLD) {
-        if (!hasDragStarted) {
-          setHasDragStarted(true);
-          setIsDragging(true);
-        }
-        setDragPosition({
-          x: e.clientX - dragOffset.x,
-          y: e.clientY - dragOffset.y,
-        });
-      }
-    };
-
-    const handleMouseUp = (e: MouseEvent) => {
-      if (hasDragStarted && isDragging) {
-        // 落點計算與「不能是負的」的理由見 desktop/icon-grid.ts
-        onPositionChange(snapToGrid(e.clientX, e.clientY));
-      }
-
-      // Reset all drag state
-      setIsDragging(false);
-      setMouseDownPos(null);
-      setHasDragStarted(false);
-    };
-
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [mouseDownPos, hasDragStarted, isDragging, dragOffset, onPositionChange]);
-
-  // Calculate the actual position based on grid
   const { x: gridX, y: gridY } = gridToPixels(position);
 
   return (
     <div
-      ref={iconRef}
+      ref={setNodeRef}
       className={cn(
         "absolute flex flex-col items-center gap-1 p-2 rounded hover:bg-white/10 w-[100px] cursor-pointer transition-all group",
         isSelected && "bg-blue-500/30 border border-blue-500/50 hover:bg-blue-500/40",
         isDragging && "opacity-70 z-50 shadow-2xl scale-110",
       )}
       style={{
-        left: isDragging ? `${dragPosition.x}px` : `${gridX}px`,
-        top: isDragging ? `${dragPosition.y}px` : `${gridY}px`,
+        left: `${gridX}px`,
+        top: `${gridY}px`,
+        // 拖曳中用 transform 位移，不改 left/top —— transform 不觸發 layout，
+        // 而且 dnd-kit 給的 transform 已經含了 KeyboardSensor 的步進。
+        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
         transition: isDragging ? "none" : "all 0.3s ease-out",
       }}
-      // 重新命名時裡面會出現一個 <input>，而 input 不能放在 button 裡
-      // （無效的 HTML，瀏覽器會把 DOM 重組成跟你寫的不一樣）。
+      // role="button" / tabIndex 由 dnd-kit 的 attributes 提供（它還會補上
+      // aria-roledescription="draggable" 與拖曳說明的 aria-describedby）。
+      //
+      // 這裡是 role="button" 的 div 而不是真的 <button>：重新命名時裡面會出現
+      // 一個 <input>，而 input 不能放在 button 裡 —— 那是無效的 HTML，
+      // 瀏覽器會把 DOM 重組成跟你寫的不一樣。
+      {...listeners}
+      {...attributes}
+      // ⚠️ role / tabIndex 跟 attributes 給的值一樣，重寫一次是為了讓靜態分析
+      // 看得到 —— oxlint 讀不出 spread 裡有什麼，少了這兩行會誤報
+      // jsx-a11y/no-static-element-interactions。放在 spread **之後**，
+      // 放前面 TS 會擋（TS2783: specified more than once）。
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role
       role="button"
       tabIndex={0}
-      aria-label={file.name}
-      aria-pressed={isSelected}
-      onKeyDown={activateOnKey(() => {
-        if (!isRenaming) onDoubleClick();
-      })}
-      onMouseDown={handleMouseDown}
+      // ⚠️ 選取狀態**不能**用 aria-pressed —— dnd-kit 已經用它表示「已拿起」，
+      // 兩個意思會互相覆蓋（TS 也會擋：'aria-pressed' is specified more than once）。
+      // 而且對一個「按下去會開啟檔案」的 button 來說，pressed 本來就不是
+      // 「已選取」的正確語意。改成寫進可讀名稱。
+      aria-label={isSelected ? `${file.name}（已選取）` : file.name}
+      // ⚠️ 這裡**不能**只寫自己的 onKeyDown —— `{...listeners}` 裡就有一個
+      // （dnd-kit 的鍵盤拖曳啟動器），寫在後面會把它整個蓋掉，鍵盤拖曳
+      // 就完全不會啟動。要顯式串起來。
+      //
+      // 鍵位分工（跟檔案總管一致）：
+      //   Enter  開啟
+      //   空白   拿起／放下（dnd-kit）
+      //   方向鍵 移動一格（拿起之後才有作用）
+      //   Esc    取消，回到原位
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (!isRenaming) onDoubleClick();
+          return;
+        }
+        listeners?.onKeyDown?.(e);
+      }}
       onClick={(e) => {
-        // Only handle click if we didn't drag
-        if (!hasDragStarted) {
+        // 拖曳過就不要再當成點擊 —— dnd-kit 的 isDragging 在 dragEnd 之前都是 true
+        if (!isDragging) {
           e.stopPropagation();
           onClick(e);
         }
       }}
       onDoubleClick={(e) => {
         e.stopPropagation();
-        if (!isRenaming && !hasDragStarted) onDoubleClick();
+        if (!isRenaming && !isDragging) onDoubleClick();
       }}
       data-context-type="desktop-icon"
       data-context-id={file.path}

@@ -5,7 +5,9 @@ import {
   DESKTOP_PADDING,
   GRID_GAP,
   GRID_SIZE,
+  GRID_STEP,
   gridToPixels,
+  movePositionBy,
   snapToGrid,
   TOP_BAR_HEIGHT,
 } from "./icon-grid";
@@ -145,5 +147,64 @@ describe("絕對座標（往返測試蓋不到的部分）", () => {
   it("iconsPerColumn 非正數時的錯誤訊息帶著收到的值", () => {
     expect(() => defaultIconPosition(0, 0)).toThrow(/iconsPerColumn/);
     expect(() => defaultIconPosition(0, -1)).toThrow(/-1/);
+  });
+});
+
+describe("movePositionBy（拖曳落點）", () => {
+  it("沒有位移就留在原地", () => {
+    expect(movePositionBy({ col: 2, row: 3 }, { x: 0, y: 0 })).toEqual({ col: 2, row: 3 });
+  });
+
+  it("剛好一格的位移就移動一格", () => {
+    expect(movePositionBy({ col: 0, row: 0 }, { x: GRID_STEP, y: GRID_STEP })).toEqual({
+      col: 1,
+      row: 1,
+    });
+  });
+
+  it("不到半格的位移會被吸回原格", () => {
+    expect(movePositionBy({ col: 1, row: 1 }, { x: GRID_STEP * 0.4, y: 0 })).toEqual({
+      col: 1,
+      row: 1,
+    });
+  });
+
+  it("超過半格就進到下一格", () => {
+    expect(movePositionBy({ col: 1, row: 1 }, { x: GRID_STEP * 0.6, y: 0 })).toEqual({
+      col: 2,
+      row: 1,
+    });
+  });
+
+  it("往左上拖出畫面不會變成負的", () => {
+    // 負的 row/col 會讓圖示跑到畫面外再也點不到，而且會被存進 localStorage
+    expect(movePositionBy({ col: 0, row: 0 }, { x: -9999, y: -9999 })).toEqual({
+      col: 0,
+      row: 0,
+    });
+  });
+
+  it("落點只跟位移有關，跟游標抓在圖示的哪裡無關", () => {
+    // 這是手刻版的 bug：它用 snapToGrid(游標座標)，於是抓右下角拖會差一格。
+    // 位移版本對「抓哪裡」完全不敏感 —— 同樣的位移永遠得到同樣的結果。
+    const from = { col: 3, row: 2 };
+    const delta = { x: GRID_STEP * 2, y: GRID_STEP };
+    expect(movePositionBy(from, delta)).toEqual({ col: 5, row: 3 });
+  });
+
+  it("性質：位移永遠不會讓格子座標變負", () => {
+    fc.assert(
+      fc.property(
+        fc.nat({ max: 50 }),
+        fc.nat({ max: 50 }),
+        fc.integer({ min: -5000, max: 5000 }),
+        fc.integer({ min: -5000, max: 5000 }),
+        (col, row, dx, dy) => {
+          const next = movePositionBy({ col, row }, { x: dx, y: dy });
+          expect(next.col).toBeGreaterThanOrEqual(0);
+          expect(next.row).toBeGreaterThanOrEqual(0);
+        },
+      ),
+    );
   });
 });

@@ -694,6 +694,42 @@ history / selection / marquee、`chunk-plan`、`errors`、`file-icons`、`a11y`�
 `cellWidth` 恆 ≥ 100 或等於 `available`，所以 `if (cellWidth <= 0)` 那行是死碼。
 標註而不是硬湊測試，是因為為了打死等價突變寫出來的測試沒有任何意義。
 
+#### dnd-kit：桌面圖示的拖曳
+
+原本是手刻的 `mousedown` / `mousemove` / `mouseup`（`DraggableDesktopIcon`
+裡約 60 行狀態機）。換掉它修好三件事：
+
+| 問題 | 原本 | 現在 |
+|---|---|---|
+| **鍵盤完全不能移動圖示** | 只聽滑鼠事件 | 空白鍵拿起、方向鍵一格一格移、空白鍵放下、Esc 取消 |
+| **觸控裝置完全不能移動圖示** | `mousedown` 在觸控上不會觸發 | `PointerSensor` 一次涵蓋滑鼠／觸控／觸控筆 |
+| **落點用游標而不是圖示位置** | `snapToGrid(e.clientX, e.clientY)` | `movePositionBy(位置, 位移)` |
+
+第三個是真的 bug：抓著圖示的**右下角**拖，放手時它會跳到游標所在的格子，
+而不是它看起來所在的格子 —— 偏移將近一格。用位移就跟「抓在哪裡」無關了。
+純函式抽在 `icon-grid.ts`，有定樁也有 property test。
+
+兩個接線上的坑（都寫進程式碼註解）：
+
+1. **`{...listeners}` 裡就有一個 `onKeyDown`**。自己的 `onKeyDown` 寫在後面會
+   把它整個蓋掉，鍵盤拖曳完全不會啟動，而且**沒有任何錯誤** —— 只是功能不存在。
+   要顯式串起來。順帶把鍵位分工釐清：Enter 開啟、空白拿起／放下
+   （dnd-kit 預設兩個都吃，這裡刻意只留空白）。
+2. **`attributes` 也帶 `aria-pressed`**（表示「已拿起」），跟原本用來表示
+   「已選取」的撞在一起。TS 直接擋下（TS2783）。讓 dnd-kit 擁有拖曳語意，
+   選取狀態改寫進 `aria-label` —— 對一個「按下去會開啟檔案」的 button 來說，
+   `pressed` 本來就不是「已選取」的正確語意。
+
+⚠️ **`Finder` 的檔案拖放沒有換。** 那裡是 HTML5 原生 DnD（`draggable` +
+`dataTransfer`），而且跟「從 OS 拖檔進來上傳」交織在一起 —— 後者需要
+`dataTransfer.files`，dnd-kit 拿不到。硬換的話會把上傳功能弄壞，
+換到的只是同一批鍵盤可及性。要做的話得先把「內部搬移」與「OS 上傳」
+兩條路徑拆開，那是獨立的一次重構。
+
+驗證用 E2E（`e2e/desktop-icons.spec.ts`）而不是單元測試：dnd-kit 的
+`KeyboardSensor` 讀 `event.code`、量元素矩形、靠真正的 focus，jsdom 撐不住。
+而且要驗的是「一個原本不存在的功能現在存在」—— 那本來就沒有單元測試蓋得到。
+
 #### Lighthouse 基準線
 
 2026-08-31 在開發機量（三次中位數，量 `/login`）：
