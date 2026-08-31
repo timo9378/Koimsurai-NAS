@@ -14,7 +14,7 @@ use serde_json::json;
 /// 依使用者名稱查 id。
 ///
 /// ⚠️ 直接查 DB 而不是問 API —— 這個後端**沒有**「我是誰」的端點，
-/// 登入回應也不帶 user id（見 models/user.rs 的 LoginResponse）。
+/// 登入回應也不帶 user id（見 models/user.rs 的 `LoginResponse`）。
 /// 測試 harness 提供 `pool` 就是為了這種情況。
 async fn user_id(app: &TestApp, username: &str) -> i64 {
     sqlx::query_scalar::<_, i64>("SELECT id FROM users WHERE username = ?")
