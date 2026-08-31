@@ -141,9 +141,17 @@ const ControlCenterPopover = () => {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <div className="hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer transition-colors">
+        {/* ⚠️ 必須是 button 不能是 div。Radix 會把 aria-controls / aria-expanded /
+            aria-haspopup 掛到 asChild 的子元素上，而純 div 不允許那些屬性
+            （axe: aria-allowed-attr，critical）。更要緊的是 div 根本不能用鍵盤
+            聚焦 —— 這顆按鈕原本 Tab 到不了。 */}
+        <button
+          type="button"
+          aria-label="控制中心"
+          className="hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer transition-colors"
+        >
           <Sliders className="w-4 h-4" />
-        </div>
+        </button>
       </PopoverTrigger>
       <PopoverContent
         className="w-auto p-0 mr-2 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-white/20"
@@ -537,12 +545,16 @@ export const TopBar = () => {
 
         <Popover>
           <PopoverTrigger asChild>
-            <div className="hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer transition-colors">
-              <div className="relative">
+            <button
+              type="button"
+              aria-label="通知"
+              className="hover:bg-white/10 px-2 py-0.5 rounded cursor-pointer transition-colors"
+            >
+              <span className="relative block">
                 <Bell className="w-4 h-4" />
                 <span className="absolute top-0 right-0 w-1.5 h-1.5 bg-red-500 rounded-full border border-black" />
-              </div>
-            </div>
+              </span>
+            </button>
           </PopoverTrigger>
           <PopoverContent
             className="w-auto p-0 mr-2 bg-white/80 dark:bg-black/80 backdrop-blur-xl border-white/20"

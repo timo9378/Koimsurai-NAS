@@ -1,0 +1,85 @@
+{
+  "ci": {
+    "collect": {
+      "startServerCommand": "./scripts/e2e-server.sh",
+      "startServerReadyPattern": "running on",
+      "startServerReadyTimeout": 60000,
+      "url": [
+        "http://127.0.0.1:3098/login"
+      ],
+      "numberOfRuns": 3,
+      "settings": {
+        "preset": "desktop",
+        "chromeFlags": "--no-sandbox --headless=new"
+      },
+      "_url_comment": "量 /login 而不是 / —— SPA 在 / 會 client-side 導到 /login，Lighthouse 把那當成 redirect，主文件請求被 abort，整份報告變成 FAILED_DOCUMENT_REQUEST。而且未登入的首屏本來就是效能預算該守的那一頁。"
+    },
+    "assert": {
+      "assertions": {
+        "categories:performance": [
+          "warn",
+          {
+            "minScore": 0.8
+          }
+        ],
+        "categories:accessibility": [
+          "error",
+          {
+            "minScore": 0.9
+          }
+        ],
+        "categories:best-practices": [
+          "warn",
+          {
+            "minScore": 0.95
+          }
+        ],
+        "categories:seo": [
+          "off"
+        ],
+        "total-byte-weight": [
+          "warn",
+          {
+            "maxNumericValue": 3000000
+          }
+        ],
+        "unused-javascript": [
+          "off"
+        ],
+        "uses-responsive-images": [
+          "off"
+        ],
+        "first-contentful-paint": [
+          "warn",
+          {
+            "maxNumericValue": 2000
+          }
+        ],
+        "largest-contentful-paint": [
+          "warn",
+          {
+            "maxNumericValue": 3000
+          }
+        ],
+        "cumulative-layout-shift": [
+          "error",
+          {
+            "maxNumericValue": 0.1
+          }
+        ],
+        "total-blocking-time": [
+          "warn",
+          {
+            "maxNumericValue": 500
+          }
+        ]
+      },
+      "_comment": "⚠️ 只有**不受機器速度影響**的項目設成 error：可及性分數與 CLS。GitHub 的 runner 比開發機慢得多，把 FCP/LCP/TBT 設成 error 會變成隨機紅燈，而一個會隨機紅的門檻等於沒有門檻——沒人會再看它。時間類全部是 warn，看的是趨勢。"
+    },
+    "upload": {
+      "target": "filesystem",
+      "outputDir": ".lighthouseci"
+    }
+  },
+  "_comment": "效能預算。2026-08-31 在開發機量到的基準（三次的中位數，量 /login）：performance 86 / accessibility 93 / best-practices 100 / seo 92、FCP 1144ms、LCP 2168ms、TBT 0ms、CLS 0、總傳輸 2288 KiB。"
+}

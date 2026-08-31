@@ -159,3 +159,8 @@ describe("性質（fast-check）", () => {
     );
   });
 });
+
+it("initialHistory 不給參數時從根目錄開始", () => {
+  // Stryker: 預設值 "/" 完全沒被覆蓋到 —— 所有測試都明確傳了路徑。
+  expect(initialHistory()).toEqual({ entries: ["/"], index: 0 });
+});

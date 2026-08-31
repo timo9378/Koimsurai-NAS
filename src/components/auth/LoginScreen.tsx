@@ -298,6 +298,9 @@ export function LoginScreen() {
                       size="icon"
                       variant="ghost"
                       disabled={isLoading}
+                      // ⚠️ icon-only 的按鈕一定要有可讀名稱，否則螢幕閱讀器唸出來
+                      // 只有「按鈕」。（axe: button-name，critical）
+                      aria-label="登入"
                       className="absolute right-1 top-1 h-9 w-9 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 rounded-lg transition-colors"
                     >
                       {isLoading ? (
@@ -337,6 +340,7 @@ export function LoginScreen() {
                           size="icon"
                           variant="ghost"
                           disabled={isLoading}
+                          aria-label="建立帳號"
                           className="absolute right-1 top-1 h-9 w-9 text-zinc-400 hover:bg-white/10 hover:text-zinc-100 rounded-lg transition-colors"
                         >
                           {isLoading ? (

@@ -1,0 +1,131 @@
+# Playwright（E2E）+ axe-core（可及性）+ Lighthouse CI（效能預算）。
+#
+# 為什麼獨立一個 workflow：這三道都要先建出 server binary 與前端 bundle，再起
+# 一個真實實例。接在 ci.yml 上會讓每次 push 都多等一輪 Rust 編譯，而 ci.yml
+# 的定位是「三分鐘內給紅綠燈」。
+#
+# 為什麼值得跑：jsdom 的單元測試把網路、cookie、版面全都 mock 掉了。這裡打的是
+# **production 實際長的樣子** —— 後端 binary 同時供 SPA 與 API，同源、同一個
+# 行程。跨來源的 cookie／CSRF 行為在 vite dev server + proxy 底下驗不出來。
+#
+# ⚠️ **只對這裡起的臨時實例跑，絕對不要對 production。** E2E 會註冊帳號、
+#    建檔、刪檔。這個 job 用自己的 temp DB 與 storage，跟 runner 一起消失。
+#
+# 導入當天（2026-08-31）axe 就掃出兩個 critical 並當場修掉，見 e2e/a11y.spec.ts。
+name: E2E
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # 這些只在 job 內的臨時實例裡用，不是任何真實環境的值
+  E2E_PORT: '3098'
+  E2E_INVITE_CODE: e2e_invite
+
+jobs:
+  e2e:
+    name: Playwright + axe
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+      - uses: Swatinem/rust-cache@258712b0b7b1ddf8bddc9fc3b0faca682b2736c3 # v2
+        with:
+          prefix-key: v1-rust
+          shared-key: workspace-lint-test
+          # 這個 workflow 不是 cache 的產生者 —— 讓 ci.yml 負責寫，這裡只讀。
+          save-if: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # ⚠️ 版本要跟 lockfile 裡的 @playwright/test 一致，否則會下載到另一版
+      #    瀏覽器、留下兩份。用 pnpm exec 而不是全域的 npx 就是為了這個。
+      - name: 安裝 Playwright 瀏覽器
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: 建前端 bundle
+        run: pnpm build
+
+      - name: 建 server binary
+        run: cargo build --locked --bin Koimsurai_NAS
+
+      # webServer 由 playwright.config.ts 起（scripts/e2e-server.sh），
+      # 它會自己準備 temp DB 與 storage。
+      - name: playwright test
+        run: pnpm e2e
+
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  lighthouse:
+    name: Lighthouse CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+      - uses: Swatinem/rust-cache@258712b0b7b1ddf8bddc9fc3b0faca682b2736c3 # v2
+        with:
+          prefix-key: v1-rust
+          shared-key: workspace-lint-test
+          save-if: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # lhci 要一個真的 Chrome。借 Playwright 裝的那顆，不另外裝一份。
+      - name: 安裝 Chrome（Playwright 的）
+        run: pnpm exec playwright install --with-deps chromium
+
+      # ⚠️ 這裡刻意用 production build（`pnpm build`）而不是 dev server：
+      #    效能預算量的是使用者實際拿到的東西——minify、code split、gzip 之後。
+      - name: 建前端 bundle
+        run: pnpm build
+
+      - name: 建 server binary
+        run: cargo build --locked --bin Koimsurai_NAS
+
+      - name: lhci autorun
+        env:
+          CHROME_PATH: ''
+        run: |
+          set -euo pipefail
+          # Playwright 把 chromium 放在 ~/.cache/ms-playwright/chromium-*/chrome-linux/chrome
+          CHROME_PATH="$(find "$HOME/.cache/ms-playwright" -name chrome -type f -path '*chrome-linux*' | head -1)"
+          [ -n "$CHROME_PATH" ] || { echo "::error::找不到 Playwright 的 chromium"; exit 1; }
+          export CHROME_PATH
+          echo "使用 $CHROME_PATH"
+          pnpm lhci
+
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: lighthouse-report
+          path: .lighthouseci/
+          retention-days: 7

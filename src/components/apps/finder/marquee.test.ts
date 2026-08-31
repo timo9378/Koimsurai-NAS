@@ -173,3 +173,70 @@ describe("性質（fast-check）", () => {
     );
   });
 });
+
+// ── 具體幾何（Stryker 指出來的缺口）─────────────────────────────────
+//
+// 上面那些 property test 驗的是**關係**（單調、遞增、不重複），而關係在算術
+// 被改壞時往往仍然成立 —— 變異測試把 `available - GRID_PADDING * 2` 改成
+// `+`、把 `cellWidth + GRID_GAP` 改成 `-`，六個突變全部存活。
+// 要釘住的是實際數字，所以這裡放死值。
+describe("實際的網格數字", () => {
+  it("gridColumns 在具體寬度下算出的欄數", () => {
+    // repeat(auto-fill, minmax(100px, 1fr))、gap 16、padding 16：
+    // 可用寬 = w - 32，欄數 = floor((可用寬 + 16) / 116)
+    expect(gridColumns(190)).toBe(1); // (190-32+16)/116 = 1.5 → 1
+    expect(gridColumns(500)).toBe(4); // (500-32+16)/116 = 4.17 → 4
+    expect(gridColumns(0)).toBe(1); // 尚未佈局 —— 至少 1，否則 index % cols 是 NaN
+  });
+
+  it("框選命中的是算得出來的那一格", () => {
+    // 寬 500 → 4 欄，cellWidth = (468 - 16*3)/4 = 105，每欄起點間距 121：
+    //   #0 x 16–121   #1 x 137–242   #2 x 258–363   #3 x 379–484
+    // 框住 x 130–250 只碰得到 #1。
+    expect(
+      itemsInMarquee({ startX: 130, startY: 20, currentX: 250, currentY: 60 }, 8, {
+        mode: "grid",
+        containerWidth: 500,
+      }),
+    ).toEqual([1]);
+  });
+
+  it("第二列的起點在 GRID_CELL_HEIGHT + GRID_GAP 之後", () => {
+    // 列高 84 + 間距 16 → 第 1 列的頂在 y = 16 + 100 = 116
+    const secondRow = itemsInMarquee({ startX: 0, startY: 120, currentX: 999, currentY: 150 }, 8, {
+      mode: "grid",
+      containerWidth: 500,
+    });
+    expect(secondRow).toEqual([4, 5, 6, 7]);
+  });
+});
+
+// ── 邊界相接（Stryker 指出來的缺口）─────────────────────────────────
+//
+// `overlaps` 的註解說「含邊界相接」，但沒有任何測試真的讓兩個邊剛好相等 ——
+// 把 `>` 改成 `>=`、`<` 改成 `<=` 的突變因此存活。這不是吹毛求疵：
+// 使用者從某一格的右緣往右拖，那一格該不該保持選取，就是這個判斷。
+describe("框的邊界剛好貼齊項目邊界", () => {
+  // 寬 500 → 4 欄、cellWidth 105：#0 x 16–121、#1 x 137–242、#2 x 258–363
+  const grid = { mode: "grid", containerWidth: 500 } as const;
+  const row0 = { startY: 20, currentY: 60 };
+
+  it("框的左緣等於項目右緣時仍算選到", () => {
+    expect(itemsInMarquee({ ...row0, startX: 242, currentX: 300 }, 8, grid)).toEqual([1, 2]);
+  });
+
+  it("框的右緣等於項目左緣時仍算選到", () => {
+    expect(itemsInMarquee({ ...row0, startX: 0, currentX: 137 }, 8, grid)).toEqual([0, 1]);
+  });
+
+  it("差一個像素就真的碰不到", () => {
+    expect(itemsInMarquee({ ...row0, startX: 243, currentX: 300 }, 8, grid)).toEqual([2]);
+    expect(itemsInMarquee({ ...row0, startX: 0, currentX: 136 }, 8, grid)).toEqual([0]);
+  });
+
+  it("padding 是兩邊各一份，不是半份", () => {
+    // 可用寬 = w − GRID_PADDING × 2。寬 226 時：(226−32+16)/116 = 1.8 → 1 欄。
+    // 若寫成 GRID_PADDING ÷ 2（可用寬 w−8），(226−8+16)/116 = 2.02 → 2 欄。
+    expect(gridColumns(226)).toBe(1);
+  });
+});

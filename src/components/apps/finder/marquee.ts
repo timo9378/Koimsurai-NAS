@@ -58,6 +58,9 @@ export function itemsInMarquee(
   itemCount: number,
   layout: MarqueeLayout,
 ): number[] {
+  // Stryker disable next-line all: 等價突變 —— 改成 `< 0` 或整個拿掉，
+  // itemCount 為 0 時下面的迴圈本來就跑 0 次、一樣回空陣列。留著是為了讀起來
+  // 有意圖，不是為了改變行為。
   if (itemCount <= 0) return [];
 
   const left = Math.min(box.startX, box.currentX);
@@ -78,10 +81,17 @@ export function itemsInMarquee(
   }
 
   const available = layout.containerWidth - GRID_PADDING * 2;
+  // Stryker disable next-line all: 等價突變 —— available 剛好為 0 時會落到
+  // 下面的 cellWidth 檢查（cellWidth 也會是 0），結果一樣是空陣列。
   if (available <= 0) return [];
 
   const cols = gridColumns(layout.containerWidth);
   const cellWidth = (available - GRID_GAP * (cols - 1)) / cols;
+  // Stryker disable next-line all: 這行在 available > 0 時**到不了**，是刻意
+  // 留的縱深防禦。證明：cols == 1 時 cellWidth == available > 0；cols == k ≥ 2
+  // 意味著 available ≥ 116k − 16，於是
+  //   cellWidth = (available − 16(k−1)) / k ≥ (116k − 16 − 16k + 16) / k = 100。
+  // 所以 cellWidth 恆 ≥ 100 或等於 available，兩者都是正的。
   if (cellWidth <= 0) return [];
 
   for (let i = 0; i < itemCount; i++) {

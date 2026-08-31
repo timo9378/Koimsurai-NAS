@@ -36,5 +36,8 @@
     //    會從「多餘」變成「必要」，順序反過來就是做白工。
     "noUncheckedIndexedAccess": true
   },
-  "include": ["src"]
+  // ⚠️ e2e 與 playwright.config.ts 也要進來 —— 否則 E2E 的 TS 完全沒有型別
+  // 檢查也沒有 lint（tsc 與 oxlint 都只看 include 裡的東西），寫錯要等到
+  // CI 上 Playwright 跑起來才會發現。
+  "include": ["src", "e2e", "playwright.config.ts"]
 }

@@ -640,11 +640,84 @@ history / selection / marquee、`chunk-plan`、`errors`、`file-icons`、`a11y`�
 這四支（合計約 3600 行）仍然沒有測試，而那正是分母的大宗。
 | `cargo llvm-cov` | ✅ 已接 CI，門檻 `--fail-under-regions 46` | — |
 
-### 未安裝（工具鏈盤點列了但還沒引入）
+### 工具鏈盤點列的東西已全部引入
 
-Playwright + `@axe-core/playwright`（E2E 與自動化可及性檢查）、
-Stryker（前端變異測試）、`@lhci/cli`（效能預算）、schemathesis（吃 utoipa
-的 OpenAPI 做 API fuzz）。
+| 工具 | 接在哪 | 導入當天抓到什麼 |
+|---|---|---|
+| Playwright | `e2e.yml`（push / PR） | SPA fallback 的兩半（深層路由回 index.html、`/api` 不被接走）先前只有後端測試守著 |
+| `@axe-core/playwright` | 同上 | **兩個 critical**，見下 |
+| Stryker | `mutation.yml`（dispatch + 每週） | **7 個真的斷言缺口**，見下 |
+| `@lhci/cli` | `e2e.yml` 的第二個 job | 基準線見下 |
+| schemathesis | `api-fuzz.yml` | 28 個 panic + 4 個使用者會踩到的 bug（先前記錄） |
+
+#### axe 抓到的兩個 critical
+
+- `aria-allowed-attr`（桌面，3 個節點）：`PopoverTrigger asChild` 包在純
+  `<div>` 上。Radix 會把 `aria-controls` / `aria-expanded` 掛到子元素，而 `div`
+  不允許那些屬性。**更要緊的是那三顆按鈕根本 Tab 不到** —— 控制中心、通知、
+  Dock 的設定鍵，鍵盤使用者全都按不到。改成 `<button type="button">`。
+- `button-name`（登入頁）：icon-only 的送出鈕沒有可讀名稱，螢幕閱讀器唸出來
+  只有「按鈕」。補 `aria-label`。
+
+修完兩頁都是 0 個 serious/critical，`e2e/a11y.spec.ts` 把它當棘輪守著。
+
+#### Stryker 抓到的斷言缺口
+
+第一次跑 **89.02%**（248 個突變、25 個存活）。補完測試後 **100%**
+（226 killed / 0 survived），測試從 140 條變成 163 條。
+
+最值得記的一個：
+
+> `icon-grid.ts` 的 `snapToGrid` 把 `- DESKTOP_PADDING` 改成 `+` 之後，
+> **property test 照樣過** —— 因為那條 property 是
+> `snapToGrid ∘ gridToPixels = id`，而兩個方向共用同一組常數，**錯誤互相抵消**。
+>
+> 這是往返型 property test 的固有盲點：它驗的是兩個函式互為反函式，不是驗
+> 任何一個是對的。要釘住常數只能放絕對座標的死值。
+
+其餘的缺口都同一個形狀：**property test 驗「關係」，而關係在算術被改壞時
+往往仍然成立**。`marquee.ts` 的 `available - GRID_PADDING * 2`、
+`cellWidth + GRID_GAP` 被改掉之後，「索引遞增」「框變大選取只增不減」全都還是真的。
+
+另外三個是純粹沒測到的分支：
+
+- `errors.ts` 三處 `err.response?.data` 的 `?.` 被拿掉後存活 —— 代表**沒有任何
+  測試餵過「沒有 response 的 axios 錯誤」**，而那正是斷網，也正是這幾支最需要
+  撐住的情況（少了 `?.` 就是 TypeError）。
+- `overlaps` 的註解寫著「含邊界相接」，但沒有測試讓兩個邊剛好相等。
+- `selection.ts` 的 `if (name !== undefined)`：錨點比清單長時（在第 5 項設錨點、
+  檔案被刪到剩 3 項、再 Shift+Click）會把 `undefined` 放進選取集合，
+  之後送給 API 就是檔名 `"undefined"`。
+
+有 9 個突變是**等價突變**（數學上打不死），已在 `marquee.ts` 用
+`// Stryker disable next-line` 標註並附證明 —— 例如 `available > 0` 之後
+`cellWidth` 恆 ≥ 100 或等於 `available`，所以 `if (cellWidth <= 0)` 那行是死碼。
+標註而不是硬湊測試，是因為為了打死等價突變寫出來的測試沒有任何意義。
+
+#### Lighthouse 基準線
+
+2026-08-31 在開發機量（三次中位數，量 `/login`）：
+
+| performance | accessibility | best-practices | seo | FCP | LCP | TBT | CLS | 總傳輸 |
+|---|---|---|---|---|---|---|---|---|
+| 86 | 93 | 100 | 92 | 1144ms | 2168ms | 0ms | 0 | 2288 KiB |
+
+⚠️ **只有不受機器速度影響的項目設成 error**（可及性分數、CLS）。GitHub 的
+runner 慢得多，把 FCP/LCP/TBT 設成 error 會變成隨機紅燈，而一個會隨機紅的
+門檻等於沒有門檻。
+
+#### 導入時踩到的三個坑
+
+1. **Stryker 卡在 "Creating test runner process(es)" 不動**：它把
+   `node_modules` 一起算進專案（實測 54031 個檔案）然後複製到 sandbox。
+   要顯式給 `ignorePatterns`。
+2. **Stryker 找不到 vitest runner**：pnpm 的嚴格 `node_modules` 下自動掃不到，
+   要在設定裡顯式列 `plugins`。
+3. **lhci 整份報告 `FAILED_DOCUMENT_REQUEST`**：`scripts/e2e-server.sh` 原本把
+   `RUST_LOG` 預設成 `warn`，而 lhci 的 `startServerReadyPattern` 等的
+   `"running on"` 是一行 `tracing::info!` —— 被濾掉了，於是 lhci 在伺服器還沒
+   listen 時就開始抓頁面。另外 `/` 會 client-side 導到 `/login`，Lighthouse 把
+   那當 redirect 並 abort 主文件請求，所以直接量 `/login`。
 
 ### 後端覆蓋率的分佈
 

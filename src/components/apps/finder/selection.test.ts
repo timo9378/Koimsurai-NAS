@@ -191,3 +191,16 @@ describe("性質（fast-check）", () => {
     );
   });
 });
+
+it("錨點比清單還長時（檔案在中途被刪掉）不會把 undefined 放進選取", () => {
+  // Stryker: `if (name !== undefined)` 改成 `true` 存活 —— 沒有測試讓範圍
+  // 超出 fileNames。實際會發生：先在第 5 項設錨點，別人刪檔讓清單只剩 3 項，
+  // 再 Shift+Click。少了那個判斷，選取集合裡會混進 undefined，
+  // 之後 `Array.from(selected)` 交給 API 就會送出 "undefined" 這個檔名。
+  const files = ["a.txt", "b.txt", "c.txt"];
+  const stale = { selected: new Set<string>(), anchorIndex: 5 };
+  const next = selectOnClick(stale, files, 0, { shift: true, toggle: false });
+
+  expect([...next.selected].every((n) => files.includes(n))).toBe(true);
+  expect(next.selected).toEqual(new Set(files));
+});

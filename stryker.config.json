@@ -1,0 +1,61 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "變異測試：把程式改壞，看測試會不會紅。覆蓋率只說「這行跑過」，變異分數說「這行壞掉會不會被抓到」——後端的 cargo-mutants 就是靠這個抓到四個斷言缺口。範圍刻意只涵蓋抽出來的純邏輯模組：那些是變異測試唯一划算的地方（快、決定性、每個突變都對應一個真的行為改變）。整個 src 跑一次要數十分鐘，而元件的突變大多產生無意義的等價變體。",
+  "packageManager": "pnpm",
+  "testRunner": "vitest",
+  "plugins": [
+    "@stryker-mutator/vitest-runner"
+  ],
+  "_plugins_comment": "pnpm 的嚴格 node_modules 下 Stryker 自動掃不到 plugin，要顯式列出，否則報 \"no TestRunner plugins were loaded\"。",
+  "vitest": {
+    "configFile": "vitest.config.ts"
+  },
+  "mutate": [
+    "src/components/apps/finder/history.ts",
+    "src/components/apps/finder/selection.ts",
+    "src/components/apps/finder/marquee.ts",
+    "src/components/desktop/icon-grid.ts",
+    "src/features/files/chunk-plan.ts",
+    "src/lib/a11y.ts",
+    "src/lib/errors.ts"
+  ],
+  "ignorePatterns": [
+    "node_modules",
+    "dist",
+    "target",
+    "backend",
+    "packages",
+    "coverage",
+    "reports",
+    ".lighthouseci",
+    "playwright-report",
+    "test-results",
+    "e2e",
+    "public",
+    ".git",
+    ".github"
+  ],
+  "_ignore_comment": "沒有這段的話 Stryker 會把 node_modules 一起算進專案（實測 54031 個檔案），然後複製整包到 sandbox —— 表現成卡在 \"Creating test runner process(es)\" 不動。",
+  "reporters": [
+    "clear-text",
+    "progress",
+    "html",
+    "json"
+  ],
+  "htmlReporter": {
+    "fileName": "reports/mutation/index.html"
+  },
+  "concurrency": 2,
+  "timeoutMS": 20000,
+  "thresholds": {
+    "high": 100,
+    "low": 95,
+    "break": 95
+  },
+  "tempDirName": ".stryker-tmp",
+  "cleanTempDir": true,
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation.json"
+  },
+  "_thresholds_comment": "實測 100.00%（226 killed / 0 survived）。break 設 95 是**棘輪**留 5pp 餘裕：加一段還沒測到的新邏輯不該當場擋下，但把既有斷言刪弱會被抓到。"
+}

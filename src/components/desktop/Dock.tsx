@@ -486,7 +486,10 @@ export const Dock = () => {
             app.id === "settings" ? (
               <Popover.Root key={app.id} open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
                 <Popover.Trigger asChild>
-                  <div>
+                  {/* 同 TopBar：Radix 的 aria-* 需要一個允許它們的角色，
+                      而 div 不允許，Tab 也到不了。用不帶樣式的 button 包住，
+                      實際外觀仍由 DockItem 決定。 */}
+                  <button type="button" aria-label={app.label} className="contents">
                     <DockItem
                       mouseX={mouseX}
                       icon={app.icon}
@@ -499,7 +502,7 @@ export const Dock = () => {
                       onCloseWindow={closeWindow}
                       onFocusWindow={focusWindow}
                     />
-                  </div>
+                  </button>
                 </Popover.Trigger>
                 <Popover.Portal>
                   <Popover.Content

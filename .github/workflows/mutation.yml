@@ -1,0 +1,59 @@
+# Stryker —— 前端的變異測試（後端的對應物是 mutants.yml 的 cargo-mutants）。
+#
+# 覆蓋率只回答「這行有沒有被跑到」，變異測試回答「這行**壞掉**會不會被抓到」。
+# 後端第一次跑 cargo-mutants 就抓到四個斷言缺口 —— 那些行的覆蓋率是 100%。
+#
+# ⚠️ **不在本機跑。** 開發機就是 NAS 本體，上面跑著實際在用的服務。Stryker 會
+#    把每個突變都重跑一次測試，248 個突變 × 兩個 worker 會把 CPU 吃滿一段時間。
+#    跟 mutants.yml 同一個理由。
+#
+# 範圍刻意只涵蓋抽出來的純邏輯模組（見 stryker.config.json 的 mutate）：
+# 那些快、決定性、每個突變都對應一個真的行為改變。整個 src 跑一次要數十分鐘，
+# 而元件的突變大多產生無意義的等價變體，讀那份報告的成本高於收穫。
+#
+# 怎麼用：
+#     gh workflow run mutation.yml
+#     gh run watch && gh run view    # 或看 job summary / 下載 HTML 報告
+name: Mutation (frontend)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 每週日 21:00 UTC = 週一 05:00 Asia/Taipei
+    # （mutants 19:00、api-fuzz 20:00，三個錯開一小時避免互相排隊）
+    - cron: '0 21 * * 0'
+
+concurrency:
+  group: mutation-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  stryker:
+    name: Stryker
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # thresholds.break 在 stryker.config.json 裡 —— 低於它這步就是紅的。
+      # 那個數字是**棘輪**：跑出更高的分數就把它往上調。
+      - name: stryker run
+        run: pnpm mutate
+
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mutation-report
+          path: reports/mutation/
+          retention-days: 30

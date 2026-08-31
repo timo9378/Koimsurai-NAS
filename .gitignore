@@ -57,3 +57,17 @@ yarn-error.log*
 # GlitchTip source map 上傳用的 API token（compose 的 build secret 來源）。
 # ⚠️ 檔案本身必須存在，compose 才不會報錯；空檔會走「跳過上傳」分支。
 /sentry-token
+
+# Playwright（E2E）
+# ⚠️ 不要寫 `/test-results` —— 開頭斜線只釘 repo 根，跟前面 node_modules
+#    那個坑同一類。
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+playwright/.cache/
+
+# Stryker（前端變異測試）與 Lighthouse CI 的產物
+.stryker-tmp/
+reports/
+.lighthouseci/

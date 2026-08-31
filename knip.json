@@ -5,10 +5,12 @@
       "entry": [
         "src/routes/**/*.tsx",
         "public/sw.js",
-        "src/components/ui/**"
+        "src/components/ui/**",
+        "e2e/**/*.spec.ts"
       ],
       "project": [
         "src/**/*.{ts,tsx}",
+        "e2e/**/*.ts",
         "*.config.ts"
       ]
     }

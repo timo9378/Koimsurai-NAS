@@ -140,3 +140,19 @@ describe("性質（fast-check）", () => {
     );
   });
 });
+
+// ── Stryker 指出來的缺口 ────────────────────────────────────────────
+describe("預設分塊大小", () => {
+  it("不給 chunkSize 時每塊是 5 MiB", () => {
+    const FIVE_MIB = 5 * 1024 * 1024;
+    const chunks = planChunks(FIVE_MIB + 1);
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0]).toEqual({ start: 0, end: FIVE_MIB });
+    expect(chunks[1]).toEqual({ start: FIVE_MIB, end: FIVE_MIB + 1 });
+  });
+
+  it("chunkSize 非正數時的錯誤訊息帶著收到的值", () => {
+    expect(() => planChunks(10, 0, 0)).toThrow(/chunkSize/);
+    expect(() => planChunks(10, 0, -5)).toThrow(/-5/);
+  });
+});

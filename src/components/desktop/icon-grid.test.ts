@@ -117,3 +117,33 @@ describe("性質（fast-check）", () => {
     );
   });
 });
+
+// ── Stryker 指出來的缺口 ────────────────────────────────────────────
+//
+// ⚠️ 往返型的 property test（`snapToGrid ∘ gridToPixels = id`）有個盲點：
+// 兩個方向共用同一組常數，常數錯了會**互相抵消**。變異測試把
+// `clientY - TOP_BAR_HEIGHT - DESKTOP_PADDING` 的第二個減號改成加號，
+// 往返測試照樣過。要釘住的是絕對座標，所以這裡放死值。
+describe("絕對座標（往返測試蓋不到的部分）", () => {
+  it("桌面左上角第一格的落點", () => {
+    // 圖示區從 TOP_BAR_HEIGHT(48) + DESKTOP_PADDING(16) 開始，左緣是 16
+    expect(snapToGrid(16, 64)).toEqual({ col: 0, row: 0 });
+  });
+
+  it("往右下各一格 = 各加 GRID_SIZE + GRID_GAP", () => {
+    expect(snapToGrid(16 + 108, 64 + 108)).toEqual({ col: 1, row: 1 });
+  });
+
+  it("頂端狀態列的高度真的被扣掉", () => {
+    // y=100：扣掉 48+16 = 36，36/108 = 0.33 → 第 0 列。
+    // 如果 padding 被加而不是減（36 → 68），0.63 就會進位成第 1 列。
+    expect(snapToGrid(0, 100).row).toBe(0);
+    // y=130：扣掉後 66，66/108 = 0.61 → 第 1 列
+    expect(snapToGrid(0, 130).row).toBe(1);
+  });
+
+  it("iconsPerColumn 非正數時的錯誤訊息帶著收到的值", () => {
+    expect(() => defaultIconPosition(0, 0)).toThrow(/iconsPerColumn/);
+    expect(() => defaultIconPosition(0, -1)).toThrow(/-1/);
+  });
+});
