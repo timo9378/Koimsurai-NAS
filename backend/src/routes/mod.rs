@@ -123,6 +123,11 @@ impl Modify for CommonErrorResponses {
         file::delete_file,
         file::batch_delete,
         file::batch_move,
+        tus::options,
+        tus::create,
+        tus::status,
+        tus::append,
+        tus::terminate,
         file::batch_copy,
         trash::list_trash,
         trash::restore_file,
@@ -160,7 +165,8 @@ impl Modify for CommonErrorResponses {
         (name = "system", description = "System monitoring endpoints"),
         (name = "audit", description = "Audit log endpoints"),
         (name = "search", description = "Search endpoints"),
-        (name = "tags", description = "Tag management endpoints")
+        (name = "tags", description = "Tag management endpoints"),
+        (name = "tus", description = "tus 1.0.0 可續傳上傳（見 handlers/tus.rs）")
     ),
     modifiers(&CommonErrorResponses)
 )]

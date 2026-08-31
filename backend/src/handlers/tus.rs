@@ -126,10 +126,43 @@ fn id_of(raw: &str) -> Result<UploadId, Box<AxumResponse>> {
     raw.parse::<UploadId>().map_err(|e| Box::new(err_to_axum(&e)))
 }
 
+/// tus 的能力探索。
+///
+/// ⚠️ 這條掛在 CORS layer **之外**（見 routes/mod.rs）—— tower-http 的
+/// `CorsLayer` 會短路掉每一個 OPTIONS，不管是不是真的 preflight。
+#[utoipa::path(
+    options,
+    path = "/api/tus",
+    tag = "tus",
+    responses(
+        (status = 204, description = "伺服器支援的 tus 版本與擴充（Tus-Version / Tus-Extension 標頭）")
+    )
+)]
 pub async fn options(State(state): State<AppState>) -> AxumResponse {
     to_axum(state.tus.options())
 }
 
+/// 建立一份上傳（tus 的 creation 擴充）。
+///
+/// `Upload-Metadata` 帶目的地：`filename`（必要）與 `path`（可選的父目錄），
+/// 兩者都是標準 base64。⚠️ 那是**客戶端說了算**的值，落地時一定要走
+/// `StorageRoot::resolve`（見 [`finalize`]）。
+#[utoipa::path(
+    post,
+    path = "/api/tus",
+    tag = "tus",
+    request_body(
+        content = String,
+        description = "可選的初始資料（creation-with-upload）。有 body 時 Content-Type 必須是 application/offset+octet-stream",
+        content_type = "application/offset+octet-stream"
+    ),
+    responses(
+        (status = 201, description = "已建立；Location 標頭是後續 PATCH 的目標"),
+        (status = 412, description = "缺少或不支援的 Tus-Resumable"),
+        (status = 413, description = "Upload-Length 超過上限"),
+        (status = 415, description = "帶了 body 卻不是 application/offset+octet-stream")
+    )
+)]
 pub async fn create(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -168,6 +201,17 @@ fn body_of(headers: &HeaderMap, body: axum::body::Bytes) -> RequestBody {
     }
 }
 
+/// 問這份上傳傳到哪了 —— 續傳的前提。
+#[utoipa::path(
+    head,
+    path = "/api/tus/{id}",
+    tag = "tus",
+    params(("id" = String, Path, description = "上傳 ID（建立時由 Location 標頭給出）")),
+    responses(
+        (status = 200, description = "Upload-Offset / Upload-Length / Upload-Metadata 標頭"),
+        (status = 404, description = "不存在或已過期")
+    )
+)]
 pub async fn status(State(state): State<AppState>, AxumPath(id): AxumPath<String>) -> AxumResponse {
     let uid = match id_of(&id) {
         Ok(v) => v,
@@ -179,6 +223,17 @@ pub async fn status(State(state): State<AppState>, AxumPath(id): AxumPath<String
     }
 }
 
+/// 放棄一份上傳（tus 的 termination 擴充），連暫存一起清掉。
+#[utoipa::path(
+    delete,
+    path = "/api/tus/{id}",
+    tag = "tus",
+    params(("id" = String, Path, description = "上傳 ID")),
+    responses(
+        (status = 204, description = "已刪除"),
+        (status = 404, description = "不存在")
+    )
+)]
 pub async fn terminate(
     State(state): State<AppState>,
     AxumPath(id): AxumPath<String>,
@@ -194,6 +249,26 @@ pub async fn terminate(
     }
 }
 
+/// 續傳一段資料。
+///
+/// `Upload-Offset` 必須等於伺服器目前的 offset，否則回 **409** ——
+/// 那不是可以忽略的錯誤：默默接受會讓檔案內容錯位而且沒有人發現。
+///
+/// 補完最後一塊時會觸發落地（搬進使用者的儲存空間），見 [`finalize`]。
+#[utoipa::path(
+    patch,
+    path = "/api/tus/{id}",
+    tag = "tus",
+    params(("id" = String, Path, description = "上傳 ID")),
+    request_body(content = String, description = "這一段的位元組", content_type = "application/offset+octet-stream"),
+    responses(
+        (status = 204, description = "已寫入；Upload-Offset 標頭是新的位置"),
+        (status = 404, description = "不存在或已過期"),
+        (status = 409, description = "Upload-Offset 與伺服器的狀態不符"),
+        (status = 412, description = "缺少或不支援的 Tus-Resumable"),
+        (status = 415, description = "Content-Type 不是 application/offset+octet-stream")
+    )
+)]
 pub async fn append(
     State(state): State<AppState>,
     AxumPath(id): AxumPath<String>,
