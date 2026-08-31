@@ -12,6 +12,7 @@ pub mod system;
 pub mod tag;
 pub mod terminal;
 pub mod trash;
+pub mod tus;
 pub mod upload;
 pub mod upload_link;
 pub mod version;

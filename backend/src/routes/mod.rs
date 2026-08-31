@@ -7,8 +7,8 @@
 
 use crate::handlers::report_tunnel;
 use crate::handlers::{
-    audit, auth, docker, file, job, media, permission, search, share, system, tag, terminal, trash, upload,
-    upload_link, version, webdav, ws,
+    audit, auth, docker, file, job, media, permission, search, share, system, tag, terminal, trash, tus,
+    upload, upload_link, version, webdav, ws,
 };
 use crate::middleware::auth::require_auth;
 use crate::state::AppState;
@@ -342,6 +342,36 @@ pub async fn create_router(state: AppState) -> Router {
         // ⚠️ 刻意無認證：錯誤可能發生在登入之前。防濫用見該 handler 的說明。
         .route("/api/_report", post(report_tunnel::tunnel))
         .layer(cors)
+        // ── tus 1.0.0（可續傳上傳）────────────────────────────────
+        //
+        // ⚠️ **刻意掛在 `.layer(cors)` 之後**，也就是不吃 CORS layer。
+        //
+        // tower-http 的 CorsLayer 會短路掉**每一個** OPTIONS 請求，不管它是不是
+        // 真的 preflight（見它 cors/mod.rs 裡的 `if parts.method ==
+        // Method::OPTIONS`）。而 tus 的能力探索就是一個 OPTIONS ——
+        // 掛在 CORS 底下的話，`Tus-Version` / `Tus-Extension` 永遠送不出去，
+        // 非瀏覽器的客戶端就無從得知伺服器支援哪些擴充。
+        //
+        // 不吃 CORS 的代價是零：這個 CORS 設定是 `allow_origin(Any)` 且沒有
+        // allow_credentials，而本 API 是 cookie 認證 —— 瀏覽器在那個組合下
+        // 本來就不會送 cookie，跨來源呼叫從來就不成立。SPA 現在也是由這個
+        // binary 同源供應的。
+        //
+        // ⚠️ 路徑要跟 handlers/tus.rs 的 BASE_PATH 一致（"/api/tus"），
+        // 否則 crate 產生的 Location 會指到不存在的位置，而客戶端會
+        // 安靜地續傳失敗（不是報錯，是每次都從頭傳）。
+        .merge(
+            Router::new()
+                .route("/api/tus", axum::routing::options(tus::options).post(tus::create))
+                .route(
+                    "/api/tus/{id}",
+                    axum::routing::head(tus::status)
+                        .patch(tus::append)
+                        .delete(tus::terminate),
+                )
+                .layer(middleware::from_fn_with_state(state.clone(), require_auth))
+                .layer(DefaultBodyLimit::max(10 * 1024 * 1024 * 1024)),
+        )
         .layer(session_layer)
         .with_state(state)
 }

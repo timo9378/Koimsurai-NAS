@@ -1,4 +1,13 @@
 import { expect, type Page } from "@playwright/test";
+import type * as TusJsClient from "tus-js-client";
+
+type TusClient = typeof TusJsClient;
+
+declare global {
+  interface Window {
+    tus: TusClient;
+  }
+}
 
 export const INVITE_CODE = process.env.E2E_INVITE_CODE ?? "e2e_invite";
 
@@ -52,4 +61,16 @@ export async function createDesktopFolder(page: Page, prefix: string): Promise<s
   });
   expect(res.ok(), `在 Desktop 底下建資料夾失敗：${res.status()}`).toBe(true);
   return name;
+}
+
+/**
+ * 把 `tus-js-client` 的 UMD build 注入頁面，掛在 `window.tus`。
+ *
+ * ⚠️ 不能在 `page.evaluate` 裡寫 `import("tus-js-client")` —— 那是一個 bare
+ * specifier，瀏覽器解析不了（應用程式的 bundle 已經把它打包進去，但沒有以
+ * 那個名字對外暴露）。用 node_modules 裡**同一版**的 dist 檔注入。
+ */
+export async function loadTusClient(page: Page): Promise<void> {
+  await page.addScriptTag({ path: "node_modules/tus-js-client/dist/tus.min.js" });
+  await page.waitForFunction(() => typeof window.tus.Upload === "function");
 }

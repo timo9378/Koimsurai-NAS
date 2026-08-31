@@ -60,6 +60,15 @@ specta = { version = "=2.0.0-rc.25", features = ["derive", "chrono", "uuid", "se
 specta-typescript = "0.0.12"
 specta-serde = "0.0.12"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+# tus 1.0.0（可續傳上傳協定）。
+#
+# ⚠️ 刻意**只**用 tus-protocol，不用 tus-axum / tus-server。
+# 後兩者會拖進 67 個 crate —— 包含 opendal、aws-lc-sys（要 cmake 的 C/組語
+# 密碼庫）、jni（Java Native Interface）、clap。為了續傳上傳把那些放進建置
+# 相依完全不成比例。tus-protocol 單獨加只多**一個** crate、零傳遞相依：
+# 它是「自帶儲存」的純協定核心，HTTP 那層我們自己接（handlers/tus.rs），
+# 於是路徑檢查仍然走 StorageRoot。
+tus-protocol = { version = "0.1.0", features = ["storage-file", "state-file", "lock-memory"] }
 
 [features]
 default = []

@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
-import { getApiErrorBody, getApiErrorStatus } from "@/lib/errors";
 import type {
   FileInfo,
   Job,
@@ -8,8 +7,6 @@ import type {
   TimelineGroup,
   FileVersion,
   BatchOperationRequest,
-  InitUploadRequest,
-  InitUploadResponse,
   UploadSession,
 } from "@/types/api";
 
@@ -106,56 +103,6 @@ export const useUpload = () => {
     },
     // 不在每檔 onSuccess 廣域 invalidate(['files'])：批次上傳數十檔會放大成數百個 refetch 撞 nginx 429。
     // 改由呼叫端整批結束刷一次（useFileUpload）或單檔操作後刷一次（GlobalContextMenu）。
-  });
-};
-
-export const useInitUpload = () => {
-  return useMutation({
-    mutationFn: async (data: InitUploadRequest) => {
-      try {
-        const response = await apiClient.post<InitUploadResponse>("/upload/init", data);
-        return response.data;
-      } catch (error: unknown) {
-        // 409 Conflict：後端會在 body 帶 upload_id 與 uploaded_size 供續傳
-        const body = getApiErrorBody<InitUploadResponse>(error);
-        if (getApiErrorStatus(error) === 409 && body?.upload_id) {
-          console.warn("Upload session exists, resuming...", body);
-          return body;
-        }
-        // If 409 but no upload_id, it means file exists (Priority 2) -> Throw to let UI handle conflict
-        throw error;
-      }
-    },
-  });
-};
-
-export const useUploadChunk = () => {
-  return useMutation({
-    mutationFn: async ({
-      sessionId,
-      chunk,
-      offset,
-    }: {
-      sessionId: string;
-      chunk: Blob;
-      /** 這一塊在檔案裡的起始位元組。 */
-      offset: number;
-    }) => {
-      // ⚠️ 一定要送 X-Upload-Offset。
-      //
-      // 後端有一道「位移對不上就回 409」的檢查（見 backend/src/handlers/upload.rs），
-      // 但客戶端原本**從來沒送過這個 header**，所以那道檢查在正式環境從未被
-      // 觸發過 —— 等於一道不存在的防護。
-      //
-      // 它擋的正是續傳算錯位置的情形：伺服器是 append 模式，多送或少送都
-      // 不會有錯誤，只會得到一個內容錯位的檔案。
-      await apiClient.patch<void>(`/upload/session/${sessionId}`, chunk, {
-        headers: {
-          "Content-Type": "application/octet-stream",
-          "X-Upload-Offset": String(offset),
-        },
-      });
-    },
   });
 };
 

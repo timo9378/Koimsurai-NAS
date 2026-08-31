@@ -730,6 +730,71 @@ history / selection / marquee、`chunk-plan`、`errors`、`file-icons`、`a11y`�
 `KeyboardSensor` 讀 `event.code`、量元素矩形、靠真正的 focus，jsdom 撐不住。
 而且要驗的是「一個原本不存在的功能現在存在」—— 那本來就沒有單元測試蓋得到。
 
+#### tus 1.0.0（可續傳上傳）
+
+前置是 axum 0.7 → 0.8（見對應的 commit）。
+
+**只用 `tus-protocol`，不用 `tus-axum` / `tus-server`。** 後兩者
+`cargo add` 下去會拖進 **67 個 crate** —— `opendal`、`aws-lc-sys`（要 cmake 的
+C/組語密碼庫）、`jni`（Java Native Interface）、`clap`、`figment`。為了續傳上傳
+把那些放進建置相依完全不成比例，而且 `tus-axum` 當時是 **92 次下載、單一版本、
+六週前發布**。`tus-protocol` 單獨加只多**一個** crate、零傳遞相依：
+它是「自帶儲存」的純協定核心。
+
+代價是 `backend/src/handlers/tus.rs`（HTTP 動詞 → 協定呼叫的轉接）。
+換到的是**落地流程仍然在我們手上**：檔案要落到哪走的是
+`StorageRoot::resolve`，不是第三方 crate 的 storage 抽象。
+
+| 端點 | |
+|---|---|
+| `OPTIONS /api/tus` | 能力探索 |
+| `POST /api/tus` | 建立上傳（含 creation-with-upload）|
+| `HEAD /api/tus/{id}` | 問傳到哪 |
+| `PATCH /api/tus/{id}` | 續傳；補完最後一塊時觸發落地 |
+| `DELETE /api/tus/{id}` | 放棄 |
+
+前端 `tus-js-client`。除了「用套件而不是手刻」之外的實際差別：
+
+- **關掉瀏覽器再打開也能續傳。** 舊版的 `upload_id` 只活在 zustand 的 store
+  裡（記憶體），重新整理就沒了，只能整份重傳。
+- **offset 由伺服器說了算**：每次續傳前先 HEAD。舊版由客戶端自己算，
+  而那個不一致正是先前那個「續傳重送已傳位元組」的 bug。
+
+⚠️ 舊的 `/api/upload/*` **後端端點保留**（仍有測試、89.5% 覆蓋率），
+前端已不再呼叫。留著是為了萬一 tus 在正式環境出問題時還有東西可以退回，
+確認穩定之後再下線。前端的死碼（`planChunks` 與兩個 hook）已經刪掉。
+
+##### 接線時踩到的四個坑
+
+1. **`RequestBody::empty()` 不等於 `absent()`。** axum 的 `Bytes` 抽取器在
+   沒有 body 時給空 `Bytes`，我一律傳 `from_bytes` → 協定把單純的建立當成
+   creation-with-upload → 要求 `Content-Type: application/offset+octet-stream`
+   → 每個 `POST` 都是 **415**。要靠 Content-Type 分辨。
+2. **CORS layer 會吃掉所有 OPTIONS。** `tower-http` 的 `CorsLayer` 對
+   **每一個** OPTIONS 都短路（不是只有真的 preflight），所以 tus 的能力探索
+   永遠送不出 `Tus-Version` / `Tus-Extension`。tus 的路由因此刻意掛在
+   `.layer(cors)` **之後**。代價是零：那個 CORS 設定是 `allow_origin(Any)`
+   且無 credentials，而本 API 是 cookie 認證 —— 跨來源呼叫本來就不成立。
+3. **PATCH 的回應不帶 `Upload-Length`。** 我原本拿 PATCH 的標頭判斷「傳完了沒」，
+   於是落地**永遠不會發生**。而這個 bug 差點溜過去：兩支路徑逃逸的測試
+   「通過」了 —— 檔案根本沒被寫出去，當然也沒逃出去。是「檔案應該落在儲存根」
+   那兩條把它揪出來的，之後再用拆掉 `resolve` 的方式反向驗證了逃逸測試。
+4. **`page.evaluate` 裡不能 `import("tus-js-client")`** —— bare specifier
+   瀏覽器解析不了。改用 `addScriptTag` 注入 node_modules 裡同一版的 dist。
+
+##### 變異測試又抓到兩個
+
+- `normalizeParentPath` 開頭的 `if (path === "/" || path === "") return ""`
+  是**冗餘**的（六個突變全部存活）—— 那兩個輸入經過後面兩個 `replace`
+  本來就會變成 `""`。刪掉。
+- `/^\/+/` 的 `^` 錨點拿掉之後測試照樣過。有開頭斜線時第一個匹配剛好就是它，
+  結果一樣；**沒有**開頭斜線時就會咬掉中間那個分隔符，`"Documents/2026"`
+  變成 `"Documents2026"` —— 檔案落到錯的目錄。補了一條測試釘住。
+
+`startTusUpload` 本體用 `// Stryker disable all` 排除並附理由：它只是把
+`tus-js-client` 的三個呼叫串起來，由 `e2e/tus-upload.spec.ts` 守著，
+在 vitest 裡硬湊 mock 只會測到 mock 本身。
+
 #### Lighthouse 基準線
 
 2026-08-31 在開發機量（三次中位數，量 `/login`）：

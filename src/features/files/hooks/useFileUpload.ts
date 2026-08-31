@@ -1,15 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useUpload, useInitUpload, useUploadChunk } from "../api/useFiles";
+import { useUpload } from "../api/useFiles";
 import { useUploadStore } from "@/store/upload-store";
 import { apiClient } from "@/lib/api-client";
-import { planChunks } from "../chunk-plan";
-import type { FileInfo, UploadSession } from "@/types/api";
-import {
-  getApiErrorBody,
-  getApiErrorMessage,
-  getApiErrorStatus,
-  isNetworkError,
-} from "@/lib/errors";
+import { startTusUpload } from "../tus-upload";
+import type { FileInfo } from "@/types/api";
+import { getApiErrorMessage, isNetworkError } from "@/lib/errors";
 
 // Concurrency-limited upload queue utility
 const createUploadQueue = (concurrency: number) => {
@@ -58,8 +53,6 @@ const uploadQueue = createUploadQueue(4);
 export const useFileUpload = () => {
   const queryClient = useQueryClient();
   const uploadFile = useUpload();
-  const initUpload = useInitUpload();
-  const uploadChunk = useUploadChunk();
   const { addTask, updateTask, tasks: uploadTasks } = useUploadStore();
 
   const handleUploadFiles = async (files: File[], currentPath: string) => {
@@ -71,7 +64,7 @@ export const useFileUpload = () => {
         try {
           // Use chunked upload for files > 1MB to bypass Next.js body size limits
           if (file.size > 1 * 1024 * 1024) {
-            await processChunkedUpload(taskId, file, currentPath);
+            await processTusUpload(taskId, file, currentPath);
           } else {
             await uploadFile.mutateAsync({
               file,
@@ -122,94 +115,52 @@ export const useFileUpload = () => {
     await queryClient.invalidateQueries({ queryKey: ["files"] });
   };
 
-  const processChunkedUpload = async (
-    taskId: string,
-    file: File,
-    currentPath: string,
-    resumeUploadId?: string,
-    startOffset = 0,
-  ) => {
-    let upload_id = resumeUploadId;
-
-    try {
-      if (!upload_id) {
-        try {
-          const initResult = await initUpload.mutateAsync({
-            file_path:
-              currentPath === "/"
-                ? ""
-                : currentPath.startsWith("/")
-                  ? currentPath.slice(1)
-                  : currentPath,
-            file_name: file.name,
-            total_size: file.size,
+  /**
+   * 大檔走 tus 1.0.0（`features/files/tus-upload.ts`）。
+   *
+   * ⚠️ 這裡不再自己算分塊位置。舊版用 `planChunks(file.size, startOffset)`
+   * 由客戶端決定從哪裡續，而 offset 到底在哪只有伺服器知道 —— 那個不一致
+   * 正是先前那個「續傳重送已傳位元組」的 bug。tus 每次續傳前先 HEAD 問一次，
+   * 客戶端沒有猜測的餘地。
+   *
+   * `chunk-plan.ts` 沒有刪：`CHUNK_SIZE` 仍是這裡的分塊大小，而那支模組的
+   * property test 仍然守著「分塊剛好鋪滿且不重疊」這條性質。
+   */
+  const processTusUpload = async (taskId: string, file: File, currentPath: string) =>
+    new Promise<void>((resolve, reject) => {
+      void startTusUpload(file, currentPath, {
+        onProgress: (progress) => updateTask(taskId, { progress }),
+        // 存起來讓「暫停 → 繼續」找得回同一份上傳
+        onUrl: (uploadId) => updateTask(taskId, { uploadId }),
+        onSuccess: () => {
+          updateTask(taskId, { progress: 100, status: "completed" });
+          resolve();
+        },
+        onError: (error) => {
+          updateTask(taskId, {
+            status: "error",
+            error: getApiErrorMessage(error, "Upload interrupted"),
           });
+          reject(error);
+        },
+      }).catch(reject);
+    });
 
-          // ⚠️ Rust 的 Option<i64> 會序列化成 null（不是省略欄位），
-          // 用 `!== undefined` 判斷永遠成立，startOffset 會被設成 null。
-          if (initResult.uploaded_size != null) {
-            console.log(`Resuming upload for ${file.name} from ${initResult.uploaded_size}`);
-            upload_id = initResult.upload_id;
-            startOffset = initResult.uploaded_size;
-          } else {
-            upload_id = initResult.upload_id;
-          }
-
-          updateTask(taskId, { uploadId: upload_id });
-        } catch (error: unknown) {
-          // We might want to handle conflict here or let UI handle it.
-          // For now throwing to be caught by caller if we want UI dialog.
-          // But since we abstracted it, we need a way to bubble conflict up?
-          // For simplicity, let's treat conflict as error string 'File exists' so UI can react if it observes task state.
-          if (
-            getApiErrorStatus(error) === 409 &&
-            !getApiErrorBody<{ upload_id?: string }>(error)?.upload_id
-          ) {
-            updateTask(taskId, { status: "error", error: "File exists" }); // UI can check this error string
-            return;
-          }
-          throw error;
-        }
-      }
-
-      // ⚠️ 從 startOffset 這個**位元組**開始，不是從它所在的分塊開始。
-      // 舊寫法用 `Math.floor(startOffset / CHUNK_SIZE)` 退回分塊開頭，
-      // 斷在分塊中間時會把已經寫進伺服器的那段重送一次（append 模式 →
-      // 檔案變長且錯位）。理由與邊界見 features/files/chunk-plan.ts。
-      for (const { start, end } of planChunks(file.size, startOffset)) {
-        await uploadChunk.mutateAsync({
-          sessionId: upload_id,
-          chunk: file.slice(start, end),
-          offset: start,
-        });
-
-        // file.size 為 0 時不要除以零 —— 空檔案送完就是 100%
-        const progress = file.size === 0 ? 100 : Math.round((end / file.size) * 100);
-        updateTask(taskId, { progress });
-      }
-
-      updateTask(taskId, { status: "completed" });
-    } catch (error: unknown) {
-      console.error(`Chunk upload failed for ${file.name}:`, error);
-      updateTask(taskId, {
-        status: "error",
-        error: getApiErrorMessage(error, "Upload interrupted"),
-        uploadId: upload_id,
-      });
-    }
-  };
-
+  /**
+   * 「繼續」按鈕。
+   *
+   * ⚠️ 不需要先去問伺服器傳到哪 —— `startTusUpload` 內部會用檔案指紋找回
+   * 上一次的上傳 URL（存在 localStorage），再由 tus 自己 HEAD 取得 offset。
+   * 舊版要先 `GET /upload/session/{id}` 拿 `uploaded_size` 再自己算分塊，
+   * 而那個數字與伺服器實際狀態之間有一個可以不一致的縫。
+   */
   const resumeUpload = async (taskId: string) => {
     const task = uploadTasks[taskId];
-    if (!task?.uploadId) return;
+    if (!task) return;
 
     updateTask(taskId, { status: "uploading", error: undefined });
-
     try {
-      const response = await apiClient.get<UploadSession>(`/upload/session/${task.uploadId}`);
-      const uploadedSize = response.data.uploaded_size;
-
-      await processChunkedUpload(taskId, task.file, task.path, task.uploadId, uploadedSize);
+      await processTusUpload(taskId, task.file, task.path);
     } catch (error: unknown) {
       console.error("Failed to resume upload:", error);
       updateTask(taskId, { status: "error", error: "Failed to resume upload" });

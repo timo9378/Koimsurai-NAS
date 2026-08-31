@@ -38,6 +38,8 @@ pub struct AppState {
     pub pool: Pool<Sqlite>,
     pub storage_path: StorageRoot,
     pub queue: Arc<JobQueue>,
+    /// tus 1.0.0 的協定 handle（見 handlers/tus.rs）。
+    pub tus: Arc<crate::handlers::tus::TusHandle>,
     pub webdav: DavHandler,
     pub tx: broadcast::Sender<JobUpdate>,
     pub audit: Arc<AuditService>,

@@ -56,6 +56,7 @@ dependencies = [
  "tower-sessions-sqlx-store",
  "tracing",
  "tracing-subscriber",
+ "tus-protocol",
  "urlencoding",
  "utoipa",
  "utoipa-scalar",
@@ -5764,6 +5765,29 @@ dependencies = [
  "rand 0.9.5",
  "sha1",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "tus-protocol"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72475b057878ba9db19fb2a3e8e85e31dd562b21269cec08746229b3dda487ea"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "futures-core",
+ "futures-util",
+ "http",
+ "percent-encoding",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

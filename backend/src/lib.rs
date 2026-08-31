@@ -170,10 +170,19 @@ pub async fn create_app(pool: SqlitePool, storage_path: PathBuf) -> axum::Router
         .build()
         .expect("建立 HTTP client 失敗（TLS/系統層損壞才可能）");
 
+    let storage_root = crate::storage::StorageRoot::new(storage_path);
+
+    // tus 的暫存區與狀態存放在 <storage>/.tus。建不出來就讓啟動失敗 ——
+    // 靜默降級成「上傳端點在但永遠 500」比直接不啟動更難查。
+    let tus = crate::handlers::tus::build(&storage_root)
+        .await
+        .expect("tus 暫存區建立失敗（磁碟滿了或權限不對）");
+
     let state = AppState {
         pool,
-        storage_path: crate::storage::StorageRoot::new(storage_path),
+        storage_path: storage_root,
         queue,
+        tus,
         webdav,
         tx,
         audit,
