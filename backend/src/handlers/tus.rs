@@ -53,6 +53,21 @@ use crate::error::AppError;
 use crate::state::AppState;
 use crate::storage::StorageRoot;
 
+// ⚠️ 用單一變體的 enum 而不是 `String`，是為了讓 OpenAPI 產出
+// `enum: ["1.0.0"]`。標成自由字串的話 schemathesis 會亂產版本號，
+// 打出來幾乎全是 412 —— operation 看起來有被測到，實際一次都沒進到
+// handler 本體。spec 要說出真正的約束，fuzz 才打得進去。
+//
+// ⚠️ 這裡用一般註解而不是 doc comment：utoipa 會把 doc comment 放進
+// schema 的 description，而這段是寫給維護者的內部理由，不是給 API
+// 使用者看的文件。
+/// tus 協定版本。目前只有 1.0.0。
+#[derive(serde::Deserialize, utoipa::ToSchema)]
+pub enum TusVersion {
+    #[serde(rename = "1.0.0")]
+    V1_0_0,
+}
+
 /// 這個服務對外掛在哪一段路徑。要跟 `routes/mod.rs` 的 nest 一致，
 /// 否則 `Location` 標頭會指到不存在的位置，而客戶端會安靜地續傳失敗。
 pub const BASE_PATH: &str = "/api/tus";
@@ -154,6 +169,15 @@ pub async fn options(State(state): State<AppState>) -> AxumResponse {
     post,
     path = "/api/tus",
     tag = "tus",
+    // ⚠️ 請求標頭一定要記進 spec。少了它們，schemathesis 不知道要送
+    // Tus-Resumable，打出來幾乎全是 412 —— operation 看起來「有被測到」，
+    // 實際上一次都沒進到 handler 本體。
+    params(
+        ("Tus-Resumable" = inline(TusVersion), Header, description = "協定版本，固定 1.0.0"),
+        ("Upload-Length" = Option<i64>, Header, description = "檔案總位元組數。用 Upload-Defer-Length 時可省略"),
+        ("Upload-Defer-Length" = Option<i64>, Header, description = "值為 1 表示長度稍後再給"),
+        ("Upload-Metadata" = Option<String>, Header, description = "逗號分隔的 `鍵 base64值`；本服務認得 filename（必要）與 path")
+    ),
     request_body(
         content = String,
         description = "可選的初始資料（creation-with-upload）。有 body 時 Content-Type 必須是 application/offset+octet-stream",
@@ -209,7 +233,10 @@ fn body_of(headers: &HeaderMap, body: axum::body::Bytes) -> RequestBody {
     head,
     path = "/api/tus/{id}",
     tag = "tus",
-    params(("id" = String, Path, description = "上傳 ID（建立時由 Location 標頭給出）")),
+    params(
+        ("id" = String, Path, description = "上傳 ID（建立時由 Location 標頭給出）"),
+        ("Tus-Resumable" = inline(TusVersion), Header, description = "協定版本，固定 1.0.0")
+    ),
     responses(
         (status = 200, description = "Upload-Offset / Upload-Length / Upload-Metadata 標頭"),
         (status = 404, description = "不存在或已過期")
@@ -231,7 +258,10 @@ pub async fn status(State(state): State<AppState>, AxumPath(id): AxumPath<String
     delete,
     path = "/api/tus/{id}",
     tag = "tus",
-    params(("id" = String, Path, description = "上傳 ID")),
+    params(
+        ("id" = String, Path, description = "上傳 ID"),
+        ("Tus-Resumable" = inline(TusVersion), Header, description = "協定版本，固定 1.0.0")
+    ),
     responses(
         (status = 204, description = "已刪除"),
         (status = 404, description = "不存在"),
@@ -265,7 +295,11 @@ pub async fn terminate(
     patch,
     path = "/api/tus/{id}",
     tag = "tus",
-    params(("id" = String, Path, description = "上傳 ID")),
+    params(
+        ("id" = String, Path, description = "上傳 ID"),
+        ("Tus-Resumable" = inline(TusVersion), Header, description = "協定版本，固定 1.0.0"),
+        ("Upload-Offset" = i64, Header, description = "這一段從哪個位元組開始。必須等於伺服器目前的 offset，否則 409")
+    ),
     request_body(content = String, description = "這一段的位元組", content_type = "application/offset+octet-stream"),
     responses(
         (status = 204, description = "已寫入；Upload-Offset 標頭是新的位置"),

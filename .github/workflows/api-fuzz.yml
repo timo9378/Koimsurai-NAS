@@ -123,6 +123,31 @@ jobs:
           print(f"FUZZ_TOKEN={m.group(1)}")
           PY
 
+      # ⚠️ 沒有這一步，9 個吃路徑參數的 operation **每一次都拿到 404**。
+      #
+      # schemathesis 從 spec 產參數值，而 UUID 與檔名隨機產出來的一律不存在，
+      # 於是那些 operation 一次也沒進到 handler 本體。它自己會警告：
+      #
+      #   Missing test data: 9 operations repeatedly returned 404 Not Found,
+      #   preventing tests from reaching your API's core logic
+      #
+      # 「有被測到」跟「測進去了」是兩件事，而報告上看起來一樣。
+      #
+      # 種子腳本用真的 API 建出資源，把 ID 寫成 schemathesis 的參數覆寫。
+      # 導入當天它自己就撞出一個 bug：重複加同一個標籤會回 500 並洩漏
+      # SQLite 的原始錯誤字串（見 handlers/tag.rs 的 ON CONFLICT）。
+      - name: 種測試資料並產出 schemathesis 設定
+        run: |
+          set -euo pipefail
+          python3 scripts/fuzz_seed.py \
+            --base "http://127.0.0.1:$PORT" \
+            --cookie "access_token=$FUZZ_TOKEN" \
+            --out "$RUNNER_TEMP/schemathesis.toml"
+          echo '### 種好的參數' >> "$GITHUB_STEP_SUMMARY"
+          echo '```toml' >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/schemathesis.toml" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
       # ⚠️ `--exclude-checks` 關掉的五條是**規格漂移**，不是 bug：spec 少寫了
       # 伺服器實際支援的東西（`Allow` header 誠實地列出 PUT，是 spec 少了那個
       # operation），或 schema 的約束跟實際驗證對不上。那是文件品質，
@@ -180,7 +205,8 @@ jobs:
         run: |
           set -euo pipefail
           U="http://127.0.0.1:$PORT"
-          schemathesis run "$RUNNER_TEMP/openapi.json" \
+          schemathesis --config-file "$RUNNER_TEMP/schemathesis.toml" \
+            run "$RUNNER_TEMP/openapi.json" \
             --url "$U" \
             --header "Cookie: access_token=$FUZZ_TOKEN" \
             --header "Origin: $U" \

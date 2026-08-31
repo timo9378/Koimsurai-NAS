@@ -49,14 +49,32 @@ pub async fn add_tag(
     AxumPath(path): AxumPath<String>,
     Json(payload): Json<AddTagRequest>,
 ) -> Result<StatusCode, AppError> {
-    sqlx::query("INSERT INTO file_tags (user_id, file_path, tag_name, color) VALUES (?, ?, ?, ?)")
-        .bind(user_id)
-        .bind(&path)
-        .bind(&payload.tag_name)
-        .bind(&payload.color)
-        .execute(&state.pool)
-        .await
-        .map_err(AppError::from)?;
+    // ⚠️ 一定要 ON CONFLICT DO NOTHING。
+    //
+    // file_tags 有 (user_id, file_path, tag_name) 的 UNIQUE 約束，而重複加
+    // 同一個標籤是**使用者一定會做的事**（點兩下、或兩個分頁各點一次）。
+    // 少了這行，第二次會撞 UNIQUE constraint，`AppError::from(sqlx::Error)`
+    // 把它變成 500 並且把 SQLite 的原始錯誤字串原封不動送出去：
+    //
+    //     500 {"error":"error returned from database: (code: 2067)
+    //          UNIQUE constraint failed: file_tags.user_id, ..."}
+    //
+    // 兩個問題：狀態碼是錯的（客戶端送的東西造成的，不是伺服器壞了），
+    // 而且洩漏了資料表與欄位名稱。
+    //
+    // 用 DO NOTHING 而不是回 409：「把這個標籤加上去」本來就該是冪等的，
+    // 已經在上面不是錯誤。（api-fuzz 的種子腳本撞出來的。）
+    sqlx::query(
+        "INSERT INTO file_tags (user_id, file_path, tag_name, color) VALUES (?, ?, ?, ?)
+         ON CONFLICT(user_id, file_path, tag_name) DO NOTHING",
+    )
+    .bind(user_id)
+    .bind(&path)
+    .bind(&payload.tag_name)
+    .bind(&payload.color)
+    .execute(&state.pool)
+    .await
+    .map_err(AppError::from)?;
 
     Ok(StatusCode::OK)
 }
