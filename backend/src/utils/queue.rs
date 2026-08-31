@@ -296,7 +296,11 @@ pub async fn worker(
                 // 不能用 `return` —— 外層是 `let result = match ...`，
                 // return 會跳出整個 worker 而不只是這個 job。
                 let Ok(dest_path) = storage.resolve(&destination) else {
-                    break 'copy Err(format!("拒絕的目的地路徑：{destination}"));
+                    // ⚠️ 錯誤字串會被寫進 jobs 表，而 `GET /api/tasks` 回的是
+                    // **全域**的工作清單（jobs 表沒有 user_id）—— 把路徑放進
+                    // 訊息裡等於讓別的使用者看到。細節寫進 log 就好。
+                    error!("拒絕的目的地路徑：{destination}");
+                    break 'copy Err("目的地路徑不合法".to_string());
                 };
 
                 if !dest_path.exists() {
@@ -308,8 +312,10 @@ pub async fn worker(
 
                 for path in paths {
                     let Ok(src_path) = storage.resolve(&path) else {
+                        // 同上：路徑只進 log，不進 jobs 表
+                        error!("拒絕的來源路徑：{path}");
                         success = false;
-                        error_msg = format!("拒絕的來源路徑：{path}");
+                        error_msg = "來源路徑不合法".to_string();
                         continue;
                     };
                     if !src_path.exists() {
@@ -344,7 +350,8 @@ pub async fn worker(
             JobType::IndexFile { path } => 'index: {
                 let storage = crate::storage::StorageRoot::from_env();
                 let Ok(full_path) = storage.resolve(&path) else {
-                    break 'index Err(format!("拒絕的索引路徑：{path}"));
+                    error!("拒絕的索引路徑：{path}");
+                    break 'index Err("索引路徑不合法".to_string());
                 };
 
                 if full_path.exists() && full_path.is_file() {
