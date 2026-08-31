@@ -88,105 +88,158 @@ def b64(s: str) -> str:
     return base64.b64encode(s.encode()).decode()
 
 
-def seed(api: Api) -> dict[str, str]:
-    """建資料，回傳可用的參數值。取不到的就略過 —— 種子失敗不該讓整個 fuzz 停擺。"""
-    out: dict[str, str] = {}
+# ⚠️ 破壞性的 operation（restore、delete）第一次呼叫就把資源消耗掉，
+# 之後每一次都 404。schemathesis 預設每個 operation 產 20 個案例
+# （--max-examples 20），所以每一種要種到夠 —— 種一份的話 1 次成功、
+# 19 次 404，報告上仍然是「mostly 404」。
+SEED_COUNT = 25
+
+
+def seed(api: Api) -> dict[str, list[str]]:
+    """建資料，回傳每個參數的候選值。取不到就略過 —— 種子失敗不該讓整個 fuzz 停擺。"""
+    out: dict[str, list[str]] = {}
+
+    def put(key: str, value: str | None) -> None:
+        if value:
+            out.setdefault(key, []).append(value)
 
     # ── 一般檔案（download / tags）─────────────────────────────
     status, _, _ = api.multipart("/api/upload", "fuzz-seed.txt", b"seed content for api-fuzz")
     if created(status):
-        out["file_path"] = "fuzz-seed.txt"
+        put("file_path", "fuzz-seed.txt")
 
     # ── 圖片（thumbnail）──────────────────────────────────────
     status, _, _ = api.multipart("/api/upload", "fuzz-seed.png", PNG_1X1)
     if created(status):
-        out["image_path"] = "fuzz-seed.png"
+        put("image_path", "fuzz-seed.png")
 
     # ── 標籤 ─────────────────────────────────────────────────
-    status, _, _ = api.json("POST", "/api/tags/add/fuzz-seed.txt", {"tag_name": "fuzzseed"})
-    if created(status):
-        out["tag_name"] = "fuzzseed"
+    # DELETE /api/files/{path}/tags/{tag_name} 會把標籤移掉，所以每個標籤
+    # 只夠用一次。
+    for i in range(SEED_COUNT):
+        name = f"fuzzseed{i}"
+        status, _, _ = api.json("POST", "/api/tags/add/fuzz-seed.txt", {"tag_name": name})
+        if created(status):
+            put("tag_name", name)
 
     # ── 分享連結（/s/{id}）────────────────────────────────────
-    status, _, data = api.json("POST", "/api/share", {"file_path": "fuzz-seed.txt"})
-    if status < 400 and isinstance(data, dict) and data.get("id"):
-        out["share_id"] = data["id"]
+    for _ in range(SEED_COUNT):
+        status, _, data = api.json("POST", "/api/share", {"file_path": "fuzz-seed.txt"})
+        if created(status) and isinstance(data, dict):
+            put("share_id", data.get("id"))
 
     # ── 分塊上傳工作階段（/api/upload/session/{id}）────────────
-    status, _, data = api.json(
-        "POST", "/api/upload/init",
-        {"file_path": "", "file_name": "fuzz-session.bin", "total_size": 1024},
-    )
-    if status < 400 and isinstance(data, dict) and data.get("upload_id"):
-        out["session_id"] = data["upload_id"]
+    for i in range(SEED_COUNT):
+        status, _, data = api.json(
+            "POST", "/api/upload/init",
+            {"file_path": "", "file_name": f"fuzz-session-{i}.bin", "total_size": 1024},
+        )
+        if created(status) and isinstance(data, dict):
+            put("session_id", data.get("upload_id"))
 
     # ── tus 上傳（/api/tus/{id}）──────────────────────────────
-    status, headers, _ = api._req(
-        "POST", "/api/tus",
-        extra={
-            "Tus-Resumable": "1.0.0",
-            "Upload-Length": "1024",
-            "Upload-Metadata": f"filename {b64('fuzz-tus.bin')}",
-        },
-    )
-    location = headers.get("Location") or headers.get("location")
-    if status < 400 and location:
-        out["tus_id"] = location.rsplit("/", 1)[-1]
+    # DELETE /api/tus/{id} 會終止上傳，HEAD 之後就 404 —— 兩個共用同一批 id。
+    for i in range(SEED_COUNT):
+        status, headers, _ = api._req(
+            "POST", "/api/tus",
+            extra={
+                "Tus-Resumable": "1.0.0",
+                "Upload-Length": "1024",
+                "Upload-Metadata": f"filename {b64(f'fuzz-tus-{i}.bin')}",
+            },
+        )
+        location = headers.get("Location") or headers.get("location")
+        if created(status) and location:
+            put("tus_id", location.rsplit("/", 1)[-1])
 
     # ── 垃圾桶項目（/api/trash/{filename}）─────────────────────
-    api.multipart("/api/upload", "fuzz-trash.txt", b"to be deleted")
-    api.json("POST", "/api/files/batch/delete", {"paths": ["fuzz-trash.txt"]})
+    # POST 是「還原」，會把檔案搬出垃圾桶。
+    for i in range(SEED_COUNT):
+        api.multipart("/api/upload", f"fuzz-trash-{i}.txt", b"to be deleted")
+        api.json("POST", "/api/files/batch/delete", {"paths": [f"fuzz-trash-{i}.txt"]})
     status, _, data = api.json("GET", "/api/trash")
-    if status < 400 and isinstance(data, list) and data:
-        name = data[0].get("name")
-        if name:
-            out["trash_filename"] = name
+    if created(status) and isinstance(data, list):
+        for item in data:
+            put("trash_filename", item.get("name"))
 
     # ── 稽核紀錄（/api/audit/logs/{id}）────────────────────────
     #
     # ⚠️ 不是每個動作都會寫 audit log —— 上傳就不會，建資料夾才會。
     # 少了這一步，audit 的清單是空的，DELETE /api/audit/logs/{id}
     # 就永遠拿 404。
-    api.json("POST", "/api/files/folder", {"path": "", "folder_name": "fuzz-seed-dir"})
-    status, _, data = api.json("GET", "/api/audit/logs?page=1&limit=1")
+    for i in range(SEED_COUNT):
+        api.json("POST", "/api/files/folder", {"path": "", "folder_name": f"fuzz-seed-dir-{i}"})
+    status, _, data = api.json("GET", f"/api/audit/logs?page=1&limit={SEED_COUNT}")
     rows = data.get("logs") if isinstance(data, dict) else data
-    if status < 400 and isinstance(rows, list) and rows and rows[0].get("id") is not None:
-        out["audit_id"] = str(rows[0]["id"])
+    if created(status) and isinstance(rows, list):
+        for row in rows:
+            if row.get("id") is not None:
+                put("audit_id", str(row["id"]))
 
     return out
 
 
-def toml_config(v: dict[str, str]) -> str:
-    """把種好的值寫成 schemathesis 的 operation 參數覆寫。"""
-    blocks: list[str] = [
+def toml_config(v: dict[str, list[str]]) -> str:
+    """把種好的值寫成 schemathesis 的參數覆寫。
+
+    多個候選值用 `[dictionaries.*]`，schemathesis 會從裡面抽 —— 破壞性的
+    operation 才不會第一次之後就全部 404。
+    """
+    head: list[str] = [
         "# 由 scripts/fuzz_seed.py 產生 —— 不要手改。",
         "# 這些是**真的存在**的資源 ID，讓 schemathesis 打得進 handler 本體",
         "# 而不是每次都拿到 404。",
         "",
     ]
+    dicts: list[str] = []
+    ops: list[str] = []
+    seen: set[str] = set()
 
-    def block(name: str, params: dict[str, str]) -> None:
-        if not all(params.values()):
+    def dictionary(key: str) -> str | None:
+        """把 `key` 的候選值寫成一個字典，回傳字典名稱。"""
+        values = v.get(key) or []
+        if not values:
+            return None
+        if key not in seen:
+            seen.add(key)
+            items = ", ".join(f'"{x}"' for x in values)
+            dicts.append(f"[dictionaries.{key}]")
+            dicts.append(f"values = [{items}]")
+            dicts.append("")
+        return key
+
+    def block(name: str, params: dict[str, str], literals: dict[str, str] | None = None) -> None:
+        """params：參數名 → 種子的 key。任何一個湊不齊就整塊略過。
+
+        literals 是固定值（例如縮圖尺寸），不需要種資料。
+        ⚠️ 同一個 operation 只能有一個 `[[operations]]` 區塊 —— 拆成兩塊
+        會互相蓋掉，而症狀是其中一個參數安靜地失效。
+        """
+        resolved = {p: dictionary(k) for p, k in params.items()}
+        if not all(resolved.values()):
             return
-        kv = ", ".join(f'"{k}" = "{val}"' for k, val in params.items())
-        blocks.append("[[operations]]")
-        blocks.append(f'include-name = "{name}"')
-        blocks.append(f"parameters = {{ {kv} }}")
-        blocks.append("")
+        parts = [f'"{p}" = {{ dictionary = "{d}" }}' for p, d in resolved.items()]
+        parts += [f'"{p}" = "{val}"' for p, val in (literals or {}).items()]
+        ops.append("[[operations]]")
+        ops.append(f'include-name = "{name}"')
+        ops.append(f"parameters = {{ {', '.join(parts)} }}")
+        ops.append("")
 
-    fp, img, tag = v.get("file_path"), v.get("image_path"), v.get("tag_name")
-    block("GET /api/download/{path}", {"path": fp})
-    block("GET /api/thumbnail/{size}/{path}", {"size": "256", "path": img})
-    block("DELETE /api/files/{path}/tags/{tag_name}", {"path": fp, "tag_name": tag})
-    block("POST /api/files/{path}/tags", {"path": fp})
-    block("POST /api/files/{path}/star", {"path": fp})
-    block("GET /s/{id}", {"id": v.get("share_id")})
-    block("GET /api/upload/session/{id}", {"id": v.get("session_id")})
-    block("PATCH /api/upload/session/{id}", {"id": v.get("session_id")})
-    block("HEAD /api/tus/{id}", {"id": v.get("tus_id")})
-    block("POST /api/trash/{filename}", {"filename": v.get("trash_filename")})
-    block("DELETE /api/audit/logs/{id}", {"id": v.get("audit_id")})
-    return "\n".join(blocks) + "\n"
+    block("GET /api/download/{path}", {"path": "file_path"})
+    block("GET /api/thumbnail/{size}/{path}", {"path": "image_path"}, {"size": "256"})
+    block("DELETE /api/files/{path}/tags/{tag_name}", {"path": "file_path", "tag_name": "tag_name"})
+    block("POST /api/files/{path}/tags", {"path": "file_path"})
+    block("POST /api/files/{path}/star", {"path": "file_path"})
+    block("GET /s/{id}", {"id": "share_id"})
+    block("GET /api/upload/session/{id}", {"id": "session_id"})
+    block("PATCH /api/upload/session/{id}", {"id": "session_id"})
+    block("HEAD /api/tus/{id}", {"id": "tus_id"})
+    block("DELETE /api/tus/{id}", {"id": "tus_id"})
+    block("PATCH /api/tus/{id}", {"id": "tus_id"})
+    block("POST /api/trash/{filename}", {"filename": "trash_filename"})
+    block("DELETE /api/audit/logs/{id}", {"id": "audit_id"})
+
+    return "\n".join(head + dicts + ops) + "\n"
 
 
 def main() -> int:
@@ -200,7 +253,8 @@ def main() -> int:
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(toml_config(values))
 
-    print(f"種好 {len(values)} 個參數：{', '.join(sorted(values)) or '（無）'}", file=sys.stderr)
+    summary = ", ".join(f"{k}×{len(vs)}" for k, vs in sorted(values.items()))
+    print(f"種好：{summary or '（無）'}", file=sys.stderr)
     # ⚠️ 種子失敗不讓整個 job 紅：少幾個真實值只是 fuzz 打得淺一點，
     # 而 schemathesis 自己會用警告告訴我們哪些 operation 還在拿 404。
     return 0
