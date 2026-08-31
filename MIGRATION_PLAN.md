@@ -947,6 +947,28 @@ schemathesis 之後可以直接吃它，不必先起伺服器也不必偽造登�
 內容也拿得到錯誤；後者還要 fsync 到實體磁碟（防斷電），對 10GB 級的上傳
 代價太大，那是另一個層次的取捨。
 
+### schemathesis（API fuzz）目前狀態
+
+2026-08-31 最後一次：**50 個 operation、1492/1492 通過，綠燈。**
+（接 tus 之前是 44 個 operation。）
+
+補上 tus 的 utoipa 標註之後第一次跑就打出兩個 `status_code_conformance`
+失敗，兩個都是**標註寫錯**不是伺服器 bug：
+
+- `OPTIONS /api/tus` 實際回 200，標成 204。tus 規格說 SHOULD 回 204 **或**
+  200，而 `tus-protocol` 選了 200 —— 標註要照**實際行為**寫，不是照規格抄。
+- `DELETE /api/tus/{id}` 會回 412（缺 `Tus-Resumable`），漏標了。
+
+這正是把端點放進 spec 的理由：spec 與實作對不上的地方，只有拿 spec 去打
+實作才看得出來。
+
+另外 `scripts/schemathesis_hooks.py` 把 `application/offset+octet-stream`
+alias 到內建的 `application/octet-stream` —— 沒有它，tus 的兩個吃 body 的
+operation 會直接報 `Serialization not possible` 而不是被 fuzz。
+
+⚠️ 先前那兩個原因不明的 `Network Error` 這次**沒有出現**。它們是間歇性的，
+不代表已經解決。
+
 ### schemathesis（API fuzz）第一次跑的結果
 
 用 `export_openapi` 產的 spec，對一個**獨立的測試實例**（PORT=3099、
