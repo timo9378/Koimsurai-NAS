@@ -340,8 +340,6 @@ pub async fn create_router(state: AppState) -> Router {
             "/api/upload-link/{id}/info",
             get(upload_link::get_upload_link_info),
         ) // Public upload link - info
-        .route("/webdav", any(webdav::webdav_handler))
-        .route("/webdav/{*path}", any(webdav::webdav_handler))
         // Public health check for uptime monitoring (no auth, returns 200)
         .route("/health", get(|| async { "OK" }))
         // 前端錯誤回報的轉發端點（Sentry SDK 的 tunnel 目的地）。
@@ -388,6 +386,32 @@ pub async fn create_router(state: AppState) -> Router {
                 //
                 // `route_layer` 只套在**有對到**的路由上，正是 auth middleware
                 // 該有的行為。
+                .route_layer(middleware::from_fn_with_state(state.clone(), require_auth))
+                .layer(DefaultBodyLimit::max(10 * 1024 * 1024 * 1024)),
+        )
+        // ── WebDAV ───────────────────────────────────────────────
+        //
+        // ⚠️ 這兩條原本掛在根 router 上、**不在任何 auth layer 底下**，
+        // 於是完全不需要憑證就能對整個儲存空間讀寫刪列目錄
+        // （`GET /webdav/../任何檔案` 直接回 200）。詳見 handlers/webdav.rs。
+        //
+        // 跟 tus 同樣的理由掛在 cors 之後：CorsLayer 會短路掉每一個 OPTIONS，
+        // 而 WebDAV 的能力探索就是 OPTIONS。
+        //
+        // ⚠️ `route_layer` 而不是 `layer` —— 後者會連 fallback 一起包住，
+        // 讓所有未對到的路徑變成 401（這個坑今天已經踩過一次）。
+        .merge(
+            Router::new()
+                .route(webdav::MOUNT_PATH, any(webdav::webdav_handler))
+                // ⚠️ 結尾斜線要獨立一條。`{*path}` 匹配不到空 segment，
+                // 所以 `/webdav/` 會落到 fallback 變成 404 —— 而 WebDAV 客戶端
+                // 請求集合根時送的就是這個形式。少了它既是功能缺口，
+                // 那條路徑也不會經過下面的 auth layer。
+                .route(&format!("{}/", webdav::MOUNT_PATH), any(webdav::webdav_handler))
+                .route(
+                    &format!("{}/{{*path}}", webdav::MOUNT_PATH),
+                    any(webdav::webdav_handler),
+                )
                 .route_layer(middleware::from_fn_with_state(state.clone(), require_auth))
                 .layer(DefaultBodyLimit::max(10 * 1024 * 1024 * 1024)),
         )

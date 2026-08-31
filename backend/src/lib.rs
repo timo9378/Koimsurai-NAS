@@ -108,7 +108,14 @@ pub async fn create_app(pool: SqlitePool, storage_path: PathBuf) -> axum::Router
     ));
 
     // Initialize WebDAV
+    // ⚠️ `strip_prefix` 不能少。沒有它，dav-server 拿到的是**完整**的 URL
+    // 路徑（`/webdav/foo`），於是它去找 `<storage>/webdav/foo` —— 整個 `WebDAV`
+    // 掛在錯的子目錄上，所有正常請求都 404，而 `/webdav/../x` 反而讀得到
+    // 儲存根。功能壞掉與安全漏洞是同一個成因。
+    //
+    // 必須跟 routes/mod.rs 的掛載路徑一致。
     let webdav = DavHandler::builder()
+        .strip_prefix(crate::handlers::webdav::MOUNT_PATH)
         .filesystem(LocalFs::new(storage_path.clone(), false, false, false))
         .locksystem(dav_server::memls::MemLs::new())
         .build_handler();
