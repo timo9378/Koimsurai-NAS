@@ -135,8 +135,8 @@ jobs:
       # 用 llvm-cov 包起來跑，一次拿到「測試有沒有過」與「涵蓋了多少」兩個訊號
       # ——分成兩道會把整個測試套件跑兩次。
       #
-      # ⚠️ --fail-under-regions 43 是**棘輪**不是目標。實測 45.99%
-      #    （functions 39.33 / lines 45.53），留約 2pp 餘裕：加一段還沒測到的
+      # ⚠️ --fail-under-regions 46 是**棘輪**不是目標。實測 48.50%
+      #    （functions 43.21 / lines 48.38），留約 2pp 餘裕：加一段還沒測到的
       #    新功能不該當場擋下，但「刪掉一批測試」會被抓到。補了測試就把數字往上調。
       #
       #    數字本身不必太在意——真正該看的是分佈，見下面那步印出來的逐檔表。
@@ -150,12 +150,19 @@ jobs:
       #      utils/image.rs           0 → 63.4%（magic bytes 判斷那半）
       #      handlers/media.rs        0 → 27.8%（路徑處理那半；抓到三個路徑漏洞）
       #
-      #    接下來值得補的（0%，但都是一般 CRUD，優先度低於上面那批）：
-      #      handlers/trash.rs / tag.rs / version.rs / media.rs / audit.rs
+      #      storage.rs               —  98.1%（路徑能力型別；六個逃逸的 PoC）
+      #
+      #    接下來值得補的（實測 2026-08-31，都是一般 CRUD，優先度低於上面那批）：
+      #      handlers/tag.rs / version.rs / permission.rs / job.rs / ws.rs  全 0%
+      #      handlers/trash.rs 5.2%（path_escape 的測試只碰到提早 return 的分支）
+      #      handlers/auth.rs 21.1% / utils/queue.rs 27.7% / handlers/file.rs 30.4%
+      #
+      #    ⚠️ handlers/version.rs 是 0% 而不是「沒人測」——restore_version 的路由
+      #      只有一個參數、handler 卻抽 Path<(String, String)>，永遠 500 進不了函式本體。
       - name: nextest + 覆蓋率
         run: |
           cargo llvm-cov nextest --locked --no-fail-fast \
-            --fail-under-regions 43 --summary-only 2>&1 | tee coverage.txt
+            --fail-under-regions 46 --summary-only 2>&1 | tee coverage.txt
 
       # 逐檔表寫進 job summary：聚合數字看不出「哪裡是空的」，而那才是要看的。
       # !cancelled()：沒過門檻時上一步會紅，那時候最需要看這張表。

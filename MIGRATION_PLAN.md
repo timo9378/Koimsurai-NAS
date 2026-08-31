@@ -638,7 +638,7 @@ v8 預設只把**被測試碰到的檔案**列入分母 —— 那樣顯示 **51
 history / selection / marquee、`chunk-plan`、`errors`、`file-icons`、`a11y`、
 兩個 store）與三支元件；`Finder` / `FileList` / `DesktopIcons` / `MobileLayout`
 這四支（合計約 3600 行）仍然沒有測試，而那正是分母的大宗。
-| `cargo llvm-cov` | ✅ 已接 CI，門檻 `--fail-under-regions 24` | — |
+| `cargo llvm-cov` | ✅ 已接 CI，門檻 `--fail-under-regions 46` | — |
 
 ### 未安裝（工具鏈盤點列了但還沒引入）
 
@@ -648,8 +648,15 @@ Stryker（前端變異測試）、`@lhci/cli`（效能預算）、schemathesis�
 
 ### 後端覆蓋率的分佈
 
-導入當下（2026-08-31）是 **25.19%**，補完四個「壞了不會有症狀」的區塊之後是
-**32.12%**（functions 29.61 / lines 32.89），CI 門檻 `--fail-under-regions 30`。
+導入當下（2026-08-31）是 **25.19%**，補完幾批「壞了不會有症狀」的區塊、
+再加上路徑逃逸那輪之後是 **48.50%**（functions 43.21 / lines 48.38），
+CI 門檻 `--fail-under-regions 46`。
+
+仍為 0% 的：`tag.rs`、`version.rs`、`permission.rs`、`job.rs`、`ws.rs`、
+`system.rs`、`docker.rs`、`webdav.rs`、`utils/metadata.rs`。
+其中 **`version.rs` 的 0% 不是「沒人測」** —— `restore_version` 永遠 500，
+根本進不了函式本體（見 §9-bis）。`trash.rs` 只有 5.24%：路徑逃逸的測試
+只碰到提早 return 的分支。
 
 | 檔案 | 覆蓋率 | 備註 |
 |---|---|---|
