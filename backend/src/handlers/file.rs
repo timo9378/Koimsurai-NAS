@@ -647,6 +647,21 @@ pub async fn upload_file(
             file.write_all(&chunk).await.map_err(AppError::from)?;
             total_written += chunk.len();
         }
+
+        // ⚠️ 一定要 flush，不能靠 drop。
+        //
+        // `tokio::fs::File` 有自己的緩衝，而它的文件明講：drop 時**不保證**
+        // 資料已經寫出去，而且 drop 過程中發生的寫入錯誤會被**直接吞掉**。
+        // 少了這行有兩個後果：
+        //   1. 回應送出時檔案可能還沒完整落地 —— 客戶端上傳完立刻列目錄／下載
+        //      會拿到截斷或不存在的檔案（測試在機器忙碌時偶發紅過一次，
+        //      就是這個）
+        //   2. 磁碟滿了之類的錯誤完全看不到，上傳回報成功而檔案是壞的
+        //
+        // 用 flush 而不是 sync_all：前者把緩衝推給 OS，之後任何讀取都看得到
+        // 正確內容，也拿得到錯誤；後者還要 fsync 到實體磁碟（防斷電），
+        // 對 10GB 級的上傳代價太大，那是另一個層次的取捨。
+        file.flush().await.map_err(AppError::from)?;
         tracing::info!("File {} written successfully, {} bytes", file_name, total_written);
 
         // NOTE: thumbnail generation will be enqueued after we determine mime_type

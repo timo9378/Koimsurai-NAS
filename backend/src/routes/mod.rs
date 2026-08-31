@@ -101,7 +101,7 @@ use crate::utils::versioning::FileVersion;
         (name = "tags", description = "Tag management endpoints")
     )
 )]
-struct ApiDoc;
+pub struct ApiDoc;
 
 pub async fn create_router(state: AppState) -> Router {
     // Session store (SqliteStore for persistence)
@@ -241,8 +241,22 @@ pub async fn create_router(state: AppState) -> Router {
         ])
         .allow_headers(Any);
 
-    Router::new()
+    // API 文件（需要登入）
+    //
+    // ⚠️ 這道 layer 不能省。掛在 router 根層而沒有 require_auth 的話，
+    // `https://<host>/scalar` 對任何人都是 200 —— 完整的端點清單、參數、
+    // schema 全部攤開給人看。那不是漏洞，但它把攻擊面整理好送到對方手上，
+    // 而這台是對外開放的。
+    //
+    // ⚠️ ApiDoc::openapi() 產生的 spec **本身**就在 binary 裡，這道 layer
+    // 擋的是「不用登入就讀得到」。真的要讓 production 完全沒有這份文件，
+    // 得改成 feature flag 在編譯期拿掉。
+    let docs_routes = Router::new()
         .merge(Scalar::with_url("/scalar", ApiDoc::openapi()))
+        .layer(middleware::from_fn_with_state(state.clone(), require_auth));
+
+    Router::new()
+        .merge(docs_routes)
         .nest("/api/auth", auth_routes)
         .nest("/api", file_routes)
         .nest("/api/docker", docker_routes)

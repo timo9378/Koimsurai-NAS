@@ -19,6 +19,8 @@ node_modules/
 coverage/
 coverage.txt
 lcov.info
+# `cargo run --bin export_openapi` 的產物（給 schemathesis 吃的）
+openapi.json
 # cargo-llvm-cov 的中繼檔（在 workspace root 的 target/ 底下，已被 target 涵蓋，
 # 但用 --output-dir 時會落在別處）
 llvm-cov-target/

@@ -637,6 +637,39 @@ id 會出現在日誌、瀏覽器歷史、使用者自己貼出來的錯誤訊�
 `handlers/trash.rs`、`tag.rs`、`version.rs`、`media.rs`、`audit.rs`、
 `search.rs`、`permission.rs`。
 
+### API 文件與 spec 匯出
+
+`/scalar` 原本掛在 router 根層、沒有 `require_auth` —— `https://<host>/scalar`
+對任何人都是 200，完整的端點清單、參數、schema 全部攤開。已移到
+`require_auth` 後面（登入才看得到），並補一條測試釘住。
+
+⚠️ 那份 spec **本身**仍然在 binary 裡，這道 layer 擋的是「不用登入就讀得到」。
+真的要讓 production 完全沒有這份文件，得改成 feature flag 在編譯期拿掉。
+
+`cargo run --bin export_openapi -- openapi.json` 把 spec 寫成檔案，
+schemathesis 之後可以直接吃它，不必先起伺服器也不必偽造登入。
+
+### 三條上傳路徑都沒有 flush
+
+`tokio::fs::File` 有自己的緩衝，而它的文件明講：drop 時**不保證**資料已經
+寫出去，drop 過程中的寫入錯誤會被**直接吞掉**。三條上傳路徑
+（`upload.rs` 分塊續傳、`upload_link.rs` 匿名上傳、`file.rs` 一般 multipart）
+都只 `write_all` 就結束，兩個後果：
+
+1. 回應送出時檔案可能還沒完整落地 —— 客戶端上傳完立刻列目錄／下載會拿到
+   截斷或不存在的檔案
+2. 磁碟滿了之類的錯誤完全看不到，上傳回報成功而檔案是壞的
+
+`upload.rs` 那條尤其嚴重：完成時會 rename 再讀 metadata 拿大小，而 rename 是
+目錄操作 —— 資料還在緩衝裡的話，記進 `files` 資料表的大小會是錯的。
+
+⚠️ 這個是**測試偶發紅一次**才發現的（機器忙碌時，`anonymous_upload_lands_in_the_target_folder`
+斷言檔案存在失敗）。當下很容易當成 flaky test 重跑帶過 —— 那樣就會錯過它。
+
+用 `flush` 而不是 `sync_all`：前者把緩衝推給 OS，之後任何讀取都看得到正確
+內容也拿得到錯誤；後者還要 fsync 到實體磁碟（防斷電），對 10GB 級的上傳
+代價太大，那是另一個層次的取捨。
+
 ### 程式面的已知債
 
 - `Finder.tsx` 約 1400 行。上一頁/下一頁已抽成 `finder/history.ts`，

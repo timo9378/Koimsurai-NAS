@@ -128,6 +128,30 @@ async fn valid_bearer_token_gets_through() {
     assert_ne!(res.status(), StatusCode::UNAUTHORIZED, "有效 token 不該被擋");
 }
 
+#[tokio::test]
+async fn the_api_docs_require_login() {
+    let app = spawn_app().await;
+
+    // ⚠️ /scalar 掛在 router 根層（不在 /api 底下），很容易在重構時把
+    //    require_auth 那道 layer 弄丟 —— 而弄丟之後完全沒有症狀，只是
+    //    完整的端點清單、參數、schema 對任何人都是 200。
+    let res = Client::new()
+        .get(format!("{}/scalar", app.address))
+        .send()
+        .await
+        .expect("request");
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED, "API 文件不該公開");
+
+    // 登入之後看得到
+    let client = register_and_login(&app, "doc_reader").await;
+    let res = client
+        .get(format!("{}/scalar", app.address))
+        .send()
+        .await
+        .expect("request");
+    assert!(res.status().is_success(), "登入後應該看得到：{}", res.status());
+}
+
 // ─────────────────────── 守衛：CSRF 那半 ───────────────────────
 //
 // cookie 認證的**寫入類**請求要求 Origin 或 Referer。Bearer 不受此限制 ——
