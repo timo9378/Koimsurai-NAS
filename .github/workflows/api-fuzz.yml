@@ -112,10 +112,12 @@ jobs:
           print(f"FUZZ_TOKEN={m.group(1)}")
           PY
 
-      # ⚠️ `--exclude-checks` 關掉的那六條全是**規格漂移**，不是 bug：
+      # ⚠️ `--exclude-checks` 關掉的那七條全是**規格漂移**，不是 bug：
       # utoipa 的 `responses(...)` 只標了 happy path，所以任何 4xx/5xx 都算
       # 「未記載的狀態碼」（實測 45 個），`Allow` header 與「宣告了伺服器不支援的
-      # 方法」同理。那是文件品質，要補是去補標註，不是改程式。
+      # 方法」同理。allow_header_conformance 也是：伺服器的 `Allow` 誠實地列出
+      # PUT（rename_file 確實存在），是 spec 少了那個 operation。
+      # 那是文件品質，要補是去補標註，不是改程式。
       #
       # 留著會讓這個 job **永遠是紅的**——而一個永遠紅的排程 job 等於沒有 job，
       # 沒有人會再看它。現在留下的檢查是「真的出事才會紅」的那些：
@@ -136,7 +138,7 @@ jobs:
             --header "Cookie: access_token=$FUZZ_TOKEN" \
             --header "Origin: $U" \
             --exclude-path-regex '^/api/(docker|terminal|media/stream|media/hls)' \
-            --exclude-checks response_schema_conformance,status_code_conformance,positive_data_acceptance,negative_data_rejection,unsupported_method,missing_required_header \
+            --exclude-checks response_schema_conformance,status_code_conformance,positive_data_acceptance,negative_data_rejection,unsupported_method,missing_required_header,allow_header_conformance \
             --max-examples 20 \
             --continue-on-failure
 

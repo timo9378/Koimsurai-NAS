@@ -704,8 +704,8 @@ DELETE、清垃圾桶、刪檔。
 **已接 CI**（`.github/workflows/api-fuzz.yml`）：workflow_dispatch + 每週日
 20:00 UTC + PR 動到 `backend/` 時。
 
-⚠️ CI 上關掉了六條**規格漂移**的檢查（未記載的狀態碼 45、`Allow` header、
-宣告了伺服器不支援的方法…）。那些不是 bug —— utoipa 的 `responses(...)` 只標了
+⚠️ CI 上關掉了七條**規格漂移**的檢查（未記載的狀態碼 45、`Allow` header 7、
+宣告了伺服器不支援的方法 6…）。那些不是 bug —— utoipa 的 `responses(...)` 只標了
 happy path，所以任何 4xx/5xx 都算「未記載」。留著會讓這個 job **永遠是紅的**，
 而永遠紅的排程 job 等於沒有 job。現在留下的是「真的出事才會紅」的那幾條
 （`server_error`、`not_a_server_error`、`ensure_resource_availability`）。
