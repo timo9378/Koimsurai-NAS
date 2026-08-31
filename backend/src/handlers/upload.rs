@@ -28,6 +28,18 @@ pub async fn init_upload(
 ) -> Result<Json<InitUploadResponse>, AppError> {
     let target_dir = validate_path(&state.storage_path, &payload.file_path)?;
 
+    // ⚠️ file_path 有過 validate_path，但 file_name **也要**驗 —— 它同樣是
+    // 使用者送來的，而完成上傳時會做 `target_dir.join(&file_name)` 再 rename
+    // 過去。`../evil.sh` 這種檔名等於一個任意檔案寫入。
+    //
+    // 檔名就該是「一個名字」：不含任何路徑分隔符，也不是 `.` / `..`。
+    let name = std::path::Path::new(&payload.file_name);
+    let is_plain_file_name = name.components().count() == 1
+        && matches!(name.components().next(), Some(std::path::Component::Normal(_)));
+    if !is_plain_file_name {
+        return Err(AppError::Status(StatusCode::BAD_REQUEST));
+    }
+
     if !target_dir.exists() {
         tokio::fs::create_dir_all(&target_dir)
             .await

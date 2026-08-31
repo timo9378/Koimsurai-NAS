@@ -564,6 +564,7 @@ Stryker（前端變異測試）、`@lhci/cli`（效能預算）、schemathesis�
 | `handlers/terminal.rs` | 0 → **64.3%** | 白名單 + cd／補全；抓到五個逃逸，見下 |
 | `handlers/upload.rs` | 0 → **87.4%** | 分塊續傳；抓到一個 IDOR，見下 |
 | `utils/image.rs` | 0 → **63.4%** | magic bytes 判斷那半 |
+| `handlers/media.rs` | 0 → **27.8%** | 路徑處理那半；抓到三個路徑漏洞，見下 |
 
 **補測試時抓到的 CSRF 繞過**：`middleware/auth.rs` 原本用
 `origin_host.starts_with(host_val)` 比對 Origin 與 Host。Host 是
@@ -606,6 +607,31 @@ terminal.rs 裡有三處同樣的寫法，一起抽成 `is_within_storage`。
 id 會出現在日誌、瀏覽器歷史、使用者自己貼出來的錯誤訊息裡。
 改成 `WHERE id = ? AND user_id = ?`，並回 404 而不是 403 —— 不存在與不屬於你
 對外表現要一樣，否則等於提供一個「這個 id 存在嗎」的探測器。
+
+**`starts_with` 稽核抓到的三個路徑漏洞**（既然同一個模式已經出事兩次，
+把後端所有 `starts_with` 與「把使用者輸入 join 到 storage 後面」的地方掃了一遍）：
+
+| 端點 | 問題 | 嚴重度 |
+|---|---|---|
+| `GET /api/media/hls/serve` | **任意檔案讀取** | 高 |
+| `POST /api/upload/init` | **任意檔案寫入**（`file_name` 沒驗） | 高 |
+| `GET /api/media/stream`、`/hls/status` | 檔案存在性探測 | 中 |
+
+`hls_serve` 那個最嚴重：`cache.join(file)` 之後用 `Path::starts_with` 檢查包含
+關係，但**那是純字面比對，不解析 `..`**——
+
+    "/s/.hls_cache/abc/../../secret.txt".starts_with("/s/.hls_cache/abc") == true
+
+元件是 `[…, abc, ParentDir, ParentDir, secret.txt]`，確實以 cache 的元件開頭。
+檢查通過，`fs::read` 才由 OS 解析 `..`，而這個端點會把內容直接回給呼叫端。
+已登入使用者只要那部影片轉過一次 HLS（快取目錄存在），就能讀走後端讀得到的
+任何檔案——包括 `/data/db` 底下的 SQLite 資料庫。
+
+這是 `starts_with` 在這包裡第三次出事。前兩次是「字元前綴 ≠ 元件前綴」
+（CSRF 的 Origin、terminal 的 cd），這次是「元件前綴 ≠ 解析後的包含關係」。
+處置：字面層只接受 `Normal` 元件，再 `canonicalize` 確認一次（擋符號連結）。
+`stream_media` / `hls_status` 改走既有的 `validate_path`；`upload` 的
+`file_name` 要求必須是單一 `Normal` 元件。
 
 還是 **0%** 的（都是一般 CRUD，優先度低於上面那批）：
 `handlers/trash.rs`、`tag.rs`、`version.rs`、`media.rs`、`audit.rs`、

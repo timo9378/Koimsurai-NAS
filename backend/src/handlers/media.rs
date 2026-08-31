@@ -42,7 +42,19 @@ pub async fn stream_media(
     State(state): State<AppState>,
     Query(params): Query<StreamParams>,
 ) -> impl IntoResponse {
-    let file_path = state.storage_path.join(&params.path);
+    // ⚠️ 一定要走 validate_path，不能直接 `storage_path.join(&params.path)`。
+    // `Path::join` 不做任何正規化：`../../etc/passwd` 會原封不動留在路徑裡，
+    // 由 OS 在開檔時才解析 —— 中間沒有任何一步會發現它已經走出 storage。
+    // 這個端點會把檔案內容串流回去，所以那就是一個任意檔案讀取。
+    //
+    // 被拒絕時回 404 而不是 403：拒絕與不存在對外表現要一樣，否則等於提供
+    // 一個「這個路徑存在嗎」的探測器。
+    let Ok(file_path) = crate::handlers::file::validate_path(&state.storage_path, &params.path) else {
+        return Response::builder()
+            .status(404)
+            .body(Body::from("File not found"))
+            .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數");
+    };
 
     if !file_path.exists() {
         return Response::builder()
@@ -343,7 +355,15 @@ fn check_hls_ready(cache_path: &std::path::Path, quality: &str) -> (bool, Vec<St
     )
 )]
 pub async fn hls_status(State(state): State<AppState>, Query(params): Query<HlsParams>) -> impl IntoResponse {
-    let file_path = state.storage_path.join(&params.path);
+    // 同 stream_media：不能直接 join（見那裡的說明）。這個端點雖然只回狀態，
+    // 但「存在 / 不存在」的回應不同，餵得進任意路徑就是一個存在性探測器。
+    let Ok(file_path) = crate::handlers::file::validate_path(&state.storage_path, &params.path) else {
+        return Response::builder()
+            .status(404)
+            .header("Content-Type", "application/json")
+            .body(Body::from(r#"{"error": "Video file not found"}"#))
+            .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數");
+    };
 
     if !file_path.exists() {
         return Response::builder()
@@ -431,6 +451,42 @@ pub struct HlsServeParams {
     pub file: String, // HLS 檔案名稱 (e.g., "master.m3u8", "720p/playlist.m3u8", "720p/segment_001.ts")
 }
 
+/// 把使用者送來的 `file` 參數安全地接到 HLS 快取目錄底下。
+///
+/// ⚠️ **不能**只寫 `cache.join(file)` 然後 `joined.starts_with(&cache)`。
+/// `Path::starts_with` 是**純字面**的元件比對，它不解析 `..`：
+///
+///     "/s/.hls_cache/abc/../../secret.txt".starts_with("/s/.hls_cache/abc") == true
+///
+/// 元件是 `[…, abc, ParentDir, ParentDir, secret.txt]`，確實以 cache 的元件
+/// 開頭。檢查通過之後 `fs::read` 才由 OS 解析 `..`，於是讀到快取目錄之外。
+/// 這個端點會把讀到的內容直接回給呼叫端 —— 也就是一個任意檔案讀取。
+///
+/// （這是 `starts_with` 在這個 codebase 裡第三次出事：CSRF 的 Origin 比對、
+/// terminal 的 cd 範圍檢查，然後是這裡。前兩次是「字元前綴不等於元件前綴」，
+/// 這次是「元件前綴不等於解析後的包含關係」。）
+///
+/// 兩道一起做：
+///   1. 字面層只接受 `Normal` 元件 —— `..`、絕對路徑、`.` 一律拒絕
+///   2. `canonicalize` 之後再確認一次 —— 擋快取目錄裡指向外部的符號連結
+fn resolve_hls_file(cache_path: &std::path::Path, file: &str) -> Option<PathBuf> {
+    use std::path::Component;
+
+    for component in std::path::Path::new(file).components() {
+        if !matches!(component, Component::Normal(_)) {
+            return None;
+        }
+    }
+
+    let joined = cache_path.join(file);
+    let canonical = joined.canonicalize().ok()?;
+    let canonical_base = cache_path.canonicalize().ok()?;
+    if !canonical.starts_with(&canonical_base) {
+        return None;
+    }
+    Some(canonical)
+}
+
 /// 提供 HLS 檔案 (playlist 或 segment)
 #[utoipa::path(
     get,
@@ -449,22 +505,16 @@ pub async fn hls_serve(
     Query(params): Query<HlsServeParams>,
 ) -> impl IntoResponse {
     let cache_path = get_hls_cache_path(&state.storage_path, &params.path);
-    let file_path = cache_path.join(&params.file);
 
-    // 安全檢查：確保路徑沒有超出快取目錄
-    if !file_path.starts_with(&cache_path) {
-        return Response::builder()
-            .status(403)
-            .body(Body::from("Access denied"))
-            .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數");
-    }
-
-    if !file_path.exists() {
+    // 安全檢查：確保路徑沒有超出快取目錄（見 resolve_hls_file 的說明）
+    let Some(file_path) = resolve_hls_file(&cache_path, &params.file) else {
+        // ⚠️ 一律回 404 而不是 403：被拒絕與不存在對外表現要一樣，
+        // 否則等於提供一個「這個路徑存在嗎」的探測器。
         return Response::builder()
             .status(404)
             .body(Body::from("HLS file not found"))
             .expect("Response::builder 只在 status/header 非法時失敗，這裡全是常數");
-    }
+    };
 
     // 讀取檔案
     match tokio::fs::read(&file_path).await {
