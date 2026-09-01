@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { FileInfo } from "@/types/api";
 import { formatBytes } from "@/lib/format";
+import { formatDateTime } from "@/lib/datetime";
 import { cn } from "@/lib/utils";
 
 const Row = ({
@@ -32,7 +33,7 @@ export const FileInfoRows = ({ file }: { file: FileInfo }) => (
     </Row>
     <Row label="Type">{file.is_dir ? "Folder" : file.mime_type || "Unknown"}</Row>
     <Row label="Size">{file.is_dir ? "--" : formatBytes(file.size)}</Row>
-    <Row label="Modified">{new Date(file.modified).toLocaleString()}</Row>
+    <Row label="Modified">{formatDateTime(file.modified)}</Row>
     <Row label="Path" valueClassName="truncate ml-4 text-right">
       {file.path}
     </Row>

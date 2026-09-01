@@ -55,6 +55,7 @@ import { toast } from "sonner";
 import { useSystemStatus } from "@/features/system/api/useSystem";
 import { activateOnKey } from "@/lib/a11y";
 import { formatBytes } from "@/lib/format";
+import { formatDate } from "@/lib/datetime";
 import { dirName, joinPath, pathSegments } from "@/lib/paths";
 import { planRename } from "@/components/apps/finder/rename";
 import { getApiErrorMessage } from "@/lib/errors";
@@ -141,7 +142,7 @@ const ActionSheet = ({ file, onClose, onAction, isTrash }: ActionSheetProps) => 
             <p className="text-xs text-gray-500">
               {file.is_dir ? "Folder" : formatBytes(file.size)}
               {" · "}
-              {new Date(file.modified).toLocaleDateString()}
+              {formatDate(file.modified)}
             </p>
           </div>
         </div>
@@ -828,7 +829,7 @@ export const MobileLayout = () => {
                       <p className="text-xs text-gray-500 mt-0.5">
                         {file.is_dir ? "Folder" : formatBytes(file.size)}
                         {" · "}
-                        {new Date(file.modified).toLocaleDateString()}
+                        {formatDate(file.modified)}
                         {file.is_starred && " ⭐"}
                       </p>
                     </div>

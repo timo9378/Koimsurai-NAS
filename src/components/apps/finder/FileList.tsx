@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import type { FileInfo } from "@/types/api";
 import { useThumbnail } from "@/features/files/api/useFiles";
 import { FileTypeIcon } from "@/lib/file-icons";
+import { formatDate, formatDateTime } from "@/lib/datetime";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -680,7 +681,7 @@ export const FileList = ({
                                       Size: {file.is_dir ? "Folder" : formatBytes(file.size)}
                                     </div>
                                     <div className="text-xs text-muted-foreground">
-                                      Modified: {new Date(file.modified).toLocaleString()}
+                                      Modified: {formatDateTime(file.modified)}
                                     </div>
                                   </div>
                                 </TooltipContent>
@@ -701,7 +702,7 @@ export const FileList = ({
                               selectedFiles.has(file.name) ? "text-blue-100" : "text-gray-500",
                             )}
                           >
-                            {new Date(file.modified).toLocaleDateString()}
+                            {formatDate(file.modified)}
                           </div>
                         </div>
                       </ContextMenuTrigger>

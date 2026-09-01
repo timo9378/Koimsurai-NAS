@@ -17,6 +17,7 @@
  */
 
 import type { FileInfo } from "@/types/api";
+import { timestampOf } from "@/lib/datetime";
 
 export type SortField = "name" | "size" | "modified";
 export type SortDirection = "asc" | "desc";
@@ -62,18 +63,6 @@ function compareBy(
     case "size":
       return a.size - b.size;
     case "modified":
-      return timestamp(a.modified) - timestamp(b.modified);
+      return timestampOf(a.modified) - timestampOf(b.modified);
   }
-}
-
-/**
- * ⚠️ 無效的日期要當成最舊，不能讓 `NaN` 流進比較函式。
- *
- * `new Date("爛字串").getTime()` 是 `NaN`，而回傳 `NaN` 的比較函式會讓
- * `Array.sort` 的結果變成實作定義的順序 —— 不會報錯，只是順序莫名其妙，
- * 而且在不同瀏覽器可能不一樣。
- */
-function timestamp(value: string): number {
-  const t = new Date(value).getTime();
-  return Number.isNaN(t) ? Number.NEGATIVE_INFINITY : t;
 }
