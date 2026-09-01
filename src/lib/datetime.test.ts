@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { formatDate, formatDateTime, parseApiTimestamp, timestampOf } from "./datetime";
+import { describe, expect, it, vi } from "vitest";
+import {
+  formatDate,
+  formatDateTime,
+  formatRelative,
+  parseApiTimestamp,
+  timestampOf,
+} from "./datetime";
 
 describe("parseApiTimestamp", () => {
   it("Unix 秒的字串 —— 後端實際送的就是這個", () => {
@@ -60,5 +66,26 @@ describe("formatDateTime / formatDate", () => {
   it("壞值顯示破折號，不是「Invalid Date」", () => {
     expect(formatDateTime("爛字串")).toBe("—");
     expect(formatDate(undefined)).toBe("—");
+  });
+});
+
+describe("formatRelative", () => {
+  it("正常值交給傳入的格式化函式", () => {
+    expect(formatRelative("1782355562", (d) => d.toISOString())).toBe(
+      new Date(1782355562_000).toISOString(),
+    );
+  });
+
+  it("壞值不會呼叫格式化函式 —— date-fns 對 Invalid Date 會丟 RangeError", () => {
+    const formatter = vi.fn();
+    expect(formatRelative("爛字串", formatter)).toBe("—");
+    expect(formatRelative("", formatter)).toBe("—");
+    expect(formatter).not.toHaveBeenCalled();
+  });
+
+  it("空值不會被默默當成「現在」", () => {
+    // 原本的 parseAuditLogDate 是 `value ? new Date(value) : new Date()`，
+    // 沒有時間戳的紀錄會顯示「不到一分鐘前」—— 那是編出來的。
+    expect(formatRelative(null, () => "不到一分鐘前")).toBe("—");
   });
 });

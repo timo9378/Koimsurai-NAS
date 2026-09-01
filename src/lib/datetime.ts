@@ -48,3 +48,18 @@ export function formatDateTime(value: string | number | null | undefined): strin
 export function formatDate(value: string | number | null | undefined): string {
   return parseApiTimestamp(value)?.toLocaleDateString() ?? "—";
 }
+
+/**
+ * 「多久以前」。解不出來時回 `—`。
+ *
+ * ⚠️ 一定要在這裡擋掉無效值。`date-fns` 的 `formatDistanceToNow` 對
+ * Invalid Date 會**丟 RangeError**，而它是在 render 裡呼叫的 ——
+ * 一筆壞掉的稽核紀錄就會讓整個通知中心炸掉，不是顯示得難看而已。
+ */
+export function formatRelative(
+  value: string | number | null | undefined,
+  formatter: (date: Date) => string,
+): string {
+  const date = parseApiTimestamp(value);
+  return date ? formatter(date) : "—";
+}

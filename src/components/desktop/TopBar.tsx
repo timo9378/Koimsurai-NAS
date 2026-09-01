@@ -37,6 +37,7 @@ import { dispatchAppCommand } from "@/lib/app-commands";
 import { useClipboardStore } from "@/store/clipboard-store";
 import { useSocket } from "@/components/providers/socket-provider";
 import { useDelayedTrue } from "@/hooks/use-delayed-true";
+import { formatRelative } from "@/lib/datetime";
 import { useTasks } from "@/features/files/api/useFiles";
 import { jobLabel, summarizeJobs } from "./jobs";
 import { useWindowStore } from "@/store/window-store";
@@ -193,7 +194,6 @@ interface AuditLog {
 // 現在後端的 AuditLog.created_at 是 `DateTime<Utc>`，一律送 RFC 3339 帶 Z，
 // 所以直接 new Date() 就是對的，不需要任何補救。
 // （是 schemathesis 的 response_schema_conformance 把後端那半指出來的。）
-const parseAuditLogDate = (value: string): Date => (value ? new Date(value) : new Date());
 
 // Map action types to display info
 const getActionInfo = (action: string) => {
@@ -342,9 +342,13 @@ const NotificationCenter = () => {
                       </span>
                       <div className="flex items-center gap-1 shrink-0">
                         <span className="text-[10px] text-muted-foreground">
-                          {formatDistanceToNow(parseAuditLogDate(log.created_at), {
-                            addSuffix: true,
-                          })}
+                          {/* ⚠️ 不能直接把值丟給 formatDistanceToNow —— 它對
+                              Invalid Date 會丟 RangeError，而這是在 render 裡，
+                              一筆壞掉的紀錄會讓整個通知中心炸掉。原本的
+                              `parseAuditLogDate` 還會把空值默默變成「現在」。 */}
+                          {formatRelative(log.created_at, (date) =>
+                            formatDistanceToNow(date, { addSuffix: true }),
+                          )}
                         </span>
                         <button
                           onClick={(e) => handleDeleteOne(log.id, e)}

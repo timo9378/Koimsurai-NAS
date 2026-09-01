@@ -14,6 +14,7 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
+  FolderSync,
   ShieldCheck,
   ShieldAlert,
   Copy,
@@ -36,8 +37,17 @@ import {
   useTwoFactorDisable,
 } from "@/features/auth/api/useAuth";
 import { formatBytes } from "@/lib/format";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
-type SettingsSection = "appearance" | "dock" | "storage" | "account" | "security" | "about";
+type SettingsSection =
+  | "appearance"
+  | "dock"
+  | "storage"
+  | "webdav"
+  | "account"
+  | "security"
+  | "about";
 
 interface SettingsItemProps {
   icon: React.ElementType;
@@ -204,6 +214,75 @@ const StorageSection = () => {
 
       {(!systemStatus?.disks || systemStatus.disks.length === 0) && (
         <div className="text-sm text-gray-500 dark:text-zinc-400">載入中...</div>
+      )}
+    </div>
+  );
+};
+
+/**
+ * WebDAV 的說明與掛載網址。
+ *
+ * ⚠️ 這個區塊存在的理由：WebDAV 功能是完整的，但**整個 UI 之前沒有一處提到它**
+ * —— 使用者不會知道有這個東西。更麻煩的是它與 2FA 互斥（Basic 認證沒有第二
+ * 因素的位置），而開啟 2FA 之後 WebDAV 會直接停止運作、客戶端只會顯示
+ * 「密碼錯誤」。那個因果關係一定要寫在使用者看得到的地方。
+ */
+const WebDavSection = () => {
+  const { data: status } = useTwoFactorStatus();
+  const [copied, setCopied] = useState(false);
+  const url = `${window.location.origin}/webdav/`;
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("複製失敗");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">WebDAV</h3>
+        <p className="text-sm text-gray-500 dark:text-zinc-400 mt-1">
+          把 NAS 掛成網路磁碟機（Windows／macOS／Linux 都支援）。
+        </p>
+      </div>
+
+      <div className="p-4 rounded-xl border border-gray-200 dark:border-white/10 space-y-3">
+        <div className="text-xs text-gray-500 dark:text-zinc-400">掛載網址</div>
+        <div className="flex items-center gap-2">
+          <code className="flex-1 min-w-0 truncate text-sm px-2 py-1.5 rounded bg-black/5 dark:bg-white/5">
+            {url}
+          </code>
+          <Button variant="outline" size="sm" onClick={() => void copy()}>
+            {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+          </Button>
+        </div>
+        <p className="text-xs text-gray-500 dark:text-zinc-400">
+          帳號密碼跟登入這個介面用的同一組。
+        </p>
+      </div>
+
+      {status?.enabled ? (
+        <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 space-y-1">
+          <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+            <ShieldCheck className="w-4 h-4 shrink-0" />
+            <span className="text-sm font-medium">這個帳號目前用不了 WebDAV</span>
+          </div>
+          <p className="text-xs text-amber-700/80 dark:text-amber-400/80">
+            你已經啟用兩步驟驗證，而 WebDAV 走的 HTTP Basic 認證沒有輸入第二因素的
+            地方。客戶端會一直顯示「密碼錯誤」—— 那不是密碼的問題。
+            目前還沒有應用程式專用密碼，所以要用 WebDAV 就得先關掉 2FA。
+          </p>
+        </div>
+      ) : (
+        <p className="text-xs text-gray-500 dark:text-zinc-400">
+          ⚠️ 啟用兩步驟驗證之後 WebDAV 會停止運作 —— Basic 認證沒有輸入第二因素的
+          地方，而目前沒有應用程式專用密碼。
+        </p>
       )}
     </div>
   );
@@ -391,6 +470,15 @@ const SecuritySection = () => {
           </div>
         </div>
       </div>
+
+      {/* ⚠️ 啟用之前就要說清楚：2FA 與 WebDAV 是互斥的。使用者按下去之後
+          WebDAV 客戶端只會顯示「密碼錯誤」，沒有任何地方會告訴他原因。 */}
+      {!enabled && step === "idle" && (
+        <p className="text-xs text-gray-500 dark:text-zinc-400">
+          啟用之後 <strong>WebDAV 會停止運作</strong> —— Basic 認證沒有輸入第二因素的
+          地方，而目前沒有應用程式專用密碼。細節見「WebDAV」那一頁。
+        </p>
+      )}
 
       {/* idle 狀態下的主要動作 */}
       {step === "idle" && (
@@ -678,6 +766,7 @@ const SECTIONS: { id: SettingsSection; label: string; icon: React.ElementType }[
   { id: "appearance", label: "外觀", icon: Palette },
   { id: "dock", label: "Dock", icon: Layout },
   { id: "storage", label: "儲存空間", icon: HardDrive },
+  { id: "webdav", label: "WebDAV", icon: FolderSync },
   { id: "account", label: "帳戶", icon: User },
   { id: "security", label: "安全性", icon: ShieldCheck },
   { id: "about", label: "關於", icon: Info },
@@ -694,6 +783,8 @@ export const Settings = () => {
         return <DockSection />;
       case "storage":
         return <StorageSection />;
+      case "webdav":
+        return <WebDavSection />;
       case "account":
         return <AccountSection />;
       case "security":
