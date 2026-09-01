@@ -55,6 +55,7 @@ import { toast } from "sonner";
 import { useSystemStatus } from "@/features/system/api/useSystem";
 import { activateOnKey } from "@/lib/a11y";
 import { formatBytes } from "@/lib/format";
+import { dirName, joinPath, pathSegments } from "@/lib/paths";
 
 // ─── Thumbnail component ────────────────────────────────
 const MobileFileThumb = ({ file, currentPath }: { file: FileInfo; currentPath: string }) => {
@@ -486,11 +487,10 @@ export const MobileLayout = () => {
 
   const goBack = useCallback(() => {
     if (currentPath === "/") return;
-    const parent = currentPath.substring(0, currentPath.lastIndexOf("/")) || "/";
-    setCurrentPath(parent);
+    setCurrentPath(dirName(currentPath));
   }, [currentPath]);
 
-  const pathParts = currentPath === "/" ? [] : currentPath.split("/").filter(Boolean);
+  const pathParts = pathSegments(currentPath);
 
   // ─── File tap handler ─────────
   // 「我的最愛」點一下的行為。抽成具名函式是為了讓 onClick 與 onKeyDown
@@ -507,7 +507,7 @@ export const MobileLayout = () => {
   const handleFileTap = (file: FileInfo) => {
     if (file.is_dir) {
       if (isTrashMode) return; // Don't navigate in trash
-      navigateTo(currentPath === "/" ? `/${file.name}` : `${currentPath}/${file.name}`);
+      navigateTo(joinPath(currentPath, file.name));
     } else {
       // For non-directory files, open action sheet (mobile-appropriate)
       setActionFile(file);
@@ -516,8 +516,7 @@ export const MobileLayout = () => {
 
   // ─── Action handlers ──────────
   const handleAction = async (action: string, file: FileInfo) => {
-    const fullPath =
-      file.path || (currentPath === "/" ? `/${file.name}` : `${currentPath}/${file.name}`);
+    const fullPath = file.path || joinPath(currentPath, file.name);
     switch (action) {
       case "download":
         downloadFile.mutate(fullPath);
@@ -568,7 +567,7 @@ export const MobileLayout = () => {
     if (!renameFile || !newName || newName === renameFile.name) return;
     try {
       await renameFileMut.mutateAsync({
-        path: currentPath === "/" ? `/${renameFile.name}` : `${currentPath}/${renameFile.name}`,
+        path: joinPath(currentPath, renameFile.name),
         newName,
       });
     } catch {

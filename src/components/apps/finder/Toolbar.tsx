@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useFiles } from "@/features/files/api/useFiles";
 import { MOVE_MIME } from "@/lib/dnd";
+import { joinPath } from "@/lib/paths";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -109,8 +110,7 @@ const BreadcrumbItem = ({
               <DropdownMenuItem
                 key={folder.name}
                 onClick={() => {
-                  const siblingPath =
-                    parentPath === "/" ? `/${folder.name}` : `${parentPath}/${folder.name}`;
+                  const siblingPath = joinPath(parentPath, folder.name);
                   onNavigate(siblingPath);
                   setIsOpen(false);
                 }}

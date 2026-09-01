@@ -35,6 +35,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MOVE_MIME } from "@/lib/dnd";
 import { itemsInMarquee, type MarqueeBox, type MarqueeLayout } from "./marquee";
+import { joinPath } from "@/lib/paths";
 
 const FileIcon = ({ file, currentPath }: { file: FileInfo; currentPath?: string }) => {
   const isImage = file.mime_type?.startsWith("image/");
@@ -491,12 +492,7 @@ export const FileList = ({
                         </ContextMenuItem>
                         <ContextMenuItem
                           onClick={() =>
-                            onDownload?.(
-                              file.path ||
-                                (currentPath === "/"
-                                  ? `/${file.name}`
-                                  : `${currentPath}/${file.name}`),
-                            )
+                            onDownload?.(file.path || joinPath(currentPath, file.name))
                           }
                         >
                           <Download className="mr-2 h-4 w-4" /> Download
@@ -694,12 +690,7 @@ export const FileList = ({
                             </ContextMenuItem>
                             <ContextMenuItem
                               onClick={() =>
-                                onDownload?.(
-                                  file.path ||
-                                    (currentPath === "/"
-                                      ? `/${file.name}`
-                                      : `${currentPath}/${file.name}`),
-                                )
+                                onDownload?.(file.path || joinPath(currentPath, file.name))
                               }
                             >
                               <Download className="mr-2 h-4 w-4" /> Download

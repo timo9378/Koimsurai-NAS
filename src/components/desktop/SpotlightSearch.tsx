@@ -20,6 +20,7 @@ import { FileTypeIcon } from "@/lib/file-icons";
 import { apiClient } from "@/lib/api-client";
 import { isAppType, useWindowStore } from "@/store/window-store";
 import type { FileInfo } from "@/types/api";
+import { dirName } from "@/lib/paths";
 
 interface SearchResult {
   path: string;
@@ -211,7 +212,7 @@ const SpotlightSearchDialog = ({ onOpenChange }: { onOpenChange: (open: boolean)
         openWindow("preview", file.name, { file });
       } else {
         // Open containing folder
-        const parentPath = file.path.substring(0, file.path.lastIndexOf("/")) || "/";
+        const parentPath = dirName(file.path);
         openWindow("finder", "Finder", { navigateTo: parentPath });
       }
     }

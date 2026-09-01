@@ -42,6 +42,7 @@ import { ShareDialog, UploadLinkDialog, TagDialog } from "@/components/dialogs";
 import { X, Plus } from "lucide-react";
 import { activateOnKey } from "@/lib/a11y";
 import { selectOnClick } from "./finder/selection";
+import { dirName, joinPath, toApiPath } from "@/lib/paths";
 import {
   currentPath as currentHistoryPath,
   goBack,
@@ -502,8 +503,7 @@ export const Finder = ({ windowId }: FinderProps) => {
           const fileName = Array.from(selectedFiles)[0];
           const file = currentFiles?.find((f) => f.name === fileName);
           if (file) {
-            const fullPath =
-              file.path || (currentPath === "/" ? `/${file.name}` : `${currentPath}/${file.name}`);
+            const fullPath = file.path || joinPath(currentPath, file.name);
             openWindow("preview", file.name, { file: { ...file, path: fullPath } });
           }
         }
@@ -535,9 +535,7 @@ export const Finder = ({ windowId }: FinderProps) => {
           // Shift+Delete: Permanent delete with confirmation
           const filePaths = Array.from(selectedFiles).map((fileName) => {
             const file = currentFiles?.find((f) => f.name === fileName);
-            return (
-              file?.path || (currentPath === "/" ? `/${fileName}` : `${currentPath}/${fileName}`)
-            );
+            return file?.path || joinPath(currentPath, fileName);
           });
           setFilesToPermanentlyDelete(filePaths);
           setIsPermanentDeleteConfirmOpen(true);
@@ -547,8 +545,7 @@ export const Finder = ({ windowId }: FinderProps) => {
             const file = currentFiles?.find((f) => f.name === fileName);
             return {
               name: fileName,
-              path:
-                file?.path || (currentPath === "/" ? `/${fileName}` : `${currentPath}/${fileName}`),
+              path: file?.path || joinPath(currentPath, fileName),
             };
           });
 
@@ -707,17 +704,15 @@ export const Finder = ({ windowId }: FinderProps) => {
     }
 
     if (file.is_dir) {
-      handleNavigate(currentPath === "/" ? `/${file.name}` : `${currentPath}/${file.name}`);
+      handleNavigate(joinPath(currentPath, file.name));
     } else {
-      const fullPath =
-        file.path || (currentPath === "/" ? `/${file.name}` : `${currentPath}/${file.name}`);
+      const fullPath = file.path || joinPath(currentPath, file.name);
       openWindow("preview", file.name, { file: { ...file, path: fullPath } });
     }
   };
 
   const handleDelete = (file: FileInfo) => {
-    const fullPath =
-      file.path || (currentPath === "/" ? `/${file.name}` : `${currentPath}/${file.name}`);
+    const fullPath = file.path || joinPath(currentPath, file.name);
     deleteFile.mutate(fullPath);
 
     toast(`「${file.name}」已移至垃圾桶`, {
@@ -744,7 +739,7 @@ export const Finder = ({ windowId }: FinderProps) => {
 
     try {
       await renameFile.mutateAsync({
-        path: currentPath === "/" ? `/${renamingFile}` : `${currentPath}/${renamingFile}`,
+        path: joinPath(currentPath, renamingFile),
         newName: renameValue,
       });
       setRenamingFile(null);
@@ -802,7 +797,7 @@ export const Finder = ({ windowId }: FinderProps) => {
     if (fav.is_dir) {
       handleNavigate(fullPath);
     } else {
-      const parentPath = fullPath.substring(0, fullPath.lastIndexOf("/")) || "/";
+      const parentPath = dirName(fullPath);
       handleNavigate(parentPath);
       setTimeout(() => {
         setSelectedFiles(new Set([fav.name]));
@@ -942,6 +937,12 @@ export const Finder = ({ windowId }: FinderProps) => {
       // Group files by target directory for batch upload
       const filesByDir = new Map<string, File[]>();
       for (const { file, relativePath } of allFilesWithPaths) {
+        // ⚠️ 這裡**刻意不用** `lib/paths` 的 `dirName`。
+        //
+        // relativePath 來自資料夾拖放的 webkitRelativePath，是**相對**路徑
+        // （"folder/sub/file.txt"），而 dirName 的語意是「絕對路徑、
+        // 根目錄是 /」—— 對 "/a.txt" 它回 "/"，這裡要的是 ""。
+        // 兩個定義域長得很像但不一樣，混用會產生只在特定輸入下才錯的 bug。
         const targetDir = relativePath.includes("/")
           ? relativePath.substring(0, relativePath.lastIndexOf("/"))
           : "";
@@ -995,7 +996,7 @@ export const Finder = ({ windowId }: FinderProps) => {
   // #2 拖拉移動:把 sourceNames(目前目錄下的檔名)搬到 destRel(相對 storage 根、無前導斜線),
   // 搬完輪詢到它們離開目前目錄(後端 watcher 非同步索引)。
   const moveNamesToDir = async (sourceNames: string[], destRel: string) => {
-    const srcRel = currentPath === "/" ? "" : currentPath.replace(/^\//, "");
+    const srcRel = toApiPath(currentPath);
     if (destRel === srcRel) return; // 同目錄,免搬
     const toSrc = (n: string) => (srcRel ? `${srcRel}/${n}` : n);
     const names = sourceNames.filter((n) => toSrc(n) !== destRel); // 不能搬進自己
@@ -1012,13 +1013,13 @@ export const Finder = ({ windowId }: FinderProps) => {
 
   // 拖到資料夾:搬進目前目錄下的該資料夾
   const handleMoveFiles = (sourceNames: string[], targetFolderName: string) => {
-    const srcRel = currentPath === "/" ? "" : currentPath.replace(/^\//, "");
+    const srcRel = toApiPath(currentPath);
     return moveNamesToDir(sourceNames, srcRel ? `${srcRel}/${targetFolderName}` : targetFolderName);
   };
 
   // 拖到 breadcrumb:搬到該祖先路徑(Home = 根)
   const handleMoveToPath = (sourceNames: string[], destPath: string) => {
-    return moveNamesToDir(sourceNames, destPath === "/" ? "" : destPath.replace(/^\//, ""));
+    return moveNamesToDir(sourceNames, toApiPath(destPath));
   };
 
   const handleCreateFolder = async () => {
