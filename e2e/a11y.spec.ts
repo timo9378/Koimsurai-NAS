@@ -75,8 +75,10 @@ test("Dock 的每一顆圖示都可以用鍵盤到達，而且有名字", async 
   await registerAndLogin(page, "dock");
 
   const icons = page.locator('[data-context-type="dock-icon"]');
+  // ⚠️ 要先等它出現再數。`registerAndLogin` 只等到登入表單消失，桌面還在掛載中
+  // —— 本機夠快所以看不出來，CI 上 count() 會拿到 0（第一次就是這樣紅的）。
+  await expect(icons.first()).toBeVisible({ timeout: 15_000 });
   const count = await icons.count();
-  expect(count, "Dock 應該有圖示").toBeGreaterThan(0);
 
   for (let i = 0; i < count; i++) {
     const icon = icons.nth(i);
