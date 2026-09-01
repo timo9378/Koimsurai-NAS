@@ -67,32 +67,60 @@ describe("SocketProvider", () => {
     expect(socket.url).toMatch(/\/api\/ws$/);
   });
 
-  it("job_update 會寫進 react-query 的快取", async () => {
+  it("job_update 讓 `tasks` 失效 —— 那才是背景工作面板用的 key", async () => {
+    // ⚠️ 這裡原本失效的是 `["jobs"]`，而 `useTasks` 用的是 `["tasks"]`。
+    // 兩邊對不上，於是 WebSocket 推進來的更新從來沒有讓面板重整過。
     const { socket } = mount();
-    queryClient.setQueryData(["jobs", "job-1"], { job_id: "job-1", status: "running" });
+    queryClient.setQueryData(["tasks"], []);
 
     socket.emit({ type: "job_update", payload: { job_id: "job-1", status: "completed" } });
 
     await waitFor(() => {
-      expect(queryClient.getQueryData(["jobs", "job-1"])).toMatchObject({ status: "completed" });
+      expect(queryClient.getQueryState(["tasks"])?.isInvalidated).toBe(true);
     });
   });
 
-  it("工作完成／失敗會跳通知", async () => {
+  it("工作**完成**不跳 toast —— 每上傳一個檔案就有好幾個工作完成", async () => {
+    // index_file 與 generate_thumbnail 是每個檔案各跑一次。原本每個完成都跳
+    // 一個 toast，上傳 50 張照片就是 50 個「工作完成：<uuid>」。
     const { socket } = mount();
 
     socket.emit({ type: "job_update", payload: { job_id: "ok", status: "completed" } });
+    socket.emit({ type: "job_update", payload: { job_id: "ok2", status: "completed" } });
+
+    await waitFor(() => {
+      expect(queryClient.getQueryState(["tasks"])?.isInvalidated ?? true).toBe(true);
+    });
+    expect(toasts.success).not.toHaveBeenCalled();
+  });
+
+  it("工作失敗會跳 toast，而且顯示的是工作類型不是 UUID", async () => {
+    const { socket } = mount();
+    queryClient.setQueryData(
+      ["tasks"],
+      [{ id: "bad", job_type: "copy_files", status: "failed", progress: 0 }],
+    );
+
     socket.emit({
       type: "job_update",
       payload: { job_id: "bad", status: "failed", error: "磁碟滿了" },
     });
 
     await waitFor(() => {
-      expect(toasts.success).toHaveBeenCalledWith(expect.stringContaining("ok"), expect.anything());
       expect(toasts.error).toHaveBeenCalledWith(
-        expect.stringContaining("bad"),
+        "複製檔案失敗",
         expect.objectContaining({ description: "磁碟滿了" }),
       );
+    });
+  });
+
+  it("快取裡查不到類型時退回一句通用的，不會印出 UUID", async () => {
+    const { socket } = mount();
+
+    socket.emit({ type: "job_update", payload: { job_id: "unknown-uuid", status: "failed" } });
+
+    await waitFor(() => {
+      expect(toasts.error).toHaveBeenCalledWith("背景工作失敗", expect.anything());
     });
   });
 

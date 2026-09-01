@@ -34,6 +34,8 @@ import type { AppType } from "@/store/window-store";
 import { getMenuItemsForApp, type MenuCommand } from "./menu-bar";
 import { dispatchAppCommand } from "@/lib/app-commands";
 import { useClipboardStore } from "@/store/clipboard-store";
+import { useTasks } from "@/features/files/api/useFiles";
+import { jobLabel, summarizeJobs } from "./jobs";
 import { useWindowStore } from "@/store/window-store";
 
 import { useTransferStore, formatSpeed } from "@/store/transfer-store";
@@ -247,6 +249,11 @@ const NotificationCenter = () => {
 
   const notifications = logs?.slice(0, 20) ?? [];
 
+  // ⚠️ 背景工作原本**完全看不到**（`useTasks` 是零呼叫點）。轉檔、產縮圖、
+  // 複製檔案都是丟進佇列跑的，失敗了使用者只會覺得「東西沒出現」。
+  const { data: jobs } = useTasks();
+  const { active: activeJobs, failed: failedJobs } = summarizeJobs(jobs);
+
   const handleClearAll = () => {
     if (notifications.length > 0) {
       clearAllMutation.mutate();
@@ -275,6 +282,40 @@ const NotificationCenter = () => {
           {clearAllMutation.isPending ? "Clearing..." : "Clear All"}
         </button>
       </div>
+      {(activeJobs.length > 0 || failedJobs.length > 0) && (
+        <div className="mb-4 space-y-2">
+          <span className="text-xs font-semibold text-muted-foreground">背景工作</span>
+          {activeJobs.map((job) => (
+            <div key={job.id} className="bg-black/5 dark:bg-white/5 rounded-lg p-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs truncate">{jobLabel(job.job_type)}</span>
+                <span className="text-[10px] text-muted-foreground shrink-0">{job.progress}%</span>
+              </div>
+              <div className="mt-1.5 h-1 bg-black/10 dark:bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-blue-500 transition-all"
+                  style={{ width: `${Math.min(Math.max(job.progress, 0), 100)}%` }}
+                />
+              </div>
+            </div>
+          ))}
+          {failedJobs.map((job) => (
+            <div
+              key={job.id}
+              className="bg-red-500/10 rounded-lg p-2.5 border border-red-500/20"
+              title={job.error ?? undefined}
+            >
+              <span className="text-xs text-red-600 dark:text-red-400">
+                {jobLabel(job.job_type)}失敗
+              </span>
+              {job.error && (
+                <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{job.error}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="space-y-2 max-h-[400px] overflow-y-auto">
         {notifications.length === 0 ? (
           <div className="text-center text-muted-foreground py-8 text-sm">No new notifications</div>

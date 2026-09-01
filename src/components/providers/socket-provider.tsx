@@ -4,6 +4,7 @@ import { createContext, use, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { Job, WsServerMessage } from "@/types/api";
+import { jobLabel } from "@/components/desktop/jobs";
 
 // 協定型別由 Rust 產生（`pnpm export:types`）。這裡刻意不再手刻一份 —— 先前那份
 // 手寫的 WebSocketMessage 比對的是 'docker_stats' / 'job_update' / 'file_change'，
@@ -68,17 +69,21 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
             case "job_update": {
               const jobUpdate = message.payload;
 
-              queryClient.setQueryData(["jobs", jobUpdate.job_id], (old: Job | undefined) =>
-                old ? { ...old, ...jobUpdate } : undefined,
-              );
-              void queryClient.invalidateQueries({ queryKey: ["jobs"] });
+              // ⚠️ key 是 `["tasks"]`。這裡原本寫 `["jobs"]` —— 而 `useTasks`
+              // （通知中心的背景工作面板）用的是 `["tasks"]`，兩邊對不上，
+              // 於是 WebSocket 推進來的更新從來沒有讓面板重整過。
+              void queryClient.invalidateQueries({ queryKey: ["tasks"] });
 
-              if (jobUpdate.status === "completed") {
-                toast.success(`工作完成：${jobUpdate.job_id}`, {
-                  description: "背景工作已順利結束。",
-                });
-              } else if (jobUpdate.status === "failed") {
-                toast.error(`工作失敗：${jobUpdate.job_id}`, {
+              // ⚠️ 完成**不發** toast。每一個工作都會廣播完成，而 index_file 與
+              // generate_thumbnail 是每上傳一個檔案就各跑一次 —— 上傳 50 張照片
+              // 原本會跳出 50 個「工作完成：<uuid>」。完成不需要使用者做任何事，
+              // 進度看通知中心的面板就好。
+              if (jobUpdate.status === "failed") {
+                // job_id 是 UUID，對使用者沒有意義。能從快取查到類型就用類型。
+                const known = queryClient
+                  .getQueryData<Job[]>(["tasks"])
+                  ?.find((job) => job.id === jobUpdate.job_id);
+                toast.error(known ? `${jobLabel(known.job_type)}失敗` : "背景工作失敗", {
                   description: jobUpdate.error ?? "執行過程中發生錯誤。",
                 });
               }
