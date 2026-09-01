@@ -23,6 +23,7 @@ import { useUploadStore } from "@/store/upload-store";
 import { useWindowStore } from "@/store/window-store";
 import { useFileUpload } from "@/features/files/hooks/useFileUpload"; // Updated import
 import { collectTrashed } from "@/features/files/trash";
+import { createFolderWithUniqueName } from "@/features/files/new-folder";
 import { useUserTags, useFilesByTag } from "@/hooks/use-tags";
 import {
   Dialog,
@@ -1009,38 +1010,10 @@ export const Finder = ({ windowId }: FinderProps) => {
       const { data: latestFiles } = await refetch();
       const currentFilesList = latestFiles ?? [];
 
-      let name = "新資料夾";
-      let counter = 1;
-
-      while (currentFilesList.some((f) => f.name === name)) {
-        name = `新資料夾${counter}`;
-        counter++;
-      }
-
-      // Try to create folder, with retry logic for 409 conflicts
-      let created = false;
-      let attempts = 0;
-      const maxAttempts = 10;
-
-      while (!created && attempts < maxAttempts) {
-        try {
-          await createFolder.mutateAsync({ path: currentPath, name });
-          created = true;
-        } catch (error: unknown) {
-          if (getApiErrorStatus(error) === 409) {
-            // Folder already exists, try next name
-            name = `新資料夾${counter}`;
-            counter++;
-            attempts++;
-          } else {
-            throw error;
-          }
-        }
-      }
-
-      if (!created) {
-        throw new Error("無法創建資料夾,請稍後再試");
-      }
+      const name = await createFolderWithUniqueName({
+        existing: currentFilesList.map((f) => f.name),
+        create: (candidate) => createFolder.mutateAsync({ path: currentPath, name: candidate }),
+      });
 
       // Set pending rename - useEffect will handle entering rename mode when folder appears
       setPendingRenameFolder(name);

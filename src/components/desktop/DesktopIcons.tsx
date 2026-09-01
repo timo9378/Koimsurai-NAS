@@ -8,7 +8,8 @@ import {
   useBatchDelete,
   useDelete,
 } from "@/features/files/api/useFiles";
-import { getApiErrorMessage, getApiErrorStatus } from "@/lib/errors";
+import { getApiErrorMessage } from "@/lib/errors";
+import { createFolderWithUniqueName } from "@/features/files/new-folder";
 import { useWindowStore } from "@/store/window-store";
 import { useQueryClient } from "@tanstack/react-query";
 import type { FileInfo } from "@/types/api";
@@ -142,39 +143,11 @@ export const DesktopIcons = () => {
         const { data: latestFiles } = await refetch();
         const currentFiles = latestFiles ?? [];
 
-        // Generate a unique name if "新資料夾" exists
-        let name = newFolderName;
-        let counter = 1;
-
-        while (currentFiles.some((f) => f.name === name)) {
-          name = `${newFolderName}${counter}`;
-          counter++;
-        }
-
-        // Try to create folder, with retry logic for 409 conflicts
-        let created = false;
-        let attempts = 0;
-        const maxAttempts = 10;
-
-        while (!created && attempts < maxAttempts) {
-          try {
-            await createFolder.mutateAsync({ path: "Desktop", name });
-            created = true;
-          } catch (error: unknown) {
-            if (getApiErrorStatus(error) === 409) {
-              // Folder already exists, try next name
-              name = `${newFolderName}${counter}`;
-              counter++;
-              attempts++;
-            } else {
-              throw error;
-            }
-          }
-        }
-
-        if (!created) {
-          throw new Error("無法創建資料夾,請稍後再試");
-        }
+        const name = await createFolderWithUniqueName({
+          existing: currentFiles.map((f) => f.name),
+          base: newFolderName,
+          create: (candidate) => createFolder.mutateAsync({ path: "Desktop", name: candidate }),
+        });
 
         // Wait a bit for the mutation's onSuccess to complete
         // 這是「等一下再 refetch」的睡眠，不是掛在元件上的 timer——promise 一

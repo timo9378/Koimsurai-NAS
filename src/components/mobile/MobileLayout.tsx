@@ -50,6 +50,7 @@ import {
 import { useFileUpload } from "@/features/files/hooks/useFileUpload";
 import { useUploadStore } from "@/store/upload-store";
 import { overallProgress } from "@/features/files/upload-progress";
+import { createFolderWithUniqueName } from "@/features/files/new-folder";
 import { useLogout } from "@/features/auth/api/useAuth";
 import { FileTypeIcon } from "@/lib/file-icons";
 import { useThumbnail } from "@/features/files/api/useFiles";
@@ -623,16 +624,19 @@ export const MobileLayout = () => {
   };
 
   const handleNewFolder = async () => {
-    let name = "新資料夾";
-    let counter = 1;
-    while (currentFiles?.some((f) => f.name === name)) {
-      name = `新資料夾${counter++}`;
-    }
     try {
-      await createFolder.mutateAsync({ path: currentPath, name });
+      // ⚠️ 先 refetch 再挑名字：`currentFiles` 是快取，watcher／WebDAV／另一台
+      // 裝置都可能在這中間建出同名的目錄。原本這裡只用快取挑一次名字、撞到 409
+      // 就跳「Failed to create folder」—— 桌面兩處一直都有的重試，手機沒有。
+      const { data: latestFiles } = await refetch();
+      await createFolderWithUniqueName({
+        existing: (latestFiles ?? []).map((f) => f.name),
+        create: (candidate) => createFolder.mutateAsync({ path: currentPath, name: candidate }),
+      });
       void refetch();
-    } catch {
-      toast.error("Failed to create folder");
+    } catch (error) {
+      console.error("Failed to create folder:", error);
+      toast.error(getApiErrorMessage(error, "Failed to create folder"));
     }
   };
 
