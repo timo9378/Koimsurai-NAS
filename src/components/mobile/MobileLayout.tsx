@@ -35,6 +35,7 @@ import type { FileInfo } from "@/types/api";
 import {
   useFiles,
   useDelete,
+  usePermanentDelete,
   useRename,
   useCreateFolder,
   useDownload,
@@ -56,6 +57,8 @@ import { useSystemStatus } from "@/features/system/api/useSystem";
 import { activateOnKey } from "@/lib/a11y";
 import { formatBytes } from "@/lib/format";
 import { dirName, joinPath, pathSegments } from "@/lib/paths";
+import { planRename } from "@/components/apps/finder/rename";
+import { getApiErrorMessage } from "@/lib/errors";
 import {
   closeSheet,
   NO_SHEET,
@@ -474,6 +477,7 @@ export const MobileLayout = () => {
   const { data: favorites } = useFavorites();
   const { data: searchResults } = useSearch(searchQuery);
   const deleteFile = useDelete();
+  const permanentDelete = usePermanentDelete();
   const renameFileMut = useRename();
   const createFolder = useCreateFolder();
   const downloadFile = useDownload();
@@ -572,20 +576,40 @@ export const MobileLayout = () => {
         void refetchTrash();
         break;
       case "delete-permanent":
-        deleteFile.mutate(fullPath);
+        // ⚠️ 原本也是 deleteFile.mutate(fullPath) —— 那是移到垃圾桶的端點，
+        // 對一個**已經在垃圾桶裡**的項目呼叫它不會刪掉任何東西。
+        // 要送的是垃圾桶裡的檔名（見 handlers/trash.rs 的 permanent_delete）。
+        permanentDelete.mutate(file.name);
+        void refetchTrash();
         break;
     }
   };
 
   const handleRename = async (newName: string) => {
-    if (!renameFile || !newName || newName === renameFile.name) return;
+    if (!renameFile) return;
+
+    // ⚠️ 這裡原本是 `if (!renameFile || !newName || newName === renameFile.name)`
+    // —— 跟 Finder 修掉的是同一段：只擋空字串，全是空白的名稱會被送出去，
+    // 而含 `/` 的名稱只會拿到一句籠統的 "Rename failed"。
+    // 判定規則抽在 finder/rename.ts，桌面版與行動版共用同一份。
+    const plan = planRename(renameFile.name, newName);
+    if (plan.kind === "cancel") {
+      setSheet(closeSheet());
+      return;
+    }
+    if (plan.kind === "invalid") {
+      toast.error(plan.reason);
+      return;
+    }
+
     try {
       await renameFileMut.mutateAsync({
         path: joinPath(currentPath, renameFile.name),
-        newName,
+        newName: plan.name,
       });
-    } catch {
-      toast.error("Rename failed");
+      setSheet(closeSheet());
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, "重新命名失敗"));
     }
   };
 

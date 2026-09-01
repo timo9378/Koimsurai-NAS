@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   useFiles,
   useDelete,
+  usePermanentDelete,
   useRename,
   useToggleStar,
   useTrash,
@@ -326,6 +327,7 @@ export const Finder = ({ windowId }: FinderProps) => {
   const { data: favorites } = useFavorites();
 
   const deleteFile = useDelete();
+  const permanentDelete = usePermanentDelete();
   const renameFile = useRename();
   const toggleStar = useToggleStar();
   const restoreFromTrash = useRestoreFromTrash();
@@ -468,13 +470,13 @@ export const Finder = ({ windowId }: FinderProps) => {
         e.preventDefault();
         e.stopPropagation();
 
-        if (e.shiftKey) {
-          // Shift+Delete: Permanent delete with confirmation
-          const filePaths = Array.from(selectedFiles).map((fileName) => {
-            const file = currentFiles?.find((f) => f.name === fileName);
-            return file?.path || joinPath(currentPath, fileName);
-          });
-          setFilesToPermanentlyDelete(filePaths);
+        // ⚠️ 「永久刪除」只有在垃圾桶裡才成立。後端沒有「跳過垃圾桶直接刪」
+        // 的端點 —— DELETE /api/files/{path} 做的就是移到垃圾桶。
+        // 在一般目錄按 Shift+Delete 就走一般刪除，不要顯示一個做不到的確認框。
+        if (e.shiftKey && isTrashMode) {
+          // 送給 DELETE /api/trash/{filename} 的是**垃圾桶裡的檔名**，
+          // 不是原始路徑（見 handlers/trash.rs 的 permanent_delete）。
+          setFilesToPermanentlyDelete(Array.from(selectedFiles));
           setIsPermanentDeleteConfirmOpen(true);
         } else {
           // Delete: Move to trash with Toast notification + Undo
@@ -514,6 +516,7 @@ export const Finder = ({ windowId }: FinderProps) => {
     selectedFiles,
     currentFiles,
     renamingFile,
+    isTrashMode,
     openWindow,
     currentPath,
     deleteFile,
@@ -1314,10 +1317,13 @@ export const Finder = ({ windowId }: FinderProps) => {
             <Button
               variant="destructive"
               onClick={() => {
-                // TODO: Implement permanent delete API call
-                filesToPermanentlyDelete.forEach((path) => {
-                  // For now, use regular delete
-                  deleteFile.mutate(path);
+                // ⚠️ 這裡原本是 `deleteFile.mutate(path)` 配一句
+                // "TODO: Implement permanent delete API call" —— 也就是
+                // 「永久刪除」實際上呼叫的是**移到垃圾桶**的端點。
+                // 使用者按下確認、沒有任何錯誤，而檔案還在。
+                // usePermanentDelete 一直都在，只是沒有任何呼叫點。
+                filesToPermanentlyDelete.forEach((name) => {
+                  permanentDelete.mutate(name);
                 });
                 setIsPermanentDeleteConfirmOpen(false);
                 setFilesToPermanentlyDelete([]);
