@@ -28,6 +28,7 @@ import type { DiskInfo } from "@/types/api";
 import type { DockPosition } from "@/store/window-store";
 import { useWindowStore } from "@/store/window-store";
 import { useSystemStatus } from "@/features/system/api/useSystem";
+import { usagePercent } from "./dashboard/metrics";
 import {
   useTwoFactorStatus,
   useTwoFactorSetup,
@@ -162,10 +163,7 @@ const StorageSection = () => {
       </div>
 
       {systemStatus?.disks.map((disk: DiskInfo) => {
-        const usedPercent =
-          disk.total_space > 0
-            ? ((disk.total_space - disk.available_space) / disk.total_space) * 100
-            : 0;
+        const usedPercent = usagePercent(disk.total_space - disk.available_space, disk.total_space);
 
         return (
           <div

@@ -25,6 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useSystemStatus } from "@/features/system/api/useSystem";
 import { formatBytes } from "@/lib/format";
+import { diskDisplayName, diskTotals, progressColor, usagePercent } from "./dashboard/metrics";
 
 type TabType = "overview" | "cpu" | "memory" | "gpu" | "storage";
 
@@ -89,7 +90,7 @@ export const Dashboard = () => {
       const newData = {
         time: timeStr,
         cpu: cpuUsage ?? 0,
-        ram: (usedMemory / totalMemory) * 100,
+        ram: usagePercent(usedMemory, totalMemory),
         gpu: gpuUtilization ?? undefined,
       };
 
@@ -111,34 +112,16 @@ export const Dashboard = () => {
     }
   }, [cpuUsage, usedMemory, totalMemory, gpuUtilization]);
 
-  const getProgressColor = (percentage: number) => {
-    if (percentage > 90) return "from-red-500 to-rose-600";
-    if (percentage > 75) return "from-amber-400 to-orange-500";
-    return "from-emerald-400 to-teal-500";
-  };
-
-  const getDiskDisplayName = (disk: { name: string; mount_point: string; disk_type: string }) => {
-    if (disk.mount_point === "/") {
-      return { name: "System", subtitle: disk.disk_type };
-    }
-    const parts = disk.mount_point.split("/").filter(Boolean);
-    const name = parts[parts.length - 1] || disk.name;
-    return { name, subtitle: disk.disk_type };
-  };
-
   // Calculate totals for overview
-  const memoryPercent = systemStatus
-    ? (systemStatus.used_memory / systemStatus.total_memory) * 100
-    : 0;
-  const swapPercent =
-    systemStatus && systemStatus.total_swap > 0
-      ? (systemStatus.used_swap / systemStatus.total_swap) * 100
-      : 0;
-  const totalDiskUsed =
-    systemStatus?.disks.reduce((acc, disk) => acc + (disk.total_space - disk.available_space), 0) ??
-    0;
-  const totalDiskSize = systemStatus?.disks.reduce((acc, disk) => acc + disk.total_space, 0) ?? 0;
-  const diskPercent = totalDiskSize > 0 ? (totalDiskUsed / totalDiskSize) * 100 : 0;
+  // ⚠️ 三個都走 `usagePercent`。原本 swap 與磁碟有防除以零、記憶體沒有 ——
+  // `total_memory` 是 0 的時候畫面會出現「NaN%」，進度條的 width 也是 NaN。
+  const memoryPercent = usagePercent(systemStatus?.used_memory, systemStatus?.total_memory);
+  const swapPercent = usagePercent(systemStatus?.used_swap, systemStatus?.total_swap);
+  const {
+    used: totalDiskUsed,
+    size: totalDiskSize,
+    percent: diskPercent,
+  } = diskTotals(systemStatus?.disks);
 
   const renderOverviewTab = () => {
     const topProcesses = systemStatus?.top_processes ?? [];
@@ -404,8 +387,8 @@ export const Dashboard = () => {
             <div className="flex-1 overflow-auto custom-scrollbar space-y-3">
               {systemStatus?.disks.map((disk) => {
                 const used = disk.total_space - disk.available_space;
-                const percent = (used / disk.total_space) * 100;
-                const display = getDiskDisplayName(disk);
+                const percent = usagePercent(used, disk.total_space);
+                const display = diskDisplayName(disk);
                 return (
                   <div key={disk.mount_point} className="bg-white dark:bg-white/5 rounded-lg p-3">
                     <div className="flex justify-between items-center mb-2">
@@ -430,7 +413,7 @@ export const Dashboard = () => {
                       <div
                         className={cn(
                           "h-full rounded-full bg-gradient-to-r transition-all",
-                          getProgressColor(percent),
+                          progressColor(percent),
                         )}
                         style={{ width: `${percent}%` }}
                       />
@@ -603,9 +586,7 @@ export const Dashboard = () => {
           <div>
             <div className="text-sm text-gray-500 dark:text-zinc-400">Memory Usage</div>
             <div className="text-3xl font-bold text-gray-900 dark:text-white">
-              {systemStatus
-                ? `${((systemStatus.used_memory / systemStatus.total_memory) * 100).toFixed(1)}%`
-                : "--"}
+              {systemStatus ? `${memoryPercent.toFixed(1)}%` : "--"}
             </div>
           </div>
         </div>
@@ -673,7 +654,7 @@ export const Dashboard = () => {
     }
 
     const gpu = systemStatus.gpu;
-    const vramPercent = (gpu.memory_used / gpu.memory_total) * 100;
+    const vramPercent = usagePercent(gpu.memory_used, gpu.memory_total);
 
     return (
       <div className="flex flex-col h-full">
@@ -754,7 +735,7 @@ export const Dashboard = () => {
           </div>
           <div className="h-2 bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
             <div
-              className={cn("h-full rounded-full bg-gradient-to-r", getProgressColor(vramPercent))}
+              className={cn("h-full rounded-full bg-gradient-to-r", progressColor(vramPercent))}
               style={{ width: `${vramPercent}%` }}
             />
           </div>
@@ -773,8 +754,11 @@ export const Dashboard = () => {
       </div>
       <div className="flex-1 overflow-auto custom-scrollbar space-y-4">
         {systemStatus?.disks.map((disk) => {
-          const percentage = ((disk.total_space - disk.available_space) / disk.total_space) * 100;
-          const display = getDiskDisplayName(disk);
+          const percentage = usagePercent(
+            disk.total_space - disk.available_space,
+            disk.total_space,
+          );
+          const display = diskDisplayName(disk);
           return (
             <div key={disk.mount_point} className="bg-gray-100 dark:bg-white/5 rounded-xl p-4">
               <div className="flex justify-between items-start mb-3">
@@ -796,7 +780,7 @@ export const Dashboard = () => {
                 <div
                   className={cn(
                     "h-full rounded-full bg-gradient-to-r transition-all",
-                    getProgressColor(percentage),
+                    progressColor(percentage),
                   )}
                   style={{ width: `${percentage}%` }}
                 />
