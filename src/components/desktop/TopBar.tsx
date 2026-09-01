@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import {
+  WifiOff,
   Search,
   LogOut,
   Settings,
@@ -34,6 +35,8 @@ import type { AppType } from "@/store/window-store";
 import { getMenuItemsForApp, type MenuCommand } from "./menu-bar";
 import { dispatchAppCommand } from "@/lib/app-commands";
 import { useClipboardStore } from "@/store/clipboard-store";
+import { useSocket } from "@/components/providers/socket-provider";
+import { useDelayedTrue } from "@/hooks/use-delayed-true";
 import { useTasks } from "@/features/files/api/useFiles";
 import { jobLabel, summarizeJobs } from "./jobs";
 import { useWindowStore } from "@/store/window-store";
@@ -379,6 +382,8 @@ export const TopBar = () => {
   const activeWindow = windows.find((w) => w.id === activeWindowId);
   const menuConfig = getMenuItemsForApp(activeWindow?.appType || null);
   const clipboardEntry = useClipboardStore((state) => state.entry);
+  const { isConnected } = useSocket();
+  const showOffline = useDelayedTrue(!isConnected, 8000);
 
   // ⚠️ 有些項目「有實作」但**當下不能用** —— Paste 在剪貼簿空的時候就是。
   // 讓它恆亮的話，按下去會靜靜什麼都不做，而那正是這條選單列原本的毛病。
@@ -558,6 +563,19 @@ export const TopBar = () => {
         >
           {theme === "dark" ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
         </button>
+
+        {/* ⚠️ 只在**斷線一段時間之後**才出現。WebSocket 3 秒會自動重連，
+            每次瞬斷都閃一個「離線」比不顯示還吵。恢復則是立即消失。
+            沒有這個指示的話，即時更新停掉時畫面上沒有任何跡象。 */}
+        {showOffline && (
+          <output
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-amber-400"
+            title="與伺服器的即時連線中斷，正在重試"
+          >
+            <WifiOff className="w-4 h-4" />
+            <span className="hidden sm:inline text-xs">離線</span>
+          </output>
+        )}
 
         <button
           type="button"

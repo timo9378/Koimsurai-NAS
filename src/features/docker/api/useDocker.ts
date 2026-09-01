@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
+import { getApiErrorStatus } from "@/lib/errors";
 import type {
   ContainerDetails,
   ContainerStats,
@@ -35,7 +36,7 @@ export const useDockerStatus = () => {
       const response = await apiClient.get<DockerStatus>("/docker/status");
       return response.data;
     },
-    refetchInterval: 10000,
+    refetchInterval: (query) => (query.state.error ? false : 10000),
   });
 };
 
@@ -48,7 +49,10 @@ export const useContainers = () => {
       );
       return response.data.data;
     },
-    refetchInterval: 3000,
+    // ⚠️ 出錯就停止輪詢。不在 DOCKER_MANAGER_USER_IDS 裡的帳號會拿到 403，
+    // 而固定 3 秒的輪詢會讓它每 3 秒再打一次，永遠。
+    refetchInterval: (query) => (query.state.error ? false : 3000),
+    retry: (count, error) => getApiErrorStatus(error) !== 403 && count < 2,
   });
 };
 
@@ -62,7 +66,7 @@ export const useContainerStats = (id: string, enabled = false) => {
       return response.data.data;
     },
     enabled,
-    refetchInterval: 2000,
+    refetchInterval: (query) => (query.state.error ? false : 2000),
   });
 };
 
@@ -78,7 +82,7 @@ export const useContainerLogs = (id: string, enabled = false) => {
       return logEntries.map((entry) => entry.message).join("");
     },
     enabled,
-    refetchInterval: 5000,
+    refetchInterval: (query) => (query.state.error ? false : 5000),
   });
 };
 
@@ -167,6 +171,6 @@ export const useNetworks = () => {
       const response = await apiClient.get<DockerEnvelope<NetworkSummary[]>>("/docker/networks");
       return response.data.data;
     },
-    refetchInterval: 5000,
+    refetchInterval: (query) => (query.state.error ? false : 5000),
   });
 };

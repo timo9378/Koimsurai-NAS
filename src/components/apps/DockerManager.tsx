@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import {
+  ShieldOff,
   Play,
   Square,
   RotateCw,
@@ -26,6 +27,7 @@ import {
   useContainerLogs,
   useContainerActions,
   useContainers,
+  useDockerStatus,
   useImages,
   useNetworks,
   usePullImage,
@@ -35,6 +37,7 @@ import {
   type NetworkInfo,
 } from "@/features/docker/api/useDocker";
 import { useWindowStore } from "../../store/window-store";
+import { dockerPaneState } from "./docker/pane-state";
 import { lazyComponent } from "@/lib/lazy-component";
 import {
   DropdownMenu,
@@ -514,7 +517,12 @@ export const DockerManager = () => {
   const [filter, setFilter] = useState("");
   const [showPullDialog, setShowPullDialog] = useState(false);
 
-  const { data: containers, isLoading: containersLoading } = useContainers();
+  const {
+    data: containers,
+    isLoading: containersLoading,
+    error: containersError,
+  } = useContainers();
+  const { data: dockerStatus } = useDockerStatus();
   const { data: images, isLoading: imagesLoading } = useImages();
   const { data: networks, isLoading: networksLoading } = useNetworks();
 
@@ -546,6 +554,20 @@ export const DockerManager = () => {
       : activeTab === "images"
         ? imagesLoading
         : networksLoading;
+
+  // ⚠️ 原本只有 `isLoading ? "Loading…" : <清單>`，於是「沒有權限」「Docker
+  // 沒連上」「真的沒有容器」三種完全不同的狀況長得一模一樣，都是一片空白。
+  const paneState = dockerPaneState({
+    isLoading,
+    error: containersError,
+    connected: dockerStatus?.connected,
+    itemCount:
+      activeTab === "containers"
+        ? filteredContainers.length
+        : activeTab === "images"
+          ? filteredImages.length
+          : filteredNetworks.length,
+  });
 
   const getTabTitle = () => {
     switch (activeTab) {
@@ -680,9 +702,40 @@ export const DockerManager = () => {
 
         {/* Content */}
         <div className="flex-1 overflow-auto p-6 custom-scrollbar">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-full text-gray-500">
-              Loading {getTabTitle().toLowerCase()}...
+          {paneState.kind !== "ready" ? (
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-center text-gray-500">
+              {paneState.kind === "loading" && (
+                <span>Loading {getTabTitle().toLowerCase()}...</span>
+              )}
+              {paneState.kind === "forbidden" && (
+                <>
+                  <ShieldOff className="w-8 h-8 text-amber-500" />
+                  <span className="text-sm">這個帳號沒有 Docker 管理權限</span>
+                  <span className="text-xs">
+                    權限由伺服器的 <code>DOCKER_MANAGER_USER_IDS</code> 決定。
+                  </span>
+                </>
+              )}
+              {paneState.kind === "unavailable" && (
+                <>
+                  <Box className="w-8 h-8 text-gray-400" />
+                  <span className="text-sm">連不上 Docker</span>
+                  <span className="text-xs">daemon 沒有在跑，或這台機器沒開啟 Docker 管理。</span>
+                </>
+              )}
+              {paneState.kind === "error" && (
+                <>
+                  <Box className="w-8 h-8 text-red-400" />
+                  <span className="text-sm">
+                    讀取失敗{paneState.status === undefined ? "" : `（HTTP ${paneState.status}）`}
+                  </span>
+                </>
+              )}
+              {paneState.kind === "empty" && (
+                <span className="text-sm">
+                  {filter ? "沒有符合的項目" : `沒有${getTabTitle().toLowerCase()}`}
+                </span>
+              )}
             </div>
           ) : viewMode === "grid" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
