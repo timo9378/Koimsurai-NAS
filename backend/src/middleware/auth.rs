@@ -14,6 +14,19 @@ pub async fn require_auth(
     request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
+    // ⚠️ 上游已經認證過就直接放行。
+    //
+    // WebDAV 的路由在這道**外面**還掛了一道 Basic 認證（見
+    // middleware/basic_auth.rs）—— 標準的 WebDAV 客戶端只會 Basic，
+    // 不帶 Bearer 也沒有 cookie。它驗過之後會把 user_id 放進 extensions，
+    // 這裡如果不讓路就會把它擋掉，症狀是「Basic 認證看起來成功但還是 401」。
+    //
+    // 安全上沒有放寬：extensions 是**行程內**的型別化容器，客戶端塞不進東西，
+    // 唯一能寫進 i64 的就是同一條 layer 鏈上的其他 middleware。
+    if request.extensions().get::<i64>().is_some() {
+        return Ok(next.run(request).await);
+    }
+
     // First try Authorization header (explicit token, immune to CSRF)
     let auth_header = request
         .headers()

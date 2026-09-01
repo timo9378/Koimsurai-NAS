@@ -59,6 +59,12 @@ pub struct AppState {
     pub queue: Arc<JobQueue>,
     /// tus 1.0.0 的協定 handle（見 handlers/tus.rs）。
     pub tus: Arc<crate::handlers::tus::TusHandle>,
+    /// `WebDAV` 的 Basic 認證憑證快取（見 `middleware/basic_auth.rs`）。
+    ///
+    /// ⚠️ 這不是最佳化。argon2 一次 verify 實測 **310ms**，而 `WebDAV` 客戶端
+    /// 展開一層目錄就會發好幾個請求 —— 沒有快取的話功能不能用，
+    /// 而且是個「一個請求換 310ms CPU」的 `DoS` 放大器。
+    pub basic_auth_cache: crate::middleware::basic_auth::BasicAuthCache,
     /// 全站維護作業（rescan、一致性檢查）的單一併發鎖。
     ///
     /// ⚠️ 這兩個端點會走訪**整棵儲存樹**。本專案的紀錄是 320k 個檔案掃一次

@@ -190,6 +190,7 @@ pub async fn create_app(pool: SqlitePool, storage_path: PathBuf) -> axum::Router
         storage_path: storage_root,
         queue,
         tus,
+        basic_auth_cache: crate::middleware::basic_auth::BasicAuthCache::default(),
         maintenance_lock: Arc::new(tokio::sync::Mutex::new(())),
         webdav,
         tx,

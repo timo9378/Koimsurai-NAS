@@ -421,7 +421,17 @@ pub async fn create_router(state: AppState) -> Router {
                     &format!("{}/{{*path}}", webdav::MOUNT_PATH),
                     any(webdav::webdav_handler),
                 )
+                // ⚠️ layer 由外往內套、寫在後面的先執行，所以 basic_auth 寫在
+                // require_auth **後面** —— Basic 那道要先跑，驗過之後把 user_id
+                // 放進 extensions，require_auth 看到就讓路（見它開頭的說明）。
+                //
+                // 為什麼 WebDAV 需要 Basic：標準客戶端（Finder、檔案總管、
+                // rclone）只會 Basic，不帶 Bearer 也沒有 cookie。
                 .route_layer(middleware::from_fn_with_state(state.clone(), require_auth))
+                .route_layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    crate::middleware::basic_auth::basic_auth,
+                ))
                 .layer(DefaultBodyLimit::max(10 * 1024 * 1024 * 1024)),
         )
         .layer(session_layer)
