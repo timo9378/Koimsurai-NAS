@@ -45,6 +45,16 @@ import { selectOnClick } from "./finder/selection";
 import { dirName, joinPath, toApiPath } from "@/lib/paths";
 import { filterByQuery, sortFiles } from "./finder/sorting";
 import {
+  addTab as addTabTo,
+  closeTab as closeTabIn,
+  createTab,
+  restoreTabs,
+  serializeTabs,
+  type TabState,
+  type TabsState,
+  updateActiveTab as updateActiveTabIn,
+} from "./finder/tabs";
+import {
   currentPath as currentHistoryPath,
   goBack,
   goForward,
@@ -55,79 +65,29 @@ import {
 type ViewMode = "grid" | "list";
 
 // Tab state interface
-interface TabState {
-  id: string;
-  path: string;
-  history: string[];
-  historyIndex: number;
-  isTrashMode: boolean;
-  selectedTag: string | null;
-  selectedFiles: Set<string>;
-  searchQuery: string;
-}
-
-const createTab = (path = "/"): TabState => ({
-  id: crypto.randomUUID(),
-  path,
-  history: [path],
-  historyIndex: 0,
-  isTrashMode: false,
-  selectedTag: null,
-  selectedFiles: new Set(),
-  searchQuery: "",
-});
-
 interface FinderProps {
   windowId?: string;
 }
 
-// Serializable tab state for localStorage persistence
-interface SerializedTabState {
-  id: string;
-  path: string;
-  history: string[];
-  historyIndex: number;
-  isTrashMode: boolean;
-  selectedTag: string | null;
-  searchQuery: string;
-}
-
 const TABS_STORAGE_KEY = "finder-tabs";
 
-const loadPersistedTabs = (windowId?: string): { tabs: TabState[]; activeTabId: string } | null => {
+/** localStorage 的薄包裝。驗證與還原的規則在 finder/tabs.ts。 */
+const restorePersistedTabs = (windowId?: string): TabsState | null => {
   if (!windowId || typeof window === "undefined") return null;
   try {
     const stored = localStorage.getItem(`${TABS_STORAGE_KEY}-${windowId}`);
-    if (!stored) return null;
-    // localStorage 的內容不受我們控制（使用者改得到，舊版格式也可能還在），
-    // 所以每個欄位都當成「可能沒有」—— 之前宣告成必填，等於把下面那行 guard
-    // 標示成多餘的，但它其實是唯一擋住壞資料的東西。
-    const parsed = JSON.parse(stored) as Partial<{
-      tabs: SerializedTabState[];
-      activeTabId: string;
-    }>;
-    if (!parsed.tabs?.length || typeof parsed.activeTabId !== "string") return null;
-    // Restore tabs with empty selectedFiles (Set is not serializable)
-    const tabs: TabState[] = parsed.tabs.map((t) => ({
-      ...t,
-      selectedFiles: new Set<string>(),
-    }));
-    return { tabs, activeTabId: parsed.activeTabId };
+    return stored === null ? null : restoreTabs(JSON.parse(stored));
   } catch {
     return null;
   }
 };
 
-const persistTabs = (windowId: string | undefined, tabs: TabState[], activeTabId: string) => {
+const persistTabs = (windowId: string | undefined, state: TabsState) => {
   if (!windowId || typeof window === "undefined") return;
   try {
-    const serialized: { tabs: SerializedTabState[]; activeTabId: string } = {
-      tabs: tabs.map(({ selectedFiles: _selectedFiles, ...rest }) => rest),
-      activeTabId,
-    };
-    localStorage.setItem(`${TABS_STORAGE_KEY}-${windowId}`, JSON.stringify(serialized));
+    localStorage.setItem(`${TABS_STORAGE_KEY}-${windowId}`, JSON.stringify(serializeTabs(state)));
   } catch {
-    // Silently ignore storage errors
+    // 配額滿或隱私模式 —— 分頁記不住不該讓 Finder 開不起來
   }
 };
 
@@ -144,15 +104,28 @@ const EMPTY_SELECTION = new Set<string>();
 export const Finder = ({ windowId }: FinderProps) => {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
 
-  // Multi-tab state (restored from localStorage if available)
-  const [tabs, setTabs] = useState<TabState[]>(() => {
-    const persisted = loadPersistedTabs(windowId);
-    return persisted?.tabs ?? [createTab("/")];
+  // ⚠️ tabs 與 activeTabId 存成**一個** state。
+  //
+  // 原本是兩個 useState，各自呼叫一次 loadPersistedTabs（也就是讀兩次
+  // localStorage、parse 兩次），而且沒有任何東西保證 activeTabId 指向存在的
+  // 分頁 —— 指不到的話 updateActiveTab 的 map 一個都對不到，導覽／選取／搜尋
+  // 全部靜默失效，使用者點資料夾沒反應而且沒有錯誤。
+  // 轉換規則與驗證見 finder/tabs.ts。
+  const [tabsState, setTabsState] = useState<TabsState>(() => {
+    const persisted = restorePersistedTabs(windowId);
+    const initial = createTab("/");
+    return persisted ?? { tabs: [initial], activeTabId: initial.id };
   });
-  const [activeTabId, setActiveTabId] = useState<string>(() => {
-    const persisted = loadPersistedTabs(windowId);
-    return persisted?.activeTabId || tabs[0]?.id || "";
-  });
+  const { tabs, activeTabId } = tabsState;
+  const setTabs = useCallback((updater: TabState[] | ((prev: TabState[]) => TabState[])) => {
+    setTabsState((prev) => ({
+      ...prev,
+      tabs: typeof updater === "function" ? updater(prev.tabs) : updater,
+    }));
+  }, []);
+  const setActiveTabId = useCallback((id: string) => {
+    setTabsState((prev) => ({ ...prev, activeTabId: id }));
+  }, []);
 
   // Get current tab
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0];
@@ -179,12 +152,9 @@ export const Finder = ({ windowId }: FinderProps) => {
   // render 都是新的函式，寫進 deps 陣列等於「每 render 重掛一次 listener」，
   // 於是原本乾脆把它們從 deps 裡省略掉 —— 而省略掉就會抓到舊的 activeTabId，
   // 切分頁之後鍵盤操作會作用在**上一個**分頁上。包起來兩邊都對。
-  const updateActiveTab = useCallback(
-    (updates: Partial<TabState>) => {
-      setTabs((prev) => prev.map((tab) => (tab.id === activeTabId ? { ...tab, ...updates } : tab)));
-    },
-    [activeTabId],
-  );
+  const updateActiveTab = useCallback((updates: Partial<TabState>) => {
+    setTabsState((prev) => updateActiveTabIn(prev, updates));
+  }, []);
 
   const setCurrentPath = useCallback(
     (path: string) => updateActiveTab({ path }),
@@ -200,7 +170,7 @@ export const Finder = ({ windowId }: FinderProps) => {
         ),
       );
     },
-    [activeTabId],
+    [activeTabId, setTabs],
   );
   const setHistoryIndex = useCallback(
     (idx: number | ((prev: number) => number)) => {
@@ -212,7 +182,7 @@ export const Finder = ({ windowId }: FinderProps) => {
         ),
       );
     },
-    [activeTabId],
+    [activeTabId, setTabs],
   );
   const setIsTrashMode = useCallback(
     (mode: boolean) => updateActiveTab({ isTrashMode: mode }),
@@ -235,7 +205,7 @@ export const Finder = ({ windowId }: FinderProps) => {
         ),
       );
     },
-    [activeTabId],
+    [activeTabId, setTabs],
   );
   const setSearchQuery = useCallback(
     (query: string) => updateActiveTab({ searchQuery: query }),
@@ -243,30 +213,20 @@ export const Finder = ({ windowId }: FinderProps) => {
   );
 
   // Tab management functions
-  const addTab = (path = "/") => {
-    const newTab = createTab(path);
-    setTabs((prev) => [...prev, newTab]);
-    setActiveTabId(newTab.id);
-  };
+  // ⚠️ 用 functional update 而不是讀閉包裡的 tabs/activeTabId：
+  // 連續兩次關分頁時，第二次讀到的會是還沒更新的狀態。
+  const addTab = useCallback((path = "/") => {
+    setTabsState((prev) => addTabTo(prev, path));
+  }, []);
 
-  const closeTab = (tabId: string) => {
-    if (tabs.length <= 1) return; // Don't close last tab
-
-    const tabIndex = tabs.findIndex((t) => t.id === tabId);
-    const newTabs = tabs.filter((t) => t.id !== tabId);
-    setTabs(newTabs);
-
-    // If we're closing the active tab, switch to adjacent tab
-    if (tabId === activeTabId) {
-      const newIndex = Math.min(tabIndex, newTabs.length - 1);
-      setActiveTabId(newTabs[newIndex]?.id ?? "");
-    }
-  };
+  const closeTab = useCallback((tabId: string) => {
+    setTabsState((prev) => closeTabIn(prev, tabId));
+  }, []);
 
   // Persist tabs to localStorage whenever they change
   useEffect(() => {
-    persistTabs(windowId, tabs, activeTabId);
-  }, [tabs, activeTabId, windowId]);
+    persistTabs(windowId, tabsState);
+  }, [tabsState, windowId]);
 
   const [isDragging, setIsDragging] = useState(false);
   const [renamingFile, setRenamingFile] = useState<string | null>(null);
@@ -327,28 +287,27 @@ export const Finder = ({ windowId }: FinderProps) => {
       updateWindowAppState(windowId, { navigateTo: undefined });
 
       const next = pushPath({ entries: history, index: historyIndex }, targetPath);
-      // ⚠️ 一次 setTabs 寫完，不要呼叫五個 wrapper——那是五次整個 tabs 陣列的 map。
+      // ⚠️ 一次寫完，不要呼叫五個 wrapper——那是五次整個 tabs 陣列的 map。
+      //
+      // ⚠️ 這裡直接用 setTabsState 而不是 setTabs 那個包裝：包裝被 effect
+      // 呼叫的話，set-state-in-effect 的警告會指到**包裝的定義處**而不是這裡，
+      // 於是下面那行抑制註解就蓋不到它。
       //
       // 這裡確實是「在 effect 裡 setState」，而那正是這個機制的本質：別的視窗
       // （例如桌面雙擊資料夾）把導航請求寫進 window store，這個 Finder 只能
       // 用 effect 去反應。沒有更直接的管道。
       // oxlint-disable-next-line @eslint-react/set-state-in-effect
-      setTabs((prev) =>
-        prev.map((tab) =>
-          tab.id === activeTabId
-            ? {
-                ...tab,
-                isTrashMode: false,
-                history: [...next.entries],
-                historyIndex: next.index,
-                path: targetPath,
-                selectedFiles: new Set<string>(),
-              }
-            : tab,
-        ),
+      setTabsState((prev) =>
+        updateActiveTabIn(prev, {
+          isTrashMode: false,
+          history: [...next.entries],
+          historyIndex: next.index,
+          path: targetPath,
+          selectedFiles: new Set<string>(),
+        }),
       );
     }
-  }, [windows, updateWindowAppState, history, historyIndex, windowId, activeTabId]);
+  }, [windows, updateWindowAppState, history, historyIndex, windowId]);
 
   const {
     data: files,
