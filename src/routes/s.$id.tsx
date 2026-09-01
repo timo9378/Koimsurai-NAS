@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileTypeIcon } from "@/lib/file-icons";
+import { formatBytes } from "@/lib/format";
 
 interface ShareInfo {
   id: string;
@@ -32,14 +33,6 @@ interface ShareInfo {
 }
 
 type ShareStatus = "loading" | "ready" | "password_required" | "expired" | "not_found" | "error";
-
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 Bytes";
-  const k = 1024;
-  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-}
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -321,10 +314,10 @@ function SharePage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-white font-medium truncate">{shareInfo.file_name}</p>
                       <p className="text-white/50 text-sm">
-                        {shareInfo.is_directory ? "資料夾" : formatFileSize(shareInfo.file_size)}
+                        {shareInfo.is_directory ? "資料夾" : formatBytes(shareInfo.file_size)}
                         {shareInfo.is_directory &&
                           shareInfo.file_size > 0 &&
-                          ` · ${formatFileSize(shareInfo.file_size)}`}
+                          ` · ${formatBytes(shareInfo.file_size)}`}
                       </p>
                     </div>
                     <Lock className="w-5 h-5 text-yellow-400 flex-shrink-0" />
@@ -404,10 +397,10 @@ function SharePage() {
                           {shareInfo.file_name}
                         </p>
                         <p className="text-white/50 text-sm">
-                          {shareInfo.is_directory ? "資料夾" : formatFileSize(shareInfo.file_size)}
+                          {shareInfo.is_directory ? "資料夾" : formatBytes(shareInfo.file_size)}
                           {shareInfo.is_directory &&
                             shareInfo.file_size > 0 &&
-                            ` · ${formatFileSize(shareInfo.file_size)}`}
+                            ` · ${formatBytes(shareInfo.file_size)}`}
                         </p>
                       </div>
                     </div>

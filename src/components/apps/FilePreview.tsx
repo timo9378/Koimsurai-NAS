@@ -8,20 +8,13 @@ import { useQuery } from "@tanstack/react-query";
 import { useWindowStore } from "@/store/window-store";
 import { VideoPlayer } from "@/components/ui/video-player";
 import { AudioPlayer } from "@/components/ui/audio-player";
+import { formatBytes } from "@/lib/format";
 
 interface FilePreviewProps {
   file: FileInfo;
   windowId?: string;
   onClose?: () => void; // Optional now as it's handled by window manager
 }
-
-const formatBytes = (bytes: number) => {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
-};
 
 export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
   const { updateWindowSize } = useWindowStore();

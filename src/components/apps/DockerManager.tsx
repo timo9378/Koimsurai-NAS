@@ -43,6 +43,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { formatBytes } from "@/lib/format";
 
 const TerminalView = lazyComponent(
   () => import("./TerminalView").then((mod) => mod.TerminalView),
@@ -288,13 +289,6 @@ const ContainerListItem = ({ container }: { container: ContainerInfo }) => {
 const ImageCard = ({ image, viewMode }: { image: ImageInfo; viewMode: ViewMode }) => {
   const removeImage = useRemoveImage();
 
-  const formatSize = (bytes: number) => {
-    if (bytes >= 1024 * 1024 * 1024) {
-      return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
-    }
-    return `${(bytes / 1024 / 1024).toFixed(0)} MB`;
-  };
-
   const formatDate = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleDateString();
   };
@@ -318,7 +312,7 @@ const ImageCard = ({ image, viewMode }: { image: ImageInfo; viewMode: ViewMode }
           </p>
         </div>
         <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400 shrink-0">
-          <span>{formatSize(image.size)}</span>
+          <span>{formatBytes(image.size)}</span>
           <span>{formatDate(image.created)}</span>
         </div>
         <button
@@ -359,7 +353,7 @@ const ImageCard = ({ image, viewMode }: { image: ImageInfo; viewMode: ViewMode }
       <div className="grid grid-cols-2 gap-2 text-xs text-gray-500 dark:text-gray-400">
         <div className="flex items-center gap-1.5">
           <HardDrive className="w-3.5 h-3.5 shrink-0" />
-          <span className="truncate">{formatSize(image.size)}</span>
+          <span className="truncate">{formatBytes(image.size)}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <Activity className="w-3.5 h-3.5 shrink-0" />

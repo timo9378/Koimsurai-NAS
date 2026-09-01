@@ -34,6 +34,7 @@ import {
   useTwoFactorVerifySetup,
   useTwoFactorDisable,
 } from "@/features/auth/api/useAuth";
+import { formatBytes } from "@/lib/format";
 
 type SettingsSection = "appearance" | "dock" | "storage" | "account" | "security" | "about";
 
@@ -153,14 +154,6 @@ const DockSection = () => {
 const StorageSection = () => {
   const { data: systemStatus } = useSystemStatus();
 
-  const formatSize = (bytes: number) => {
-    if (bytes === 0) return "0 B";
-    const k = 1024;
-    const sizes = ["B", "KB", "MB", "GB", "TB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  };
-
   return (
     <div className="space-y-6">
       <div>
@@ -187,8 +180,8 @@ const StorageSection = () => {
                 </span>
               </div>
               <span className="text-sm text-gray-500 dark:text-zinc-400">
-                {formatSize(disk.total_space - disk.available_space)} /{" "}
-                {formatSize(disk.total_space)}
+                {formatBytes(disk.total_space - disk.available_space)} /{" "}
+                {formatBytes(disk.total_space)}
               </span>
             </div>
             <div className="w-full h-2 bg-gray-200 dark:bg-white/10 rounded-full overflow-hidden">
@@ -205,7 +198,7 @@ const StorageSection = () => {
               />
             </div>
             <div className="text-xs text-gray-500 dark:text-zinc-400">
-              可用: {formatSize(disk.available_space)} ({(100 - usedPercent).toFixed(1)}%)
+              可用: {formatBytes(disk.available_space)} ({(100 - usedPercent).toFixed(1)}%)
             </div>
           </div>
         );

@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSystemStatus } from "@/features/system/api/useSystem";
+import { formatBytes } from "@/lib/format";
 
 type TabType = "overview" | "cpu" | "memory" | "gpu" | "storage";
 
@@ -109,14 +110,6 @@ export const Dashboard = () => {
       return () => clearTimeout(timer);
     }
   }, [cpuUsage, usedMemory, totalMemory, gpuUtilization]);
-
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return "0 B";
-    const k = 1024;
-    const sizes = ["B", "KB", "MB", "GB", "TB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
-  };
 
   const getProgressColor = (percentage: number) => {
     if (percentage > 90) return "from-red-500 to-rose-600";

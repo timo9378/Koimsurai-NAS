@@ -17,7 +17,8 @@
     "src/components/desktop/icon-grid.ts",
     "src/features/files/tus-upload.ts",
     "src/lib/a11y.ts",
-    "src/lib/errors.ts"
+    "src/lib/errors.ts",
+    "src/lib/format.ts"
   ],
   "ignorePatterns": [
     "node_modules",

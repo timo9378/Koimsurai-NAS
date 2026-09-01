@@ -54,6 +54,7 @@ import { useThumbnail } from "@/features/files/api/useFiles";
 import { toast } from "sonner";
 import { useSystemStatus } from "@/features/system/api/useSystem";
 import { activateOnKey } from "@/lib/a11y";
+import { formatBytes } from "@/lib/format";
 
 // ─── Thumbnail component ────────────────────────────────
 const MobileFileThumb = ({ file, currentPath }: { file: FileInfo; currentPath: string }) => {
@@ -266,7 +267,7 @@ const FileInfoSheet = ({ file, onClose }: { file: FileInfo | null; onClose: () =
             <div className="flex justify-between">
               <span className="text-gray-500">Size</span>
               <span className="text-gray-900 dark:text-white">
-                {file.is_dir ? "--" : formatSize(file.size)}
+                {file.is_dir ? "--" : formatBytes(file.size)}
               </span>
             </div>
             <div className="flex justify-between">
@@ -303,13 +304,6 @@ const FileInfoSheet = ({ file, onClose }: { file: FileInfo | null; onClose: () =
     </>
   );
 };
-
-function formatSize(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
-}
 
 // ─── Mobile Monitor (系統狀態 + UPS) ─────────────────────
 const MonitorBar = ({ pct, color }: { pct: number; color: string }) => (
@@ -406,7 +400,7 @@ const MobileMonitor = () => {
           <Activity className="w-4 h-4 text-purple-500" />
           <span className="text-sm font-medium">記憶體</span>
           <span className="ml-auto text-xs text-gray-500">
-            {formatSize(sys.used_memory)} / {formatSize(sys.total_memory)}
+            {formatBytes(sys.used_memory)} / {formatBytes(sys.total_memory)}
           </span>
         </div>
         <span className="text-2xl font-bold">{memPct.toFixed(1)}%</span>
@@ -426,7 +420,7 @@ const MobileMonitor = () => {
                 {d.mount_point === "/" ? "System" : d.mount_point}
               </span>
               <span className="ml-auto text-xs text-gray-500 shrink-0">
-                {formatSize(d.total_space - d.available_space)} / {formatSize(d.total_space)}
+                {formatBytes(d.total_space - d.available_space)} / {formatBytes(d.total_space)}
               </span>
             </div>
             <MonitorBar pct={usedPct} color={usedPct > 90 ? "bg-red-500" : "bg-cyan-500"} />
@@ -808,7 +802,7 @@ export const MobileLayout = () => {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{file.name}</p>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        {file.is_dir ? "Folder" : formatSize(file.size)}
+                        {file.is_dir ? "Folder" : formatBytes(file.size)}
                         {" · "}
                         {new Date(file.modified).toLocaleDateString()}
                         {file.is_starred && " ⭐"}

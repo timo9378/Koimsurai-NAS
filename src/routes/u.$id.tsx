@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { formatBytes } from "@/lib/format";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -66,14 +67,6 @@ interface UploadGroup {
 
 let groupIdCounter = 0;
 const nextGroupId = () => `g-${++groupIdCounter}`;
-
-function formatFileSize(bytes: number) {
-  if (bytes === 0) return "0 Bytes";
-  const k = 1024;
-  const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-}
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleString("zh-TW", {
@@ -268,7 +261,7 @@ export function UploadPage() {
       if (maxFileSize != null) {
         const oversized = filtered.filter((f) => f.size > maxFileSize);
         if (oversized.length > 0) {
-          setError(`部分檔案超過大小限制 (${formatFileSize(maxFileSize)})`);
+          setError(`部分檔案超過大小限制 (${formatBytes(maxFileSize)})`);
           filtered = filtered.filter((f) => f.size <= maxFileSize);
         }
       }
@@ -624,7 +617,7 @@ export function UploadPage() {
               {uploadInfo.max_file_size != null && (
                 <div className="flex items-center gap-1.5">
                   <File className="h-4 w-4" />
-                  <span>單檔限制: {formatFileSize(uploadInfo.max_file_size)}</span>
+                  <span>單檔限制: {formatBytes(uploadInfo.max_file_size)}</span>
                 </div>
               )}
               {uploadInfo.max_files != null && (
@@ -749,7 +742,7 @@ export function UploadPage() {
               {/* Summary bar */}
               <div className="flex items-center justify-between text-sm text-zinc-400 px-1">
                 <span>
-                  {groups.length} 個項目 · {totalFileCount} 個檔案 · {formatFileSize(totalSize)}
+                  {groups.length} 個項目 · {totalFileCount} 個檔案 · {formatBytes(totalSize)}
                 </span>
                 {!isUploading && groups.length > 0 && (
                   <button
@@ -797,7 +790,7 @@ export function UploadPage() {
                         <p className="text-sm text-zinc-200 truncate">{group.name}</p>
                         <p className="text-xs text-zinc-500">
                           {group.isFolder && `${group.fileCount} 個檔案 · `}
-                          {formatFileSize(group.totalSize)}
+                          {formatBytes(group.totalSize)}
                           {group.status === "uploading" &&
                             ` · ${group.uploadedCount}/${group.fileCount} 已上傳`}
                           {group.status === "done" &&
@@ -847,7 +840,7 @@ export function UploadPage() {
                           >
                             <File className="h-3 w-3 shrink-0" />
                             <span className="truncate">{f.relativePath}</span>
-                            <span className="shrink-0 ml-auto">{formatFileSize(f.file.size)}</span>
+                            <span className="shrink-0 ml-auto">{formatBytes(f.file.size)}</span>
                           </div>
                         ))}
                         {group.files.length > 50 && (
@@ -889,7 +882,7 @@ export function UploadPage() {
               className="w-full bg-purple-600 hover:bg-purple-700"
             >
               <Upload className="mr-2 h-4 w-4" />
-              上傳 {pendingFileCount} 個檔案 ({formatFileSize(totalSize)})
+              上傳 {pendingFileCount} 個檔案 ({formatBytes(totalSize)})
             </Button>
           )}
         </CardContent>
