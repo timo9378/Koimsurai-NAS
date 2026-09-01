@@ -1,113 +1,163 @@
-# Koimsurai NAS 前端介面 (Frontend)
+# Koimsurai NAS
 
-這是一個基於 Next.js 構建的現代化 Web 桌面環境 (Web Desktop Environment)，專為 Koimsurai NAS 設計。它提供了一個類似 macOS 的直觀介面，讓使用者可以透過瀏覽器輕鬆管理伺服器、檔案和 Docker 容器。
+自架 NAS 的 Web 介面與後端：一個 Rust 伺服器負責檔案、搜尋、媒體轉檔與
+Docker 管理，前端是一個仿 macOS 的網頁桌面。兩邊在同一個 repo，也編成
+**同一個執行檔**部署 —— 後端在 `/api` 底下提供 API，其餘路徑供應打包好的 SPA。
 
-## ✨ 主要特色
+> ⚠️ 這份 README 之前寫的是「基於 Next.js 構建」。專案早就換成 Vite +
+> TanStack Router 了，而且它只描述前端、完全沒提到後端。這裡是照著現況重寫的。
 
-### 🖥️ 桌面環境 (Desktop Environment)
+## 這個專案實際上有什麼
 
-- **視窗管理系統**：支援多視窗開啟、拖曳、縮放、最小化與最大化。
-- **Dock 工具列**：快速啟動應用程式，類似 macOS 的操作體驗。
-- **全域搜尋 (Spotlight)**：快速搜尋檔案與應用程式。
-- **主題切換**：支援深色 (Dark) 與淺色 (Light) 模式。
+### 檔案
 
-### 📂 檔案管理 (Finder)
+- 瀏覽、上傳、下載、重新命名、移動（拖放）、**複製／剪下／貼上**、刪除。
+- 上傳走 **tus 1.0**（`tus-js-client` ↔ `tus-protocol`）：分塊、可續傳，
+  重新整理頁面之後仍然接得回去（指紋存在 localStorage）。
+- **垃圾桶**：刪除是移到 `.trash`，可以還原或永久刪除。
+  ⚠️ 垃圾桶是扁平的，撞名時存成 `原名.<timestamp>` —— 還原與永久刪除吃的是
+  **垃圾桶裡的檔名**，不是原始路徑。
+- **版本**：檔案被覆寫時自動存一份到 `.versions/`，可以列出與還原。
+  還原是非破壞性的（會先把目前的內容存成新版本）。
+- **標籤**、**我的最愛**、以 tantivy 建的全文搜尋。
+- **分享連結**與**上傳連結**：公開網址，可設密碼與到期時間。
+  資料夾的分享會即時打包成 zip。
+- **WebDAV**（`/webdav`）：Basic 認證。⚠️ 開了 2FA 的帳號用不了 WebDAV
+  （Basic 沒有第二因素的位置），目前沒有 app-specific password。
 
-- **完整檔案操作**：瀏覽、上傳、下載、刪除、重新命名、移動檔案。
-- **進階上傳**：支援大檔案分塊上傳 (Chunked Upload) 與斷點續傳。
-- **預覽功能**：支援圖片、影片與程式碼檔案預覽。
-- **垃圾桶機制**：防止誤刪檔案，支援還原功能。
-- **分享功能**：可建立檔案分享連結。
+### 媒體
 
-### 🐳 系統與容器管理
+- 圖片／影片／音訊／PDF／文字（Monaco）的預覽，影片支援 Range 串流與 HLS 轉檔。
+- Photos：依日期分組的時間軸。
+- 縮圖與影片 proxy 由背景佇列產生。
 
-- **儀表板 (Dashboard)**：即時監控 CPU、記憶體 (RAM) 與儲存空間使用率，提供視覺化圖表。
-- **Docker 管理器**：
-  - 查看容器列表與狀態。
-  - 啟動、停止、重啟與刪除容器。
-  - 即時查看容器日誌 (Logs)。
-  - 快速開啟 Web 服務連結。
+### 系統
 
-### 🛠️ 其他工具
+- 儀表板：CPU／記憶體／儲存／GPU。
+- Docker 管理：容器、映像、網路、日誌、容器內終端機。
+  ⚠️ 這個功能等同**主機 root**（容器掛著 `docker.sock`），所以由兩個環境變數
+  控制：`ENABLE_DOCKER_MANAGER` 與 `DOCKER_MANAGER_USER_IDS`（**沒設就全部拒絕**）。
+- 網頁終端機（xterm.js）、稽核紀錄、背景工作進度。
 
-- **終端機 (Terminal)**：整合 xterm.js 的網頁版終端機。
-- **系統設定**：客製化桌面體驗。
+### 桌面
 
-### 🔐 認證機制 (Authentication)
+多視窗、Dock、頂端選單列、Spotlight 搜尋、深淺色主題。
+行動裝置（`max-width: 767px`）走另一套版面。
 
-- **HttpOnly Cookie**：使用安全的 HttpOnly Cookie 儲存 Access Token 與 Refresh Token，前端不直接接觸 Token。
-- **自動續期 (Auto Refresh)**：攔截 401 錯誤，自動呼叫 `/api/auth/refresh` 進行 Token 續期並重試請求。
-- **API 封裝**：提供 `login`, `logout`, `fetchWithAuth`, `isLoggedIn` 等簡易 API 介面。
+## 技術堆疊
 
-## 🚀 技術堆疊 (Tech Stack)
+**後端**（`backend/`）
+Rust · axum 0.8 · tokio · sqlx + SQLite · tantivy（搜尋）· dav-server（WebDAV）·
+bollard（Docker）· tus-protocol · argon2 + jsonwebtoken（認證）· zip · image ·
+utoipa（OpenAPI）· specta（型別匯出）
 
-- **框架**: [Next.js 16](https://nextjs.org/) (App Router)
-- **語言**: [TypeScript](https://www.typescriptlang.org/)
-- **樣式**: [Tailwind CSS v4](https://tailwindcss.com/)
-- **UI 組件**: [Radix UI](https://www.radix-ui.com/), [Lucide React](https://lucide.dev/) (Icons)
-- **狀態管理**: [Zustand](https://github.com/pmndrs/zustand)
-- **資料獲取**: [TanStack Query (React Query)](https://tanstack.com/query/latest)
-- **圖表**: [Recharts](https://recharts.org/)
-- **其他**: Framer Motion (動畫), Monaco Editor (程式碼編輯), xterm.js (終端機)
+**前端**（`src/`）
+TypeScript · Vite 8 · React 19 · TanStack Router + Query · Tailwind CSS v4 ·
+Radix UI · zustand · framer-motion · react-virtuoso · Monaco · xterm.js ·
+recharts · tus-js-client
 
-## 📦 安裝與執行
+### 型別是**產生**的，不要手抄
 
-### 前置需求
+跨 API 邊界的 Rust 型別同時掛 `utoipa::ToSchema` 與 `specta::Type`，
+由 `pnpm export:types` 產生到 `packages/api-types/`，前端一律從 `@/types/api` 匯入。
 
-- Node.js (建議 v18 或以上)
-- pnpm (建議) 或 npm/yarn
+⚠️ 這條規則是踩過坑才有的：手抄的 `TimelineGroup` 把欄位寫成 `items`
+（後端送的是 `files`），Photos 因此從來沒有顯示過任何東西；手抄的
+`ShareLinkResponse` 把 `expires_at` 寫成 `string | undefined`，而「永不過期」
+走的正是 `null` 那條路。CI 有一個 job 專門檢查產生出來的型別是不是最新的。
 
-### 開發模式
+## 開發
 
-1. 安裝依賴套件：
+需要 Node.js（CI 用 26）、pnpm、Rust stable。
 
 ```bash
 pnpm install
-# 或
-npm install
-```
 
-2. 啟動開發伺服器：
+# 後端（:3000。設了 STATIC_DIR 的話同時供應那個目錄的 SPA）
+cargo run --manifest-path backend/Cargo.toml
 
-```bash
+# 前端開發伺服器（proxy `/api` 到 :3000，WebSocket 也一起 —— 見 vite.config.ts）
 pnpm dev
-# 或
-npm run dev
 ```
 
-3. 開啟瀏覽器訪問 [http://localhost:3000](http://localhost:3000) (或 package.json 中設定的 3001 port)。
+### 常用指令
 
-### 建置生產版本
+| 指令 | 做什麼 |
+| --- | --- |
+| `pnpm build` | `tsc --noEmit` 之後 vite build |
+| `pnpm test` / `pnpm test:coverage` | vitest（jsdom）；覆蓋率門檻是**棘輪**，見 `vitest.config.ts` |
+| `pnpm lint` / `pnpm format` | oxlint（type-aware）／oxfmt。⚠️ CSS 由 biome 管，用 `pnpm lint:css`；**不要**直接跑 `oxfmt`，會繞過排除設定 |
+| `pnpm knip` | 死碼與未使用的相依 |
+| `pnpm e2e` / `pnpm e2e:ui` | Playwright（含 axe 的可及性檢查） |
+| `pnpm export:types` | 從 Rust 重新產生 API 型別 |
+| `cargo nextest run` | 後端測試（23 個測試檔） |
+| `cargo clippy --all-targets -- -D warnings` | 後端 lint |
+
+`pnpm mutate`（Stryker）與 `cargo mutants` **不要在這台機器上跑** —— 它們同時
+起很多 worker，而這台機器就是 NAS 本身，上面跑著正式服務。CI 上有排程 job。
+
+## CI
+
+| Workflow | 內容 |
+| --- | --- |
+| `CI` | 前端 tsc／oxfmt／oxlint／biome／vitest＋覆蓋率／knip／build；後端 typos／fmt／clippy／nextest＋覆蓋率／specta 漂移／cargo-audit／cargo-shear；workflow 本身的 actionlint＋zizmor |
+| `E2E` | Playwright + `@axe-core/playwright` |
+| `API Fuzz` | schemathesis 照 OpenAPI 產請求打後端 |
+| `Mutation (frontend)` / `Mutants` | Stryker / cargo-mutants |
+
+## 專案結構
+
+```
+.
+├── backend/            Rust 伺服器
+│   ├── src/
+│   │   ├── handlers/   HTTP 處理器（依領域分檔）
+│   │   ├── middleware/ 認證、CSRF、Basic 認證、Docker 權限
+│   │   ├── services/   索引器、搜尋、媒體
+│   │   ├── utils/      佇列、版本、縮圖、命名
+│   │   └── storage.rs  ⚠️ StorageRoot —— 路徑的唯一正規入口，見下
+│   └── tests/          整合測試
+├── src/                前端
+│   ├── components/     apps/（Finder、Photos、Docker…）、desktop/、mobile/、ui/
+│   ├── features/       API hooks 與純邏輯模組
+│   ├── lib/            paths、format、errors、a11y…（抽出來、有測試的那些）
+│   ├── routes/         TanStack Router 的檔案式路由
+│   └── store/          zustand
+├── packages/api-types/ 由 Rust 產生，不要手改
+├── e2e/                Playwright
+└── scripts/            E2E 伺服器、fuzz 種子
+```
+
+### `StorageRoot`
+
+後端所有使用者給的路徑都必須經過 `storage.rs` 的 `StorageRoot::resolve()`。
+那個型別**沒有** `Deref`、`AsRef<Path>` 或 `join` —— 想拿到底層路徑只能呼叫
+有名字、可以 grep 的 `as_path()`。這是刻意的：換成這個型別的那一次改動產生了
+46 個編譯錯誤，而那 46 個地方就是需要人看過的地方。
+
+⚠️ 背景 job 的 worker 沒有 `AppState`，它用 `StorageRoot::from_env()` 自己重建根
+路徑 —— 所以驗證的邊界在 enqueue 的那個 handler 裡，不能省。
+
+## 部署
+
+編成單一容器：前端 build 進 `dist/`，後端供應它。
 
 ```bash
-pnpm build
-pnpm start
+cd /home/timo9378/Server
+VITE_RELEASE=$(git -C Koimsurai-NAS rev-parse --short HEAD) \
+  docker compose up -d --build backend
 ```
 
-## 📁 專案結構
+之後照例確認 `/health`（200）、`/api/files`（未登入要 401）、
+`/webdav/`（未登入要 401），以及 `docker compose logs backend` 沒有 panic。
 
-```
-frontend/
-├── src/
-│   ├── app/            # Next.js App Router 頁面與佈局
-│   ├── components/     # React 組件
-│   │   ├── apps/       # 應用程式組件 (Finder, Dashboard, Docker 等)
-│   │   ├── desktop/    # 桌面環境組件 (Dock, Window, TopBar)
-│   │   ├── ui/         # 通用 UI 組件 (Button, Input, Dialog 等)
-│   │   └── ...
-│   ├── features/       # 功能模組 (API hooks, 邏輯封裝)
-│   ├── hooks/          # 自定義 Hooks
-│   ├── lib/            # 工具函式庫 (API client, utils)
-│   ├── store/          # Zustand 狀態管理
-│   └── types/          # TypeScript 型別定義
-├── public/             # 靜態資源
-└── ...
-```
+## 慣例
 
-## 🤝 貢獻
-
-歡迎提交 Pull Request 或 Issue 來改進這個專案。
-
----
-
-Powered by Next.js & React
+- **註解寫「為什麼」**，尤其是「這裡曾經是什麼樣子、為什麼不能改回去」。
+  這個 repo 的註解密度偏高是刻意的。
+- **邏輯抽成純函式再測**。四支大元件（Finder／FileList／DesktopIcons／
+  MobileLayout）很難直接測，所以做法是把判斷抽到 `lib/` 或 `features/` 底下
+  的小模組，那裡的覆蓋率才是有意義的。
+- **覆蓋率門檻是棘輪不是目標**：加一段還沒測到的新功能不該當場擋下，
+  但「刪掉一批測試」要被抓到。補了測試就把數字往上調。
+- 有疑慮的行為要寫**反向驗證**：把修好的地方改回去，確認測試會紅。
