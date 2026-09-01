@@ -640,13 +640,13 @@ const AboutSection = () => {
           {
             label: "記憶體",
             value: systemStatus
-              ? `${(systemStatus.used_memory / (1024 * 1024 * 1024)).toFixed(1)} / ${(systemStatus.total_memory / (1024 * 1024 * 1024)).toFixed(1)} GB`
+              ? `${formatBytes(systemStatus.used_memory)} / ${formatBytes(systemStatus.total_memory)}`
               : "-",
           },
           {
             label: "Swap",
             value: systemStatus
-              ? `${(systemStatus.used_swap / (1024 * 1024 * 1024)).toFixed(1)} / ${(systemStatus.total_swap / (1024 * 1024 * 1024)).toFixed(1)} GB`
+              ? `${formatBytes(systemStatus.used_swap)} / ${formatBytes(systemStatus.total_swap)}`
               : "-",
           },
           {

@@ -121,9 +121,7 @@ const ContainerCard = ({ container }: { container: ContainerInfo }) => {
         </div>
         <div className="flex items-center gap-1.5">
           <HardDrive className="w-3.5 h-3.5 shrink-0" />
-          <span className="truncate">
-            {stats ? `${(stats.memory_usage / 1024 / 1024).toFixed(0)} MB` : "--"}
-          </span>
+          <span className="truncate">{stats ? formatBytes(stats.memory_usage) : "--"}</span>
         </div>
       </div>
 
@@ -210,7 +208,7 @@ const ContainerListItem = ({ container }: { container: ContainerInfo }) => {
           </div>
           <div className="flex items-center gap-1">
             <HardDrive className="w-3.5 h-3.5" />
-            <span>{stats ? `${(stats.memory_usage / 1024 / 1024).toFixed(0)} MB` : "--"}</span>
+            <span>{stats ? formatBytes(stats.memory_usage) : "--"}</span>
           </div>
         </div>
 

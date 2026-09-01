@@ -143,7 +143,7 @@ const ActionSheet = ({ file, onClose, onAction, isTrash }: ActionSheetProps) => 
               {file.name}
             </p>
             <p className="text-xs text-gray-500">
-              {file.is_dir ? "Folder" : `${(file.size / 1024).toFixed(1)} KB`}
+              {file.is_dir ? "Folder" : formatBytes(file.size)}
               {" · "}
               {new Date(file.modified).toLocaleDateString()}
             </p>

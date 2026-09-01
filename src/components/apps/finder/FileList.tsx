@@ -36,6 +36,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { MOVE_MIME } from "@/lib/dnd";
 import { itemsInMarquee, type MarqueeBox, type MarqueeLayout } from "./marquee";
 import { joinPath } from "@/lib/paths";
+import { formatBytes } from "@/lib/format";
 
 const FileIcon = ({ file, currentPath }: { file: FileInfo; currentPath?: string }) => {
   const isImage = file.mime_type?.startsWith("image/");
@@ -641,10 +642,7 @@ export const FileList = ({
                                   <div className="space-y-1">
                                     <div className="font-medium">{file.name}</div>
                                     <div className="text-xs text-muted-foreground">
-                                      Size:{" "}
-                                      {file.is_dir
-                                        ? "Folder"
-                                        : `${(file.size / 1024).toFixed(1)} KB`}
+                                      Size: {file.is_dir ? "Folder" : formatBytes(file.size)}
                                     </div>
                                     <div className="text-xs text-muted-foreground">
                                       Modified: {new Date(file.modified).toLocaleString()}
@@ -660,7 +658,7 @@ export const FileList = ({
                               selectedFiles.has(file.name) ? "text-blue-100" : "text-gray-500",
                             )}
                           >
-                            {file.is_dir ? "--" : `${(file.size / 1024).toFixed(1)} KB`}
+                            {file.is_dir ? "--" : formatBytes(file.size)}
                           </div>
                           <div
                             className={cn(
