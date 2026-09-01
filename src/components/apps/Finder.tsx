@@ -23,6 +23,7 @@ import { useUploadStore } from "@/store/upload-store";
 import { useWindowStore } from "@/store/window-store";
 import { useFileUpload } from "@/features/files/hooks/useFileUpload"; // Updated import
 import { collectTrashed } from "@/features/files/trash";
+import { FileInfoRows } from "@/components/files/FileInfoRows";
 import { createFolderWithUniqueName } from "@/features/files/new-folder";
 import { useUserTags, useFilesByTag } from "@/hooks/use-tags";
 import {
@@ -241,6 +242,8 @@ export const Finder = ({ windowId }: FinderProps) => {
 
   const [isEmptyTrashConfirmOpen, setIsEmptyTrashConfirmOpen] = useState(false);
   const [isPermanentDeleteConfirmOpen, setIsPermanentDeleteConfirmOpen] = useState(false);
+  // 右鍵選單的「Get Info」原本也是沒有 onClick 的死項目 —— 手機版一直都有這個面板。
+  const [infoFile, setInfoFile] = useState<FileInfo | null>(null);
   const [filesToPermanentlyDelete, setFilesToPermanentlyDelete] = useState<string[]>([]);
 
   // Share dialog state
@@ -1171,6 +1174,7 @@ export const Finder = ({ windowId }: FinderProps) => {
           onRenameSubmit={() => void submitRename()}
           onRenameCancel={() => setRenamingFile(null)}
           onRestore={(name) => restoreFromTrash.mutate(name)}
+          onGetInfo={setInfoFile}
           onPermanentDelete={(trashName) => {
             // 右鍵選單的「Delete Immediately」原本是一個**沒有 onClick 的**
             // ContextMenuItem —— 按下去什麼都不會發生。桌面唯一能永久刪除的
@@ -1290,6 +1294,18 @@ export const Finder = ({ windowId }: FinderProps) => {
               Empty Trash
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* File Info Dialog —— 內容與手機的 FileInfoSheet 共用同一個元件 */}
+      <Dialog open={infoFile !== null} onOpenChange={(open) => !open && setInfoFile(null)}>
+        <DialogContent className="sm:max-w-[425px] bg-white/95 dark:bg-black/95 backdrop-blur-xl border-white/20">
+          <DialogHeader>
+            <DialogTitle>File Information</DialogTitle>
+            {/* Radix 少了 description 會在 console 警告，而且讀螢幕的人也需要它 */}
+            <DialogDescription>{infoFile?.name}</DialogDescription>
+          </DialogHeader>
+          {infoFile && <FileInfoRows file={infoFile} />}
         </DialogContent>
       </Dialog>
 

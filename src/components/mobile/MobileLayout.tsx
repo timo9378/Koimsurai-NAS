@@ -51,6 +51,7 @@ import { useFileUpload } from "@/features/files/hooks/useFileUpload";
 import { useUploadStore } from "@/store/upload-store";
 import { overallProgress } from "@/features/files/upload-progress";
 import { createFolderWithUniqueName } from "@/features/files/new-folder";
+import { FileInfoRows } from "@/components/files/FileInfoRows";
 import { useLogout } from "@/features/auth/api/useAuth";
 import { FileTypeIcon } from "@/lib/file-icons";
 import { useThumbnail } from "@/features/files/api/useFiles";
@@ -268,54 +269,7 @@ const FileInfoSheet = ({ file, onClose }: { file: FileInfo | null; onClose: () =
           <h3 className="font-semibold text-base text-gray-900 dark:text-white">
             File Information
           </h3>
-          <div className="space-y-3 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-500">Name</span>
-              <span className="text-gray-900 dark:text-white font-medium truncate ml-4 text-right">
-                {file.name}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Type</span>
-              <span className="text-gray-900 dark:text-white">
-                {file.is_dir ? "Folder" : file.mime_type || "Unknown"}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Size</span>
-              <span className="text-gray-900 dark:text-white">
-                {file.is_dir ? "--" : formatBytes(file.size)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Modified</span>
-              <span className="text-gray-900 dark:text-white">
-                {new Date(file.modified).toLocaleString()}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Path</span>
-              <span className="text-gray-900 dark:text-white truncate ml-4 text-right">
-                {file.path}
-              </span>
-            </div>
-            {file.tags.length > 0 && (
-              <div className="flex justify-between items-start">
-                <span className="text-gray-500">Tags</span>
-                <div className="flex gap-1 flex-wrap justify-end">
-                  {file.tags.map((t) => (
-                    <span
-                      key={t.name}
-                      className="px-2 py-0.5 rounded-full text-xs text-white"
-                      style={{ backgroundColor: t.color || "#8E8E93" }}
-                    >
-                      {t.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <FileInfoRows file={file} />
         </div>
       </motion.div>
     </>

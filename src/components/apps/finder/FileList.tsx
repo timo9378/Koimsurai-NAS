@@ -10,9 +10,7 @@ import {
   Star,
   StarOff,
   Tags,
-  History,
   Edit2,
-  Copy,
   Info,
   Plus,
   RefreshCw,
@@ -105,6 +103,7 @@ interface FileListProps {
   onRestore?: (name: string) => void;
   /** 收到的是**垃圾桶檔名**（trash mode 下 `file.name` 就是它），不是原始路徑。 */
   onPermanentDelete?: (trashName: string) => void;
+  onGetInfo?: (file: FileInfo) => void;
   onDelete?: (file: FileInfo) => void;
   onDownload?: (path: string) => void;
   onShare?: (file: FileInfo) => void;
@@ -165,6 +164,7 @@ export const FileList = ({
   onRenameCancel,
   onRestore,
   onPermanentDelete,
+  onGetInfo,
   onDelete,
   onDownload,
   onShare,
@@ -522,21 +522,12 @@ export const FileList = ({
                         <ContextMenuItem onClick={() => onTag?.(file)}>
                           <Tags className="mr-2 h-4 w-4" /> Tags...
                         </ContextMenuItem>
-                        <ContextMenuItem>
-                          <History className="mr-2 h-4 w-4" /> Versions
-                        </ContextMenuItem>
                         <ContextMenuSeparator />
                         <ContextMenuItem onClick={() => onRenameStart?.(file)}>
                           <Edit2 className="mr-2 h-4 w-4" /> Rename
                         </ContextMenuItem>
-                        <ContextMenuItem>
-                          <Copy className="mr-2 h-4 w-4" /> Copy
-                        </ContextMenuItem>
-                        <ContextMenuItem>
-                          <Move className="mr-2 h-4 w-4" /> Move to...
-                        </ContextMenuItem>
                         <ContextMenuSeparator />
-                        <ContextMenuItem>
+                        <ContextMenuItem onClick={() => onGetInfo?.(file)}>
                           <Info className="mr-2 h-4 w-4" /> Get Info
                         </ContextMenuItem>
                         <ContextMenuSeparator />
@@ -723,14 +714,8 @@ export const FileList = ({
                             <ContextMenuItem onClick={() => onRenameStart?.(file)}>
                               <Edit2 className="mr-2 h-4 w-4" /> Rename
                             </ContextMenuItem>
-                            <ContextMenuItem>
-                              <Copy className="mr-2 h-4 w-4" /> Copy
-                            </ContextMenuItem>
-                            <ContextMenuItem>
-                              <Move className="mr-2 h-4 w-4" /> Move to...
-                            </ContextMenuItem>
                             <ContextMenuSeparator />
-                            <ContextMenuItem>
+                            <ContextMenuItem onClick={() => onGetInfo?.(file)}>
                               <Info className="mr-2 h-4 w-4" /> Get Info
                             </ContextMenuItem>
                             <ContextMenuSeparator />

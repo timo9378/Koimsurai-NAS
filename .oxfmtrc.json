@@ -5,6 +5,7 @@
     "node_modules/**",
     "src/routeTree.gen.ts",
     "packages/*/index.ts",
-    "src/components/ui/**"
+    "src/components/ui/**",
+    "**/*.css"
   ]
 }
