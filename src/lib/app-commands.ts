@@ -17,7 +17,10 @@ export type AppCommand =
   | "view-icons"
   | "view-list"
   | "new-tab"
-  | "close-tab";
+  | "close-tab"
+  | "clipboard-copy"
+  | "clipboard-cut"
+  | "clipboard-paste";
 
 const EVENT = "app-command";
 

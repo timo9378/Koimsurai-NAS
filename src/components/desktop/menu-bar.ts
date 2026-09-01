@@ -50,11 +50,10 @@ export function getMenuItemsForApp(appType: string | null): MenuBarConfig {
           },
           {
             label: "Edit",
-            // Cut／Copy／Paste 需要一套剪貼簿模型，目前沒有 —— 所以是灰的。
             items: [
-              { label: "Cut" },
-              { label: "Copy" },
-              { label: "Paste" },
+              { label: "Cut", command: app("clipboard-cut") },
+              { label: "Copy", command: app("clipboard-copy") },
+              { label: "Paste", command: app("clipboard-paste") },
               { label: "Select All", command: app("select-all") },
             ],
           },

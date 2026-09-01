@@ -33,6 +33,7 @@ import { apiClient } from "@/lib/api-client";
 import type { AppType } from "@/store/window-store";
 import { getMenuItemsForApp, type MenuCommand } from "./menu-bar";
 import { dispatchAppCommand } from "@/lib/app-commands";
+import { useClipboardStore } from "@/store/clipboard-store";
 import { useWindowStore } from "@/store/window-store";
 
 import { useTransferStore, formatSpeed } from "@/store/transfer-store";
@@ -336,6 +337,13 @@ export const TopBar = () => {
 
   const activeWindow = windows.find((w) => w.id === activeWindowId);
   const menuConfig = getMenuItemsForApp(activeWindow?.appType || null);
+  const clipboardEntry = useClipboardStore((state) => state.entry);
+
+  // ⚠️ 有些項目「有實作」但**當下不能用** —— Paste 在剪貼簿空的時候就是。
+  // 讓它恆亮的話，按下去會靜靜什麼都不做，而那正是這條選單列原本的毛病。
+  // 靜態的 menu-bar 設定不知道執行期狀態，所以在這裡補上。
+  const isAvailable = (command: MenuCommand) =>
+    !(command.kind === "app" && command.command === "clipboard-paste" && clipboardEntry === null);
 
   const runMenuCommand = (command: MenuCommand) => {
     switch (command.kind) {
@@ -451,8 +459,10 @@ export const TopBar = () => {
                     key={item.label}
                     // 沒有 command 的項目變灰。原本這裡每一項都沒有 handler ——
                     // 按下去完全沒有反應，而 macOS 本來就會把當下不能用的項目變灰。
-                    disabled={command === undefined}
-                    onSelect={command ? () => runMenuCommand(command) : undefined}
+                    disabled={command === undefined || !isAvailable(command)}
+                    onSelect={
+                      command && isAvailable(command) ? () => runMenuCommand(command) : undefined
+                    }
                     className="focus:bg-white/10 focus:text-white"
                   >
                     {item.label}

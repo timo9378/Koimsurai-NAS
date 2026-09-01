@@ -3,6 +3,9 @@
 import React, { useRef } from "react";
 import { Virtuoso, VirtuosoGrid } from "react-virtuoso";
 import {
+  Copy,
+  Scissors,
+  ClipboardPaste,
   Upload,
   Trash2,
   Download,
@@ -107,6 +110,10 @@ interface FileListProps {
   onGetInfo?: (file: FileInfo) => void;
   /** 只有檔案有版本 —— 目錄不會被覆寫，`.versions/` 底下不會有它。 */
   onShowVersions?: (file: FileInfo) => void;
+  onClipboard?: (mode: "copy" | "cut", file: FileInfo) => void;
+  onPaste?: () => void;
+  /** 剪貼簿是不是空的 —— 空的時候「Paste」要變灰而不是按了沒事。 */
+  canPaste?: boolean;
   onDelete?: (file: FileInfo) => void;
   onDownload?: (path: string) => void;
   onShare?: (file: FileInfo) => void;
@@ -169,6 +176,9 @@ export const FileList = ({
   onPermanentDelete,
   onGetInfo,
   onShowVersions,
+  onClipboard,
+  onPaste,
+  canPaste = false,
   onDelete,
   onDownload,
   onShare,
@@ -527,6 +537,12 @@ export const FileList = ({
                           <Tags className="mr-2 h-4 w-4" /> Tags...
                         </ContextMenuItem>
                         <ContextMenuSeparator />
+                        <ContextMenuItem onClick={() => onClipboard?.("copy", file)}>
+                          <Copy className="mr-2 h-4 w-4" /> Copy
+                        </ContextMenuItem>
+                        <ContextMenuItem onClick={() => onClipboard?.("cut", file)}>
+                          <Scissors className="mr-2 h-4 w-4" /> Cut
+                        </ContextMenuItem>
                         <ContextMenuItem onClick={() => onRenameStart?.(file)}>
                           <Edit2 className="mr-2 h-4 w-4" /> Rename
                         </ContextMenuItem>
@@ -720,6 +736,12 @@ export const FileList = ({
                               {file.is_starred ? "Remove from Favorites" : "Add to Favorites"}
                             </ContextMenuItem>
                             <ContextMenuSeparator />
+                            <ContextMenuItem onClick={() => onClipboard?.("copy", file)}>
+                              <Copy className="mr-2 h-4 w-4" /> Copy
+                            </ContextMenuItem>
+                            <ContextMenuItem onClick={() => onClipboard?.("cut", file)}>
+                              <Scissors className="mr-2 h-4 w-4" /> Cut
+                            </ContextMenuItem>
                             <ContextMenuItem onClick={() => onRenameStart?.(file)}>
                               <Edit2 className="mr-2 h-4 w-4" /> Rename
                             </ContextMenuItem>
@@ -758,6 +780,15 @@ export const FileList = ({
           }}
         >
           <Plus className="mr-2 h-4 w-4" /> New Folder
+        </ContextMenuItem>
+        <ContextMenuItem
+          disabled={!canPaste}
+          onClick={(e) => {
+            e.stopPropagation();
+            onPaste?.();
+          }}
+        >
+          <ClipboardPaste className="mr-2 h-4 w-4" /> Paste
         </ContextMenuItem>
         <ContextMenuItem
           onClick={(e) => {

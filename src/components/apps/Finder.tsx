@@ -17,6 +17,7 @@ import {
   useFileVersions,
   useRestoreVersion,
   useBatchMove,
+  useBatchCopy,
 } from "@/features/files/api/useFiles";
 import { getApiErrorStatus } from "@/lib/errors";
 import { MOVE_MIME } from "@/lib/dnd";
@@ -25,6 +26,8 @@ import { useUploadStore } from "@/store/upload-store";
 import { useWindowStore } from "@/store/window-store";
 import { useFileUpload } from "@/features/files/hooks/useFileUpload"; // Updated import
 import { collectTrashed } from "@/features/files/trash";
+import { clipboardPaths, planPaste } from "@/features/files/clipboard";
+import { useClipboardStore } from "@/store/clipboard-store";
 import { FileInfoRows } from "@/components/files/FileInfoRows";
 import { createFolderWithUniqueName } from "@/features/files/new-folder";
 import { useUserTags, useFilesByTag } from "@/hooks/use-tags";
@@ -357,6 +360,8 @@ export const Finder = ({ windowId }: FinderProps) => {
   const createShare = useCreateShare();
   const createFolder = useCreateFolder();
   const batchMove = useBatchMove();
+  const batchCopy = useBatchCopy();
+  const { entry: clipboardEntry, put: putClipboard, clear: clearClipboard } = useClipboardStore();
 
   const currentFilesRaw = isTrashMode ? trashFiles : files;
   const isCurrentLoading = selectedTag ? isTagLoading : isTrashMode ? isTrashLoading : isLoading;
@@ -431,6 +436,15 @@ export const Finder = ({ windowId }: FinderProps) => {
       case "select-all":
         setSelectedFiles(new Set((currentFiles ?? []).map((f) => f.name)));
         break;
+      case "clipboard-copy":
+        putOnClipboard("copy");
+        break;
+      case "clipboard-cut":
+        putOnClipboard("cut");
+        break;
+      case "clipboard-paste":
+        void pasteHere();
+        break;
       case "nav-back":
       case "nav-forward": {
         const nav: NavHistory = { entries: history, index: historyIndex };
@@ -482,7 +496,48 @@ export const Finder = ({ windowId }: FinderProps) => {
   }, [files, pendingRenameFolder]);
   /* oxlint-enable @eslint-react/set-state-in-effect */
 
-  // Quick Look (Spacebar), Delete keys, and Select All (Cmd+A)
+  /** 複製／剪下目前選取的東西（沒有選取就用右鍵點到的那一個）。 */
+  const putOnClipboard = useCallback(
+    (mode: "copy" | "cut", explicit?: FileInfo) => {
+      const names = explicit ? [explicit.name] : [...selectedFiles];
+      if (names.length === 0) return;
+      putClipboard(mode, clipboardPaths(names, currentPath));
+      toast.success(
+        names.length === 1
+          ? `已${mode === "copy" ? "複製" : "剪下"}「${names[0]}」`
+          : `已${mode === "copy" ? "複製" : "剪下"} ${names.length} 個項目`,
+      );
+    },
+    [selectedFiles, currentPath, putClipboard],
+  );
+
+  const pasteHere = useCallback(async () => {
+    const plan = planPaste(clipboardEntry, currentPath);
+    if (plan.kind === "noop") {
+      // ⚠️ 「什麼都沒發生」要說出原因。之前 Finder 有一整排按了沒反應的選單項，
+      // 靜靜不做事正是那個問題的樣子。
+      if (plan.reason === "into-self") toast.error("不能貼進自己或自己底下的資料夾");
+      else if (plan.reason === "same-dir") toast("已經在這個資料夾裡了");
+      return;
+    }
+
+    try {
+      if (plan.mode === "copy") {
+        await batchCopy.mutateAsync({ paths: plan.paths, destination: plan.destination });
+        // 複製是排進背景佇列的（202），列表要等 job 跑完才會變。
+        toast.success(`正在複製 ${plan.paths.length} 個項目…`);
+      } else {
+        await batchMove.mutateAsync({ paths: plan.paths, destination: plan.destination });
+        // 剪下貼上之後剪貼簿要清空 —— 再貼一次來源已經不在了。
+        clearClipboard();
+        toast.success(`已移動 ${plan.paths.length} 個項目`);
+      }
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, plan.mode === "copy" ? "複製失敗" : "移動失敗"));
+    }
+  }, [clipboardEntry, currentPath, batchCopy, batchMove, clearClipboard]);
+
+  // Quick Look (Spacebar)、刪除、全選（Cmd+A）、剪貼簿（Cmd+C/X/V）
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Skip keyboard handling when dialogs are open
@@ -504,6 +559,28 @@ export const Finder = ({ windowId }: FinderProps) => {
           setSelectedFiles(new Set(currentFiles.map((f) => f.name)));
         }
         return;
+      }
+
+      // 剪貼簿 - Cmd/Ctrl + C / X / V
+      //
+      // ⚠️ 只在**沒有**文字選取時攔截。使用者可能正在複製檔名或路徑列的文字，
+      // 那時候搶走 Cmd+C 會很惱人。
+      if ((e.metaKey || e.ctrlKey) && !renamingFile && "cxv".includes(e.key)) {
+        const hasTextSelection = (window.getSelection()?.toString().length ?? 0) > 0;
+        if (!hasTextSelection) {
+          if (e.key === "v") {
+            e.preventDefault();
+            e.stopPropagation();
+            void pasteHere();
+            return;
+          }
+          if (selectedFiles.size > 0) {
+            e.preventDefault();
+            e.stopPropagation();
+            putOnClipboard(e.key === "c" ? "copy" : "cut");
+            return;
+          }
+        }
       }
 
       // Quick Look - Spacebar
@@ -605,6 +682,8 @@ export const Finder = ({ windowId }: FinderProps) => {
     window.addEventListener("keydown", handleKeyDown, { capture: true });
     return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
   }, [
+    putOnClipboard,
+    pasteHere,
     selectedFiles,
     currentFiles,
     renamingFile,
@@ -1243,6 +1322,9 @@ export const Finder = ({ windowId }: FinderProps) => {
           onRestore={(name) => restoreFromTrash.mutate(name)}
           onGetInfo={setInfoFile}
           onShowVersions={setVersionsFile}
+          onClipboard={(mode, file) => putOnClipboard(mode, file)}
+          onPaste={() => void pasteHere()}
+          canPaste={clipboardEntry !== null}
           onPermanentDelete={(trashName) => {
             // 右鍵選單的「Delete Immediately」原本是一個**沒有 onClick 的**
             // ContextMenuItem —— 按下去什麼都不會發生。桌面唯一能永久刪除的

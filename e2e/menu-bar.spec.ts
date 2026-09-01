@@ -30,9 +30,12 @@ test("選單列的項目真的會動，做不到的變灰", async ({ page }) => 
   await page.getByRole("menuitem", { name: "New Window" }).click();
   await expect.poll(windowCount).toBe(before + 1);
 
-  // Edit → Paste 沒有實作，必須是停用的（而不是按了沒事）。
-  await page.getByText("Edit", { exact: true }).click();
+  // Edit → Paste 有實作，但剪貼簿是空的 —— 這時候必須是停用的，
+  // 不然按下去會靜靜什麼都不做，正是這條選單列原本的毛病。
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
   const paste = page.getByRole("menuitem", { name: "Paste" });
   await expect(paste).toBeVisible();
   await expect(paste).toHaveAttribute("data-disabled", "");
+  // 「真的沒有實作」那類（as Columns、Docker 的容器操作……）由
+  // `desktop/menu-bar.test.ts` 直接斷言設定裡沒有 command，不必在瀏覽器裡再驗一次。
 });
