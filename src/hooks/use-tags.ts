@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import type { UserTag, TaggedFile } from "@/types/api";
+import { encodeApiPath } from "@/lib/paths";
 
 // Predefined tag colors (macOS style)
 export const TAG_COLORS = {
@@ -54,7 +55,8 @@ export function useAddTag() {
       tagName: string;
       color?: string;
     }) => {
-      await apiClient.post(`/tags/add/${path}`, {
+      // 路徑要逐段編碼 —— 檔名裡有 # 或 ? 的話請求會斷在那裡。
+      await apiClient.post(`/tags/add/${encodeApiPath(path)}`, {
         tag_name: tagName,
         color,
       });
@@ -71,7 +73,7 @@ export function useRemoveTag() {
 
   return useMutation({
     mutationFn: async ({ path, tagName }: { path: string; tagName: string }) => {
-      await apiClient.delete(`/tags/remove/${encodeURIComponent(tagName)}/${path}`);
+      await apiClient.delete(`/tags/remove/${encodeURIComponent(tagName)}/${encodeApiPath(path)}`);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["tags"] });

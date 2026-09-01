@@ -41,7 +41,9 @@ export interface DockerContainer {
 
 /**
  * ⚠️ 與後端不符。Rust 的 `AddTagRequest` 欄位叫 `tag_name`，不是 `name`。
- * 只有 `useFiles.ts` 的 `useAddTag` 在用（`use-tags.ts` 另有一份實作）。
+ * **已經沒有任何呼叫點**（上面那句「useFiles.ts 的 useAddTag 在用」已過期，
+ * 那個 hook 早就不在了）。實際在用的 `hooks/use-tags.ts` 送的是正確的
+ * `tag_name`。也就是說這個型別純粹是殘留，確認之後可以直接刪。
  */
 export interface TagRequest {
   name: string;

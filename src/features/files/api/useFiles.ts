@@ -61,10 +61,8 @@ export const useFileVersions = (path: string) => {
     queryKey: ["files", "versions", path],
     queryFn: async () => {
       if (!path) return [];
-      const cleanPath = toApiPath(path);
-      // Use path directly for backend wildcard routes
       const response = await apiClient.get<FileVersion[]>(
-        `/versions/file/${cleanPath}?_t=${Date.now()}`,
+        `/versions/file/${encodeApiPath(path)}?_t=${Date.now()}`,
       );
       return response.data;
     },
@@ -297,8 +295,10 @@ export const useRestoreFromTrash = () => {
 
   return useMutation({
     mutationFn: async (filename: string) => {
-      // Use filename directly for backend wildcard routes
-      await apiClient.post(`/trash/${filename}`);
+      // ⚠️ 要編碼。垃圾桶檔名是使用者的原始檔名（撞名時再加 `.<timestamp>`），
+      // 裡面完全可能有 # 或 ? —— 不編的話請求會斷在那個字。隔壁的
+      // usePermanentDelete 一直有編，只有這裡漏了。
+      await apiClient.post(`/trash/${encodeURIComponent(filename)}`);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["trash"] });
@@ -377,9 +377,8 @@ export const useThumbnail = (path: string, size: "small" | "medium" | "large" = 
     queryKey: ["thumbnail", path, size],
     queryFn: async () => {
       if (!path) return null;
-      const cleanPath = toApiPath(path);
       // Backend expects: GET /api/thumbnail/:size/*path
-      const response = await apiClient.get<Blob>(`/thumbnail/${size}/${cleanPath}`, {
+      const response = await apiClient.get<Blob>(`/thumbnail/${size}/${encodeApiPath(path)}`, {
         responseType: "blob",
       });
       return URL.createObjectURL(response.data);
