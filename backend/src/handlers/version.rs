@@ -8,11 +8,15 @@ use axum::{
 };
 use tokio::fs;
 
+/// ⚠️ 標註路徑必須跟 `routes/mod.rs` 的真實路由一致。這裡原本寫的是
+/// `/api/files/{path}/versions`，而真實路由是 `/api/versions/file/{*path}`
+/// —— 跟底下 `restore_version` 當初「三處定義互相矛盾」是同一個毛病。
+/// schemathesis 是照 `OpenAPI` 產請求的，spec 對不上就等於這個端點沒被測到。
 #[utoipa::path(
     get,
-    path = "/api/files/{path}/versions",
+    path = "/api/versions/file/{path}",
     params(
-        ("path" = String, Path, description = "File path")
+        ("path" = String, Path, description = "檔案路徑（相對於儲存根）")
     ),
     responses(
         (status = 200, description = "List file versions", body = Vec<FileVersion>)

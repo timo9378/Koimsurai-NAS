@@ -14,6 +14,8 @@ import {
   useDownload,
   useCreateShare,
   useCreateFolder,
+  useFileVersions,
+  useRestoreVersion,
   useBatchMove,
 } from "@/features/files/api/useFiles";
 import { getApiErrorStatus } from "@/lib/errors";
@@ -42,7 +44,12 @@ import { toast } from "sonner";
 import { Sidebar } from "./finder/Sidebar";
 import { Toolbar } from "./finder/Toolbar";
 import { FileList } from "./finder/FileList";
-import { ShareDialog, UploadLinkDialog, TagDialog } from "@/components/dialogs";
+import {
+  ShareDialog,
+  UploadLinkDialog,
+  TagDialog,
+  VersionHistoryDialog,
+} from "@/components/dialogs";
 import { X, Plus } from "lucide-react";
 import { activateOnKey } from "@/lib/a11y";
 import { selectOnClick } from "./finder/selection";
@@ -244,6 +251,14 @@ export const Finder = ({ windowId }: FinderProps) => {
   const [isPermanentDeleteConfirmOpen, setIsPermanentDeleteConfirmOpen] = useState(false);
   // 右鍵選單的「Get Info」原本也是沒有 onClick 的死項目 —— 手機版一直都有這個面板。
   const [infoFile, setInfoFile] = useState<FileInfo | null>(null);
+  // 版本歷史。後端與 hook 一直都在，缺的只有這個開關與底下那個 dialog。
+  const [versionsFile, setVersionsFile] = useState<FileInfo | null>(null);
+  const versionsPath = versionsFile
+    ? versionsFile.path || joinPath(currentPath, versionsFile.name)
+    : "";
+  // `enabled: !!path`，所以關著的時候不會發請求。
+  const { data: fileVersions, isLoading: versionsLoading } = useFileVersions(versionsPath);
+  const restoreVersion = useRestoreVersion();
   const [filesToPermanentlyDelete, setFilesToPermanentlyDelete] = useState<string[]>([]);
 
   // Share dialog state
@@ -1175,6 +1190,7 @@ export const Finder = ({ windowId }: FinderProps) => {
           onRenameCancel={() => setRenamingFile(null)}
           onRestore={(name) => restoreFromTrash.mutate(name)}
           onGetInfo={setInfoFile}
+          onShowVersions={setVersionsFile}
           onPermanentDelete={(trashName) => {
             // 右鍵選單的「Delete Immediately」原本是一個**沒有 onClick 的**
             // ContextMenuItem —— 按下去什麼都不會發生。桌面唯一能永久刪除的
@@ -1296,6 +1312,17 @@ export const Finder = ({ windowId }: FinderProps) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {versionsFile && (
+        <VersionHistoryDialog
+          isOpen
+          onClose={() => setVersionsFile(null)}
+          fileName={versionsFile.name}
+          versions={fileVersions}
+          isLoading={versionsLoading}
+          onRestore={(versionId) => restoreVersion.mutateAsync({ path: versionsPath, versionId })}
+        />
+      )}
 
       {/* File Info Dialog —— 內容與手機的 FileInfoSheet 共用同一個元件 */}
       <Dialog open={infoFile !== null} onOpenChange={(open) => !open && setInfoFile(null)}>

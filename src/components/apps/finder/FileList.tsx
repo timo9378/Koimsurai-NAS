@@ -17,6 +17,7 @@ import {
   LayoutGrid,
   List as ListIcon,
   Move,
+  History,
   Folder,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -104,6 +105,8 @@ interface FileListProps {
   /** 收到的是**垃圾桶檔名**（trash mode 下 `file.name` 就是它），不是原始路徑。 */
   onPermanentDelete?: (trashName: string) => void;
   onGetInfo?: (file: FileInfo) => void;
+  /** 只有檔案有版本 —— 目錄不會被覆寫，`.versions/` 底下不會有它。 */
+  onShowVersions?: (file: FileInfo) => void;
   onDelete?: (file: FileInfo) => void;
   onDownload?: (path: string) => void;
   onShare?: (file: FileInfo) => void;
@@ -165,6 +168,7 @@ export const FileList = ({
   onRestore,
   onPermanentDelete,
   onGetInfo,
+  onShowVersions,
   onDelete,
   onDownload,
   onShare,
@@ -527,6 +531,11 @@ export const FileList = ({
                           <Edit2 className="mr-2 h-4 w-4" /> Rename
                         </ContextMenuItem>
                         <ContextMenuSeparator />
+                        {!file.is_dir && (
+                          <ContextMenuItem onClick={() => onShowVersions?.(file)}>
+                            <History className="mr-2 h-4 w-4" /> Versions
+                          </ContextMenuItem>
+                        )}
                         <ContextMenuItem onClick={() => onGetInfo?.(file)}>
                           <Info className="mr-2 h-4 w-4" /> Get Info
                         </ContextMenuItem>
@@ -715,6 +724,11 @@ export const FileList = ({
                               <Edit2 className="mr-2 h-4 w-4" /> Rename
                             </ContextMenuItem>
                             <ContextMenuSeparator />
+                            {!file.is_dir && (
+                              <ContextMenuItem onClick={() => onShowVersions?.(file)}>
+                                <History className="mr-2 h-4 w-4" /> Versions
+                              </ContextMenuItem>
+                            )}
                             <ContextMenuItem onClick={() => onGetInfo?.(file)}>
                               <Info className="mr-2 h-4 w-4" /> Get Info
                             </ContextMenuItem>
