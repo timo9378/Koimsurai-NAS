@@ -1020,27 +1020,81 @@ pub struct BatchOperationRequest {
     pub destination: Option<String>, // For move/copy
 }
 
+/// 批次刪除的結果。
+///
+/// ⚠️ 這個端點原本**永遠回 200**，失敗只進 log。全部刪不掉時前端拿到的也是
+/// 成功，於是畫面顯示「已移至垃圾桶」而檔案還在原地。一次刪不掉一個檔案就
+/// 整批中止同樣不對（其餘明明可以刪），所以回的是「哪些成功、哪些失敗」。
+#[derive(Serialize, ToSchema, specta::Type)]
+pub struct BatchDeleteResponse {
+    /// 成功移到垃圾桶的項目。`trash_name` 是**垃圾桶裡的檔名**，復原要用它。
+    pub trashed: Vec<TrashedEntry>,
+    /// 失敗的原始路徑。
+    pub failed: Vec<String>,
+}
+
+#[derive(Serialize, ToSchema, specta::Type)]
+pub struct TrashedEntry {
+    pub path: String,
+    pub trash_name: String,
+}
+
 #[utoipa::path(
     post,
     path = "/api/files/batch/delete",
     request_body = BatchOperationRequest,
     responses(
-        (status = 200, description = "Batch delete initiated")
+        (status = 200, description = "哪些移到了垃圾桶、哪些失敗", body = BatchDeleteResponse)
     )
 )]
 pub async fn batch_delete(
     State(state): State<AppState>,
     Extension(user_id): Extension<i64>,
     Json(payload): Json<BatchOperationRequest>,
-) -> Result<StatusCode, AppError> {
+) -> Result<Json<BatchDeleteResponse>, AppError> {
+    let mut trashed = Vec::new();
+    let mut failed = Vec::new();
+
     for path in payload.paths {
-        if let Err(e) = move_to_trash(&state.storage_path, &state.pool, &path, user_id).await {
-            // 記錄後繼續處理其餘檔案，不整批中止
-            tracing::error!("Failed to move '{}' to trash: {:?}", path, e);
+        match move_to_trash(&state.storage_path, &state.pool, &path, user_id).await {
+            Ok(trash_name) => {
+                trashed.push(TrashedEntry { path, trash_name });
+            }
+            Err(e) => {
+                // 記錄後繼續處理其餘檔案，不整批中止
+                tracing::error!("Failed to move '{}' to trash: {:?}", path, e);
+                failed.push(path);
+            }
         }
     }
 
-    Ok(StatusCode::OK)
+    if !trashed.is_empty() {
+        let () = state
+            .audit
+            .log(
+                user_id,
+                "batch_delete",
+                &format!("{} 個項目", trashed.len()),
+                Some(
+                    trashed
+                        .iter()
+                        .map(|t| t.path.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                ),
+                None,
+            )
+            .await;
+    }
+
+    Ok(Json(BatchDeleteResponse { trashed, failed }))
+}
+
+/// 批次移動的結果。原本永遠回 200，搬不動的只進 log。
+#[derive(Serialize, ToSchema, specta::Type)]
+pub struct BatchMoveResponse {
+    pub moved: Vec<String>,
+    pub failed: Vec<String>,
 }
 
 #[utoipa::path(
@@ -1048,13 +1102,16 @@ pub async fn batch_delete(
     path = "/api/files/batch/move",
     request_body = BatchOperationRequest,
     responses(
-        (status = 200, description = "Batch move initiated")
+        (status = 200, description = "哪些搬成功了、哪些失敗", body = BatchMoveResponse)
     )
 )]
 pub async fn batch_move(
     State(state): State<AppState>,
+    // ⚠️ 原本沒有取 user_id —— 也就是搬檔案這件事完全不會進稽核紀錄。
+    // 對 NAS 來說「檔案怎麼跑到別的地方去的」跟「誰刪的」一樣需要查。
+    Extension(user_id): Extension<i64>,
     Json(payload): Json<BatchOperationRequest>,
-) -> Result<StatusCode, AppError> {
+) -> Result<Json<BatchMoveResponse>, AppError> {
     let destination = payload
         .destination
         .ok_or(AppError::Status(StatusCode::BAD_REQUEST))?;
@@ -1064,23 +1121,44 @@ pub async fn batch_move(
         fs::create_dir_all(&dest_path).await.map_err(AppError::from)?;
     }
 
+    let mut moved = Vec::new();
+    let mut failed = Vec::new();
+
     for path in payload.paths {
         let src_path = state.storage_path.resolve(&path)?;
         if !src_path.exists() {
+            failed.push(path);
             continue;
         }
 
         let file_name = src_path
             .file_name()
-            .ok_or(AppError::Status(StatusCode::BAD_REQUEST))?;
-        let target_path = dest_path.join(file_name);
+            .ok_or(AppError::Status(StatusCode::BAD_REQUEST))?
+            .to_string_lossy()
+            .to_string();
 
-        if let Err(e) = fs::rename(src_path, target_path).await {
+        // ⚠️ 一定要挑一個沒被佔用的名字。`fs::rename` 在目的地已存在時是
+        // **原子性取代** —— 把 report.pdf 拖進一個已經有 report.pdf 的資料夾，
+        // 原本那份就這樣沒了，沒有任何提示。跟複製那條路徑是同一個坑
+        // （見 `utils::naming::available_path`）。
+        let target_path = crate::utils::naming::available_path(&dest_path, &file_name);
+
+        if let Err(e) = fs::rename(&src_path, &target_path).await {
             tracing::error!("Failed to move file: {}", e);
+            failed.push(path);
+        } else {
+            moved.push(path);
         }
     }
 
-    Ok(StatusCode::OK)
+    if !moved.is_empty() {
+        let () = state
+            .audit
+            .log(user_id, "batch_move", &destination, Some(moved.join(", ")), None)
+            .await;
+    }
+
+    Ok(Json(BatchMoveResponse { moved, failed }))
 }
 
 #[utoipa::path(
@@ -1094,6 +1172,7 @@ pub async fn batch_move(
 )]
 pub async fn batch_copy(
     State(state): State<AppState>,
+    Extension(user_id): Extension<i64>,
     Json(payload): Json<BatchOperationRequest>,
 ) -> Result<StatusCode, AppError> {
     let destination = payload
@@ -1108,6 +1187,9 @@ pub async fn batch_copy(
         state.storage_path.resolve(path)?;
     }
 
+    let paths_for_log = payload.paths.join(", ");
+    let destination_for_log = destination.clone();
+
     // Enqueue copy job
     let job_type = crate::utils::queue::JobType::CopyFiles {
         paths: payload.paths,
@@ -1118,6 +1200,19 @@ pub async fn batch_copy(
         tracing::error!("Failed to enqueue copy job: {}", e);
         AppError::Status(StatusCode::INTERNAL_SERVER_ERROR)
     })?;
+
+    // 複製是排進佇列的，這裡記的是「誰要求複製什麼到哪」——
+    // 真正做完（或失敗）反映在 jobs 表與通知中心的背景工作面板。
+    let () = state
+        .audit
+        .log(
+            user_id,
+            "batch_copy",
+            &destination_for_log,
+            Some(paths_for_log),
+            None,
+        )
+        .await;
 
     Ok(StatusCode::ACCEPTED)
 }

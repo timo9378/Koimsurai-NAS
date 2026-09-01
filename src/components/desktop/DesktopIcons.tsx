@@ -193,7 +193,16 @@ export const DesktopIcons = () => {
           if (selectedFiles.size === 1 && only !== undefined) {
             await deleteFile.mutateAsync(only);
           } else {
-            await batchDelete.mutateAsync(Array.from(selectedFiles));
+            const { failed } = await batchDelete.mutateAsync(Array.from(selectedFiles));
+            // ⚠️ 一定要講。後端不再整批回 200 了，而「按了確認、檔案還在」
+            // 卻沒有任何訊息是最讓人困惑的一種失敗。
+            if (failed.length > 0) {
+              toast.error(
+                failed.length === 1
+                  ? `「${failed[0]}」刪除失敗`
+                  : `${failed.length} 個項目刪除失敗`,
+              );
+            }
           }
           setSelectedFiles(new Set());
         } catch (error) {

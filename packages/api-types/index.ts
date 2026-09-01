@@ -32,6 +32,26 @@ export type AuditLog = {
 	created_at: string,
 };
 
+/**
+ *  批次刪除的結果。
+ * 
+ *  ⚠️ 這個端點原本**永遠回 200**，失敗只進 log。全部刪不掉時前端拿到的也是
+ *  成功，於是畫面顯示「已移至垃圾桶」而檔案還在原地。一次刪不掉一個檔案就
+ *  整批中止同樣不對（其餘明明可以刪），所以回的是「哪些成功、哪些失敗」。
+ */
+export type BatchDeleteResponse = {
+	/**  成功移到垃圾桶的項目。`trash_name` 是**垃圾桶裡的檔名**，復原要用它。 */
+	trashed: TrashedEntry[],
+	/**  失敗的原始路徑。 */
+	failed: string[],
+};
+
+/**  批次移動的結果。原本永遠回 200，搬不動的只進 log。 */
+export type BatchMoveResponse = {
+	moved: string[],
+	failed: string[],
+};
+
 export type BatchOperationRequest = {
 	paths: string[],
 	destination: string | null,
@@ -415,6 +435,11 @@ export type TaggedFile = {
 export type TimelineGroup = {
 	date: string,
 	files: FileInfo[],
+};
+
+export type TrashedEntry = {
+	path: string,
+	trash_name: string,
 };
 
 export type TwoFactorDisableRequest = {

@@ -91,7 +91,7 @@ pub async fn list_trash(
 )]
 pub async fn restore_file(
     State(state): State<AppState>,
-    Extension(_user_id): Extension<i64>,
+    Extension(user_id): Extension<i64>,
     AxumPath(filename): AxumPath<String>,
 ) -> Result<StatusCode, AppError> {
     // ⚠️ filename 是 axum 的 path param，而 Path 抽取器會解 %2F ——
@@ -192,6 +192,14 @@ pub async fn restore_file(
         }
     }
 
+    // ⚠️ 還原以前不會被記錄。稽核紀錄原本只有四個動作
+    // （create_folder／delete_file／rename_file／restore_version），
+    // 而「檔案怎麼跑回來的」跟「誰刪的」一樣需要查。
+    let () = state
+        .audit
+        .log(user_id, "restore_from_trash", &filename, None, None)
+        .await;
+
     Ok(StatusCode::OK)
 }
 
@@ -204,13 +212,19 @@ pub async fn restore_file(
 )]
 pub async fn empty_trash(
     State(state): State<AppState>,
-    Extension(_user_id): Extension<i64>,
+    Extension(user_id): Extension<i64>,
 ) -> Result<StatusCode, AppError> {
     let trash_path = state.storage_path.internal(".trash");
     if trash_path.exists() {
         fs::remove_dir_all(&trash_path).await.map_err(AppError::from)?;
         fs::create_dir_all(&trash_path).await.map_err(AppError::from)?;
     }
+    // ⚠️ 清空垃圾桶是**不可逆**的批次刪除，卻是原本最沒有紀錄的一個。
+    let () = state
+        .audit
+        .log(user_id, "empty_trash", ".trash", None, None)
+        .await;
+
     // Clean all trash metadata
     sqlx::query("DELETE FROM trash_metadata")
         .execute(&state.pool)
@@ -232,7 +246,7 @@ pub async fn empty_trash(
 )]
 pub async fn permanent_delete(
     State(state): State<AppState>,
-    Extension(_user_id): Extension<i64>,
+    Extension(user_id): Extension<i64>,
     AxumPath(filename): AxumPath<String>,
 ) -> Result<StatusCode, AppError> {
     // ⚠️ filename 是 axum 的 path param，而 Path 抽取器會解 %2F ——
@@ -255,6 +269,11 @@ pub async fn permanent_delete(
         .execute(&state.pool)
         .await
         .map_err(AppError::from)?;
+
+    let () = state
+        .audit
+        .log(user_id, "permanent_delete", &filename, None, None)
+        .await;
 
     Ok(StatusCode::OK)
 }

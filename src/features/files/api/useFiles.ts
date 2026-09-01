@@ -3,6 +3,7 @@ import { apiClient } from "@/lib/api-client";
 import { backoffInterval } from "@/features/shared/polling";
 import { apiFileUrl, dirName, encodeApiPath, joinPath, toApiPath } from "@/lib/paths";
 import type {
+  BatchDeleteResponse,
   DeleteFileResponse,
   FileInfo,
   Job,
@@ -196,7 +197,10 @@ export const useBatchDelete = () => {
 
   return useMutation({
     mutationFn: async (paths: string[]) => {
-      await apiClient.post("/files/batch/delete", { paths });
+      // ⚠️ 這個端點原本永遠回 200，失敗只進後端的 log —— 現在會說出
+      // 哪些成功（含垃圾桶檔名）、哪些失敗。呼叫端有責任把失敗講出來。
+      const { data } = await apiClient.post<BatchDeleteResponse>("/files/batch/delete", { paths });
+      return data;
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["files"] });

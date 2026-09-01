@@ -38,6 +38,7 @@ import { useClipboardStore } from "@/store/clipboard-store";
 import { useSocket } from "@/components/providers/socket-provider";
 import { useDelayedTrue } from "@/hooks/use-delayed-true";
 import { formatRelative } from "@/lib/datetime";
+import { auditActionInfo, TONE_CLASS } from "./audit-actions";
 import { useTasks } from "@/features/files/api/useFiles";
 import { jobLabel, summarizeJobs } from "./jobs";
 import { useWindowStore } from "@/store/window-store";
@@ -195,32 +196,6 @@ interface AuditLog {
 // 所以直接 new Date() 就是對的，不需要任何補救。
 // （是 schemathesis 的 response_schema_conformance 把後端那半指出來的。）
 
-// Map action types to display info
-const getActionInfo = (action: string) => {
-  const actionMap: Record<
-    string,
-    { icon: React.ComponentType<{ className?: string }>; color: string; label: string }
-  > = {
-    create_file: { icon: Activity, color: "bg-green-500/20 text-green-600", label: "Create File" },
-    delete_file: { icon: Activity, color: "bg-red-500/20 text-red-600", label: "Delete File" },
-    upload_file: { icon: Activity, color: "bg-blue-500/20 text-blue-600", label: "Upload File" },
-    create_folder: {
-      icon: Activity,
-      color: "bg-purple-500/20 text-purple-600",
-      label: "Create Folder",
-    },
-    rename_file: { icon: Activity, color: "bg-yellow-500/20 text-yellow-600", label: "Rename" },
-    move_file: { icon: Activity, color: "bg-orange-500/20 text-orange-600", label: "Move" },
-  };
-  return (
-    actionMap[action] ?? {
-      icon: Activity,
-      color: "bg-blue-500/20 text-blue-600",
-      label: action.replace(/_/g, " "),
-    }
-  );
-};
-
 const NotificationCenter = () => {
   const queryClient = useQueryClient();
 
@@ -324,16 +299,15 @@ const NotificationCenter = () => {
           <div className="text-center text-muted-foreground py-8 text-sm">No new notifications</div>
         ) : (
           notifications.map((log) => {
-            const actionInfo = getActionInfo(log.action);
-            const IconComponent = actionInfo.icon;
+            const actionInfo = auditActionInfo(log.action);
             return (
               <div
                 key={log.id}
                 className="bg-black/5 dark:bg-white/5 rounded-lg p-3 border border-black/5 dark:border-white/5 group hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
               >
                 <div className="flex items-start gap-3">
-                  <div className={cn("p-1.5 rounded-md shrink-0", actionInfo.color)}>
-                    <IconComponent className="w-4 h-4" />
+                  <div className={cn("p-1.5 rounded-md shrink-0", TONE_CLASS[actionInfo.tone])}>
+                    <Activity className="w-4 h-4" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start gap-2">
