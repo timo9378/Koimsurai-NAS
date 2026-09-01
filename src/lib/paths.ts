@@ -84,3 +84,29 @@ export function pathUpTo(path: string, index: number): string {
   // 空陣列 join 出來是空字串，樣板本來就產生 "/" —— 不需要特判（變異測試指出的）
   return `/${segments.join("/")}`;
 }
+
+/**
+ * 把使用者路徑編碼成 API 路徑的一段：去掉前後斜線、每一段各自 encode。
+ *
+ * ⚠️ 一定要**逐段** encode。整串丟給 `encodeURIComponent` 會把 `/` 也編掉，
+ * 而不編的話，檔名裡的 `#` 會被當成 fragment、`?` 會被當成 query ——
+ * 從那個字開始的路徑就沒了。
+ */
+export function encodeApiPath(path: string): string {
+  return toApiPath(path).split("/").map(encodeURIComponent).join("/");
+}
+
+/**
+ * 組出 `/api/<前綴>/<編碼過的路徑>`。
+ *
+ * ⚠️ 這個形狀在專案裡出現過四次，其中**三次是錯的** —— 都是直接串接
+ * （`` `/api/download${path}` ``）：path 沒有前導斜線時會黏成
+ * `/api/downloadfoo.txt`，而且完全沒有編碼。它們不是同時寫的，也不會同時被修，
+ * 所以要有一份。
+ *
+ * 用在 `<img src>` / `<a href>` 這種直接進瀏覽器的網址；走 axios 的請一律用
+ * `apiClient`（它的 baseURL 已經是 `/api`，再帶一次會變成 `/api/api/...`）。
+ */
+export function apiFileUrl(prefix: string, path: string): string {
+  return `/api/${prefix}/${encodeApiPath(path)}`;
+}

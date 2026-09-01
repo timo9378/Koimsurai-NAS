@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
-import { dirName, joinPath, toApiPath } from "@/lib/paths";
+import { apiFileUrl, dirName, encodeApiPath, joinPath, toApiPath } from "@/lib/paths";
 import type {
   DeleteFileResponse,
   FileInfo,
@@ -91,9 +91,7 @@ export const useUpload = () => {
 
       // FIX: Backend likely expects the directory path, not the file path
       // Encode path components to handle special characters (e.g. Chinese)
-      const endpoint = cleanPath
-        ? `/upload/${cleanPath.split("/").map(encodeURIComponent).join("/")}`
-        : `/upload`;
+      const endpoint = cleanPath ? `/upload/${encodeApiPath(cleanPath)}` : `/upload`;
 
       // Explicitly set Content-Type to undefined so the browser sets it with the boundary
       // ⚠️ 一定要把 Content-Type 設回 undefined：apiClient 的 instance 預設是
@@ -126,14 +124,11 @@ export const useRename = () => {
 
   return useMutation({
     mutationFn: async ({ path, newName }: { path: string; newName: string }) => {
-      const cleanPath = toApiPath(path);
       // Build new_path as the same directory + newName so the backend receives the full target path
       // ⚠️ 後端的 new_path 是**完整路徑**（它會走 StorageRoot::resolve），
       // 不是只有檔名 —— 只送檔名的話 /Documents/a.txt 會被搬到儲存根。
       const newPath = toApiPath(joinPath(dirName(path), newName));
-      // URL encode path components to handle special characters (dashes, spaces, etc.)
-      const encodedPath = cleanPath.split("/").map(encodeURIComponent).join("/");
-      await apiClient.put(`/files/${encodedPath}`, { new_path: newPath });
+      await apiClient.put(`/files/${encodeApiPath(path)}`, { new_path: newPath });
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["files"] });
@@ -198,9 +193,7 @@ export const useDelete = () => {
       if (!path) {
         throw new Error("Path is required for deletion");
       }
-      const cleanPath = toApiPath(path);
-      // URL encode path components to handle special characters (dashes, spaces, etc.)
-      const encodedPath = cleanPath.split("/").map(encodeURIComponent).join("/");
+      const encodedPath = encodeApiPath(path);
       // 回傳的是**垃圾桶裡的檔名**，撞名時會是 `原名.<timestamp>`。
       // 「復原」一定要用它，用原檔名會復原到別的檔案（見 backend/tests/file_tests.rs）。
       const { data } = await apiClient.delete<DeleteFileResponse>(`/files/${encodedPath}`);
@@ -358,14 +351,10 @@ export const useDownload = () => {
     // 回傳 Promise，async 拿不掉。
     // oxlint-disable-next-line typescript/require-await
     mutationFn: async (path: string) => {
-      const cleanPath = toApiPath(path);
-      // Encode each path segment to handle special characters (Chinese, spaces, etc.)
-      const encodedPath = cleanPath.split("/").map(encodeURIComponent).join("/");
-
       // Build the download URL using the same base as apiClient (respects proxy/rewrites)
       // This lets the browser handle the download natively with streaming,
       // avoiding loading the entire file into JS memory (which crashes on large files).
-      const downloadUrl = `/api/download/${encodedPath}`;
+      const downloadUrl = apiFileUrl("download", path);
 
       const link = document.createElement("a");
       link.href = downloadUrl;

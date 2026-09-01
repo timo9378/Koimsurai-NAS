@@ -1,7 +1,15 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
-import { joinPath, dirName, pathSegments, pathUpTo, toApiPath } from "./paths";
+import {
+  joinPath,
+  dirName,
+  pathSegments,
+  pathUpTo,
+  toApiPath,
+  encodeApiPath,
+  apiFileUrl,
+} from "./paths";
 
 describe("joinPath", () => {
   it("根目錄不會產生雙斜線", () => {
@@ -150,5 +158,39 @@ describe("pathSegments / pathUpTo", () => {
         },
       ),
     );
+  });
+});
+
+describe("encodeApiPath / apiFileUrl", () => {
+  it("逐段編碼，斜線保留", () => {
+    expect(encodeApiPath("/a b/c d.txt")).toBe("a%20b/c%20d.txt");
+  });
+
+  it("檔名裡的 # 與 ? 會被編掉 —— 不編的話路徑從那裡就斷了", () => {
+    expect(encodeApiPath("note#1.txt")).toBe("note%231.txt");
+    expect(encodeApiPath("what?.txt")).toBe("what%3F.txt");
+  });
+
+  it("前後的斜線都去掉", () => {
+    expect(encodeApiPath("///a/b//")).toBe("a/b");
+  });
+
+  it("中文不會被拆壞", () => {
+    expect(decodeURIComponent(encodeApiPath("/照片/貓.jpg"))).toBe("照片/貓.jpg");
+  });
+
+  it("沒有前導斜線也組得出正確的網址 —— 直接串接就是在這裡黏成一團的", () => {
+    expect(apiFileUrl("download", "foo.txt")).toBe("/api/download/foo.txt");
+    expect(apiFileUrl("download", "/foo.txt")).toBe("/api/download/foo.txt");
+  });
+
+  it("縮圖的前綴帶尺寸", () => {
+    expect(apiFileUrl("thumbnail/small", "/照片/貓.jpg")).toBe(
+      "/api/thumbnail/small/%E7%85%A7%E7%89%87/%E8%B2%93.jpg",
+    );
+  });
+
+  it("空路徑不會產生雙斜線", () => {
+    expect(apiFileUrl("download", "")).toBe("/api/download/");
   });
 });

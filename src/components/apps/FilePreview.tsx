@@ -9,6 +9,7 @@ import { useWindowStore } from "@/store/window-store";
 import { VideoPlayer } from "@/components/ui/video-player";
 import { AudioPlayer } from "@/components/ui/audio-player";
 import { formatBytes } from "@/lib/format";
+import { apiFileUrl, encodeApiPath } from "@/lib/paths";
 
 interface FilePreviewProps {
   file: FileInfo;
@@ -35,15 +36,10 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
   // We use the /api/download endpoint which maps to the backend's download_file handler
   // This handler supports Range requests for video streaming and serves file content
 
-  // Remove leading slash for the API call as per useFiles.ts pattern
-  const cleanPath = file.path.startsWith("/") ? file.path.slice(1) : file.path;
-  // Encode each path segment separately to handle special characters (e.g. Chinese, spaces)
-  const encodedPath = cleanPath.split("/").map(encodeURIComponent).join("/");
-
-  // The download endpoint: /download/{encoded_path} (without /api prefix since apiClient adds it)
-  const apiPath = `/download/${encodedPath}`;
-  // Full URL for direct usage (img src, video src, etc.)
-  const fileUrl = `/api/download/${encodedPath}`;
+  // apiClient 的 baseURL 已經是 /api，所以走 axios 的那條不帶前綴；
+  // 直接進瀏覽器的（img src、video src、下載連結）要完整網址。
+  const apiPath = `/download/${encodeApiPath(file.path)}`;
+  const fileUrl = apiFileUrl("download", file.path);
 
   // For video, we use the same endpoint as it supports Range requests
   // We can also try /api/media/stream if download doesn't work, but user indicated download_file is ready.

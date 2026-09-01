@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import type { FileInfo } from "@/types/api";
 import { useMediaTimeline } from "@/features/files/api/useFiles";
 import { flattenTimeline, filterTimeline } from "./photos/timeline";
-import { toApiPath } from "@/lib/paths";
+import { apiFileUrl } from "@/lib/paths";
 import { format, parseISO } from "date-fns";
 import { Search, Image as ImageIcon, Film, Calendar } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
@@ -90,11 +90,7 @@ export const Photos = () => {
                         onClick={() => setPreviewFile(photo)}
                       >
                         <img
-                          // path 沒有前導斜線時，直接串會變成 `/api/thumbnail/mediumfoo.jpg`。
-                          src={`/api/thumbnail/medium/${toApiPath(photo.path)
-                            .split("/")
-                            .map(encodeURIComponent)
-                            .join("/")}`}
+                          src={apiFileUrl("thumbnail/medium", photo.path)}
                           alt={photo.name}
                           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
                           loading="lazy"

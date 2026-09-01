@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import * as Popover from "@radix-ui/react-popover";
 import { activateOnKey } from "@/lib/a11y";
+import { apiFileUrl } from "@/lib/paths";
 
 interface DockItemProps {
   mouseX: MotionValue;
@@ -85,7 +86,7 @@ const DockPreview = ({
               // （開 preview 一律是 `{ file }`）—— 縮圖分支形同不存在，永遠掉到
               // 最下面那個 app 名稱。把 props 接上型別之後才浮出來。
               <img
-                src={`/api/thumbnail/small${window.props.file.path}`}
+                src={apiFileUrl("thumbnail/small", window.props.file.path)}
                 alt=""
                 className="w-full h-full object-contain opacity-80"
               />
