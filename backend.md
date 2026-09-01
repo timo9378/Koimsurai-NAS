@@ -80,13 +80,18 @@
 
 ## 📚 API 文件
 
-所有 API 端點 (除了 `/api/auth/*`, `/s/*`, `/webdav`) 均需透過 Cookie 進行身分驗證。
+所有 API 端點（除了 `/api/auth/*` 與公開的分享／上傳連結）均需透過 Cookie 進行身分驗證。
+
+⚠️ `/webdav` **不是**例外。它以前確實完全沒有驗證 —— 任何人都能讀寫刪整個
+NAS，路徑還能用 `..` 逃出儲存根。現在走 HTTP Basic（見下面的 WebDAV 一節）。
 
 ### 🧾 OpenAPI
 
 | 方法 | 路徑      | 描述                                        |
 | ---- | --------- | ------------------------------------------- |
-| GET  | `/scalar` | 取得 Utoipa/OpenAPI JSON，用以產生 API Docs |
+| GET  | `/scalar` | 互動式 API 文件（Scalar UI，不是 JSON） |
+
+⚠️ 這個路徑**不需要登入**就打得開，等於把完整的端點清單公開出去。
 
 ### 🔐 認證 (Authentication)
 
@@ -105,7 +110,7 @@
 | POST   | `/api/files/folder`          | 建立資料夾            | `{ "path": "dir/name" }`                   |
 | GET    | `/api/download/*path`        | 下載檔案              | -                                          |
 | PUT    | `/api/files/*path`           | 重新命名              | `{ "new_path": "new_name.ext" }`           |
-| DELETE | `/api/files/*path`           | 刪除檔案 (移至垃圾桶) | -                                          |
+| DELETE | `/api/files/*path`           | 刪除檔案 (移至垃圾桶) | 回 `{ "trash_name": "..." }`               |
 | POST   | `/api/files/batch/delete`    | 批次刪除              | `{ "paths": ["file1", "file2"] }`          |
 | POST   | `/api/files/batch/move`      | 批次移動              | `{ "paths": [...], "destination": "dir" }` |
 | POST   | `/api/files/batch/copy`      | 批次複製              | `{ "paths": [...], "destination": "dir" }` |
@@ -116,11 +121,21 @@
 
 | 方法  | 路徑                      | 描述                | Body / Query                                 |
 | ----- | ------------------------- | ------------------- | -------------------------------------------- |
+| ANY   | `/api/tus`（與 `/api/tus/*`） | **tus 1.0 可續傳上傳（主要路徑）** | 見下                        |
 | POST  | `/api/upload`             | 簡單上傳 (根目錄)   | `multipart/form-data`                        |
 | POST  | `/api/upload/*path`       | 簡單上傳 (指定目錄) | `multipart/form-data`                        |
 | POST  | `/api/upload/init`        | 初始化分塊上傳      | `{ "file_path": "...", "total_size": 1024 }` |
 | PATCH | `/api/upload/session/:id` | 上傳檔案分塊        | Binary Body                                  |
 | GET   | `/api/upload/session/:id` | 查詢上傳狀態        | -                                            |
+
+前端現在一律走 **tus**（`tus-js-client`）：分塊、可續傳，重新整理頁面之後靠
+檔案指紋（存在 localStorage）接得回去，不需要先問伺服器傳到哪。
+底下 `/api/upload/*` 那幾條是舊的手刻分塊實作，保留作為 fallback。
+
+⚠️ tus 的兩個坑寫在 `backend/src/handlers/tus.rs` 裡：
+「沒有 body」與「body 是空的」在協定上是**兩件不同的事**（用 Content-Type 判斷，
+不能一律送 `RequestBody::empty()`）；而「傳完了沒」要看 HEAD，PATCH 只回
+`Upload-Offset`、不回 `Upload-Length`。
 
 ### 🏷️ 標籤與收藏 (Tags & Favorites)
 
@@ -135,7 +150,13 @@
 | 方法 | 路徑                                | 描述                              | Body / Query |
 | ---- | ----------------------------------- | --------------------------------- | ------------ |
 | GET  | `/api/versions/file/*path`          | 列出指定檔案的歷史版本            | -            |
-| POST | `/api/versions/restore/:version_id` | 還原指定版本 (以 version_id 還原) | -            |
+| POST | `/api/versions/restore/{version_id}/*path` | 還原指定版本 | -            |
+
+⚠️ **兩個參數都是必要的**，順序也不能換（`matchit` 要求萬用參數在最後）。
+`version_id` 是 `.versions/` 底下的檔名（`<timestamp>_<檔名>`），而它的父目錄
+要從 `path` 推。這份文件原本只寫一個參數 —— 那是這個端點「路由、handler、
+utoipa 標註三處互相矛盾」時期留下的第三種寫法，當時它永遠回 500。
+還原是非破壞性的：後端會先把目前的內容存成新版本再覆寫。
 
 ### 🎬 媒體 (Media)
 
@@ -152,15 +173,21 @@
 | 方法 | 路徑         | 描述         | Body / Query                                                 |
 | ---- | ------------ | ------------ | ------------------------------------------------------------ |
 | POST | `/api/share` | 建立分享連結 | `{ "file_path": "...", "password": "...", "expires": 3600 }` |
-| GET  | `/s/:id`     | 存取分享連結 | (公開存取)                                                   |
+| GET  | `/s/{id}`    | 分享頁（**SPA 路由**，不是 API；實際取資料走上面兩條） | (公開存取) |
 
 ### 🗑️ 垃圾桶 (Trash)
 
 | 方法   | 路徑                   | 描述       | Body / Query |
 | ------ | ---------------------- | ---------- | ------------ |
-| GET    | `/api/trash`           | 列出垃圾桶 | -            |
-| POST   | `/api/trash/:filename` | 還原檔案   | -            |
-| DELETE | `/api/trash`           | 清空垃圾桶 | -            |
+| GET    | `/api/trash`             | 列出垃圾桶     | -            |
+| POST   | `/api/trash/{filename}`  | 還原檔案       | -            |
+| DELETE | `/api/trash/{filename}`  | **永久**刪除   | -            |
+| DELETE | `/api/trash`             | 清空垃圾桶     | -            |
+
+⚠️ `{filename}` 是**垃圾桶裡的檔名**，不是原始路徑。`.trash` 是扁平的，撞名時
+`move_to_trash` 會存成 `原名.<timestamp>` —— 所以 `DELETE /api/files/*path`
+會把那個名字回給你（`{ "trash_name": "..." }`），還原與永久刪除都要用它。
+拿原檔名去還原不會失敗，而是會**還原到上一次刪的那個同名檔案**。
 
 ### 🔍 搜尋與索引 (Search)
 
@@ -184,11 +211,26 @@
 
 | 方法 | 路徑        | 描述            |
 | ---- | ----------- | --------------- |
-| ANY  | `/webdav/*` | WebDAV 協定入口 |
+| ANY  | `/webdav/*` | WebDAV 協定入口（**HTTP Basic 認證**） |
+
+- 認證用的是同一組帳號密碼，走 argon2 驗證。實測一次 verify 約 310ms，
+  而 WebDAV 客戶端每個操作都會重送憑證 —— 所以有一層帶 TTL 的憑證快取，
+  快取的是 (使用者名稱, SHA-256(密碼))，**不存明文**。那不是最佳化，是必要條件。
+- ⚠️ **開了 2FA 的帳號一律拒絕**：Basic 沒有第二因素的位置。目前沒有
+  app-specific password，所以那些帳號用不了 WebDAV。
+- 401 一定帶 `WWW-Authenticate`，否則客戶端不會跳出輸入框。
 
 ### 🐳 Docker 管理 (Container Manager)
 
 類似 Synology Container Manager，需設定 `ENABLE_DOCKER_MANAGER=true`。
+
+⚠️ **這組端點等同主機 root。** 容器通常掛著 `/var/run/docker.sock`，能打到
+`/api/docker/*` 就能起一個特權容器掛上宿主機的根目錄。所以除了開關之外還有
+一個白名單：`DOCKER_MANAGER_USER_IDS=1,2`（逗號分隔的 user id）。
+**沒設就全部拒絕**（fail-closed），不是全部放行。
+
+不在白名單裡的帳號會拿到 403 —— 前端會顯示「這個帳號沒有 Docker 管理權限」
+而不是一片空白（那是曾經的行為）。
 
 | 方法   | 路徑                                 | 描述               | Body / Query                            |
 | ------ | ------------------------------------ | ------------------ | --------------------------------------- |
@@ -216,14 +258,19 @@
 - `services::search::search_by_ai_tag(pool, tag, min_confidence, limit)`：在 DB 中搜尋含指定 AI 標籤的圖片。
 - `services::search::get_all_ai_tags(pool)`：取得熱門/現有的 AI 標籤（autocomplete）。
 
-目前專案尚未把 AI 功能直接暴露成 HTTP 路由；以下為建議可新增到路由的 API：
+⚠️ 這一節混了「已經有的」與「只是提案的」，底下標清楚。四條裡**只有第一條
+存在**，其餘三條沒有對應的 handler（`backend/src/handlers/` 底下沒有 ai.rs），
+照著打會拿到 404。`AiService::retry_failed` 存在，但只是個沒有 HTTP 出口的
+service 方法。
 
-| 方法 | 路徑                       | 說明                                                                           |
-| ---- | -------------------------- | ------------------------------------------------------------------------------ |
-| GET  | `/api/search/ai-tags`      | 以關鍵字搜尋含指定 AI 標籤的圖片（Query: `q`, 可選 `min_confidence`, `limit`） |
-| GET  | `/api/search/ai-tags/list` | 取得所有已知 AI 標籤（自動完成用）                                             |
-| POST | `/api/ai/analyze`          | 針對單張圖片觸發即時分析並儲存結果（Body: `{ "path": "..." }`）                |
-| POST | `/api/ai/retry-failed`     | 重新分析失敗的圖片（回傳成功數量）                                             |
+| 方法 | 路徑                       | 狀態 | 說明                                                                           |
+| ---- | -------------------------- | ---- | ------------------------------------------------------------------------------ |
+| GET  | `/api/search/ai-tags`      | ✅ 已實作 | 以關鍵字搜尋含指定 AI 標籤的圖片（Query: `q`, 可選 `min_confidence`, `limit`） |
+| GET  | `/api/search/ai-tags/list` | ❌ 提案 | 取得所有已知 AI 標籤（自動完成用）                                             |
+| POST | `/api/ai/analyze`          | ❌ 提案 | 針對單張圖片觸發即時分析並儲存結果（Body: `{ "path": "..." }`）                |
+| POST | `/api/ai/retry-failed`     | ❌ 提案 | 重新分析失敗的圖片（回傳成功數量）                                             |
+
+底下的 curl 範例除了第 1 個以外都是**提案的樣子**，現在打會 404。
 
 簡單範例（curl）：
 
@@ -361,4 +408,8 @@ ENABLE_DOCKER_MANAGER=true
 ENABLE_AI_LABELLING=true
 AI_MAX_CONCURRENT=6
 AI_USE_GPU=true
+
+# ⚠️ 開了 Docker 管理就一定要設白名單 —— 沒設是全部拒絕，
+# 而全部放行等於把主機 root 交給每一個能登入的帳號。
+DOCKER_MANAGER_USER_IDS=1,2
 ```
