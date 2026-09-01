@@ -58,10 +58,13 @@ export const Photos = () => {
           <div className="flex items-center justify-center h-full text-gray-500">
             Loading your memories...
           </div>
-        ) : !timeline || timeline.length === 0 ? (
+        ) : flattenedItems.length === 0 ? (
+          /* ⚠️ 判斷的是**過濾之後**的結果。原本看的是未過濾的 timeline ——
+             我加上前端搜尋之後，篩不到東西時會落到這裡卻顯示「沒有照片」，
+             那不是事實。 */
           <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
             <ImageIcon className="w-16 h-16 opacity-20" />
-            <p>No photos found</p>
+            <p>{searchQuery.trim() ? `找不到符合「${searchQuery.trim()}」的照片` : "還沒有照片"}</p>
           </div>
         ) : (
           <Virtuoso

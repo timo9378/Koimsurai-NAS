@@ -59,6 +59,7 @@ import { selectOnClick } from "./finder/selection";
 import { dirName, joinPath, toApiPath } from "@/lib/paths";
 import { onAppCommand, type AppCommand } from "@/lib/app-commands";
 import { filterByQuery, sortFiles } from "./finder/sorting";
+import { emptyMessage } from "./finder/empty-state";
 import { planRename } from "./finder/rename";
 import { getApiErrorMessage } from "@/lib/errors";
 import { planMove } from "./finder/move";
@@ -1301,6 +1302,7 @@ export const Finder = ({ windowId }: FinderProps) => {
         <FileList
           files={currentFiles}
           isLoading={isCurrentLoading}
+          emptyMessage={emptyMessage({ isTrashMode, query: searchQuery, tag: selectedTag })}
           viewMode={viewMode}
           currentPath={currentPath}
           selectedFiles={selectedFiles}

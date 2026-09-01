@@ -114,6 +114,8 @@ interface FileListProps {
   onPaste?: () => void;
   /** 剪貼簿是不是空的 —— 空的時候「Paste」要變灰而不是按了沒事。 */
   canPaste?: boolean;
+  /** 清單是空的時候要說什麼（見 `finder/empty-state.ts`）。 */
+  emptyMessage?: string;
   onDelete?: (file: FileInfo) => void;
   onDownload?: (path: string) => void;
   onShare?: (file: FileInfo) => void;
@@ -179,6 +181,7 @@ export const FileList = ({
   onClipboard,
   onPaste,
   canPaste = false,
+  emptyMessage,
   onDelete,
   onDownload,
   onShare,
@@ -411,6 +414,13 @@ export const FileList = ({
           )}
           {isLoading ? (
             <div className="flex items-center justify-center h-full text-gray-500">Loading...</div>
+          ) : (files?.length ?? 0) === 0 ? (
+            /* ⚠️ 沒有這一段的話，VirtuosoGrid 拿到空陣列就是一片空白 ——
+               「空資料夾」「搜尋沒結果」「垃圾桶是空的」長得一模一樣。 */
+            <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-500">
+              <Folder className="w-12 h-12 opacity-20" />
+              <span className="text-sm">{emptyMessage ?? "這個資料夾是空的"}</span>
+            </div>
           ) : viewMode === "grid" ? (
             <VirtuosoGrid
               style={{ height: "100%", width: "100%" }}
