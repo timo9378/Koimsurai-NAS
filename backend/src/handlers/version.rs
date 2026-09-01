@@ -37,21 +37,42 @@ pub async fn list_file_versions(
     Ok(Json(versions))
 }
 
+/// 把某個舊版本還原成目前的檔案。
+///
+/// ⚠️ 這個端點原本**永遠回 500**，而且是三處定義互相矛盾造成的：
+///
+/// | | 說的是 |
+/// |---|---|
+/// | 路由 | `/versions/restore/{version_id}` —— **一個**參數 |
+/// | handler | `Path<(String, String)>` —— **兩個** |
+/// | utoipa 標註 | `/api/files/{path}/restore/{version_id}` —— 第三種路徑 |
+///
+/// 實測：`POST /api/versions/restore/abc` →
+/// `500 Wrong number of path arguments for Path. Expected 2 but got 1`，
+/// 而且 axum 的內部錯誤字串直接送給客戶端。前端的 `useRestoreVersion`
+/// 也一直沒送 path（註解寫著「後端好像只要 versionId」）。
+///
+/// 兩個參數都是必要的：`version_id` 是 `.versions/` 底下的檔名
+/// （`<timestamp>_<檔名>`），而父目錄要從目標路徑推。
+///
+/// ⚠️ 順序是 `{version_id}` 在前、`{*path}` 在後 —— matchit 要求萬用參數
+/// 必須是最後一段，而 `Path<(A, B)>` 是**照路由順序**綁定的。
 #[utoipa::path(
     post,
-    path = "/api/files/{path}/restore/{version_id}",
+    path = "/api/versions/restore/{version_id}/{path}",
     params(
-        ("path" = String, Path, description = "File path"),
-        ("version_id" = String, Path, description = "Version ID to restore")
+        ("version_id" = String, Path, description = "要還原的版本 ID（.versions 底下的檔名）"),
+        ("path" = String, Path, description = "目標檔案路徑，相對於儲存根")
     ),
     responses(
-        (status = 200, description = "Version restored")
+        (status = 200, description = "Version restored"),
+        (status = 404, description = "找不到該版本")
     )
 )]
 pub async fn restore_version(
     State(state): State<AppState>,
     Extension(user_id): Extension<i64>,
-    AxumPath((path, version_id)): AxumPath<(String, String)>,
+    AxumPath((version_id, path)): AxumPath<(String, String)>,
 ) -> Result<StatusCode, AppError> {
     let full_path = state.storage_path.resolve(&path)?;
 

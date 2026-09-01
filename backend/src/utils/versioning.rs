@@ -32,6 +32,23 @@ pub async fn create_version(file_path: &Path, storage_root: &Path) -> Result<(),
     let version_name = format!("{timestamp}_{file_name}");
     let version_path = version_dir.join(version_name);
 
+    // ⚠️ 絕對不能蓋掉既有的版本檔。
+    //
+    // 版本名是**秒**解析度的 `{timestamp}_{檔名}`，所以同一秒內的兩次
+    // 快照會撞名，而 `fs::rename` 是直接覆蓋。後果不只是「少留一個版本」：
+    //
+    //   restore_version 的流程是「先把目前內容存成版本，再把選定的版本
+    //   複製回來」。如果那兩步落在同一秒，第一步就會**覆蓋掉第二步要
+    //   還原的那個版本檔** —— 於是還原變成把新內容複製回自己，
+    //   而舊版本永久消失。整件事沒有任何錯誤訊息。
+    //
+    // 已經有同一秒的快照時就保留它：先存進去的是**比較舊**的內容，
+    // 而那正是版本歷史要留的東西。
+    if fs::try_exists(&version_path).await.unwrap_or(false) {
+        tracing::debug!("同一秒已有版本快照，保留既有的：{}", version_path.display());
+        return Ok(());
+    }
+
     // Rename current file to version path
     fs::rename(file_path, version_path)
         .await

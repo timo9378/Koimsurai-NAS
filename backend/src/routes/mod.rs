@@ -230,7 +230,10 @@ pub async fn create_router(state: AppState) -> Router {
         )
         .route("/star/file/{*path}", post(tag::toggle_star))
         .route("/versions/file/{*path}", get(version::list_file_versions))
-        .route("/versions/restore/{version_id}", post(version::restore_version))
+        .route(
+            "/versions/restore/{version_id}/{*path}",
+            post(version::restore_version),
+        )
         .route(
             "/files/{*path}",
             get(file::list_files)

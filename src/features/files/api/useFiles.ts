@@ -267,12 +267,16 @@ export const useRestoreVersion = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ versionId }: { path: string; versionId: string }) => {
-      // const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-      // Note: The backend route seems to only require versionId: /versions/restore/{id}
-      // If path is needed for invalidation, we keep it in args but not in URL if not required.
-      // Based on instructions: /api/versions/restore/${id}
-      await apiClient.post(`/versions/restore/${versionId}`);
+    mutationFn: async ({ path, versionId }: { path: string; versionId: string }) => {
+      // ⚠️ path **一定要**送。這裡原本只送 versionId，註解寫著「後端好像只要
+      // versionId」—— 而那是因為後端當時三處定義互相矛盾（路由一個參數、
+      // handler 抽兩個、utoipa 標註寫第三種路徑），端點**永遠回 500**，
+      // 所以「送什麼都一樣不會成功」看起來像是「只要 versionId」。
+      //
+      // 兩個都是必要的：versionId 是 .versions/ 底下的檔名，
+      // 父目錄要從 path 推。
+      const cleanPath = path.replace(/^\/+/, "");
+      await apiClient.post(`/versions/restore/${encodeURIComponent(versionId)}/${cleanPath}`);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["files"] });
