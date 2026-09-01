@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
+import { backoffInterval } from "@/features/shared/polling";
 import { apiFileUrl, dirName, encodeApiPath, joinPath, toApiPath } from "@/lib/paths";
 import type {
   DeleteFileResponse,
@@ -424,6 +425,6 @@ export const useTasks = () => {
       const response = await apiClient.get<Job[]>("/tasks");
       return response.data;
     },
-    refetchInterval: 3000,
+    refetchInterval: backoffInterval(3000),
   });
 };

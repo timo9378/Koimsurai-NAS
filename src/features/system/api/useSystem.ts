@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
+import { backoffInterval } from "@/features/shared/polling";
 import type { SystemStatus } from "@/types/api";
 
 export const useSystemStatus = () => {
@@ -12,7 +13,7 @@ export const useSystemStatus = () => {
     retry: false,
     refetchOnWindowFocus: false,
     staleTime: 2000,
-    refetchInterval: 3000,
+    refetchInterval: backoffInterval(3000),
   });
 };
 
