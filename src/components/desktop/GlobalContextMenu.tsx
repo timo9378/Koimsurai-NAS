@@ -19,6 +19,8 @@ import { cn } from "@/lib/utils";
 import { useUpload } from "@/features/files/api/useFiles";
 import { useRescan } from "@/features/system/api/useSystem";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { getApiErrorMessage } from "@/lib/errors";
 
 type ContextType = "desktop" | "dock-icon" | "window-title" | "desktop-icon" | null;
 
@@ -75,7 +77,7 @@ export const GlobalContextMenu = ({ onWallpaperChange }: GlobalContextMenuProps)
       await upload.mutateAsync({ file, path: "Desktop" });
     } catch (error) {
       console.error("Upload failed:", error);
-      alert("上傳失敗");
+      toast.error(getApiErrorMessage(error, "上傳失敗"));
     }
 
     // Reset input
@@ -91,10 +93,10 @@ export const GlobalContextMenu = ({ onWallpaperChange }: GlobalContextMenuProps)
     try {
       await rescan.mutateAsync();
       await queryClient.invalidateQueries({ queryKey: ["files"] });
-      alert("Rescan completed");
+      toast.success("重新掃描完成");
     } catch (e) {
       console.error(e);
-      alert("Rescan failed");
+      toast.error(getApiErrorMessage(e, "重新掃描失敗"));
     }
     setMenu((prev) => ({ ...prev, isOpen: false }));
   };

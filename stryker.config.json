@@ -13,6 +13,7 @@
   "mutate": [
     "src/components/apps/finder/history.ts",
     "src/components/apps/finder/marquee.ts",
+    "src/components/apps/finder/move.ts",
     "src/components/apps/finder/rename.ts",
     "src/components/apps/finder/selection.ts",
     "src/components/apps/finder/sorting.ts",

@@ -46,6 +46,7 @@ import { dirName, joinPath, toApiPath } from "@/lib/paths";
 import { filterByQuery, sortFiles } from "./finder/sorting";
 import { planRename } from "./finder/rename";
 import { getApiErrorMessage } from "@/lib/errors";
+import { planMove } from "./finder/move";
 import {
   addTab as addTabTo,
   closeTab as closeTabIn,
@@ -943,34 +944,36 @@ export const Finder = ({ windowId }: FinderProps) => {
     }
   };
 
-  // #2 拖拉移動:把 sourceNames(目前目錄下的檔名)搬到 destRel(相對 storage 根、無前導斜線),
-  // 搬完輪詢到它們離開目前目錄(後端 watcher 非同步索引)。
-  const moveNamesToDir = async (sourceNames: string[], destRel: string) => {
-    const srcRel = toApiPath(currentPath);
-    if (destRel === srcRel) return; // 同目錄,免搬
-    const toSrc = (n: string) => (srcRel ? `${srcRel}/${n}` : n);
-    const names = sourceNames.filter((n) => toSrc(n) !== destRel); // 不能搬進自己
-    if (names.length === 0) return;
+  // #2 拖拉移動。搬完要輪詢到它們離開目前目錄 —— 後端的 watcher 是非同步
+  // 索引的，搬完立刻重抓還會看到舊的一份。
+  //
+  // 「哪些真的要搬、搬去哪」的判定抽在 finder/move.ts（同目錄、搬進自己、
+  // 搬進自己底下、去重），那裡有測試。
+  const moveNamesToDir = async (sourceNames: string[], destDir: string) => {
+    const plan = planMove(sourceNames, currentPath, destDir);
+    if (plan.kind === "noop") return;
+
+    // 輪詢用的是「檔名離開目前目錄」，所以要留原始名稱
+    const movedNames = sourceNames.filter((n) =>
+      plan.paths.includes(toApiPath(joinPath(currentPath, n))),
+    );
     try {
-      await batchMove.mutateAsync({ paths: names.map(toSrc), destination: destRel });
+      await batchMove.mutateAsync({ paths: plan.paths, destination: plan.destination });
       setSelectedFiles(new Set());
-      await pollRefetchUntil((list) => names.every((n) => !list.some((f) => f.name === n)));
+      await pollRefetchUntil((list) => movedNames.every((n) => !list.some((f) => f.name === n)));
     } catch (error) {
       console.error("Move failed:", error);
-      alert("移動失敗");
+      toast.error(getApiErrorMessage(error, "移動失敗"));
     }
   };
 
   // 拖到資料夾:搬進目前目錄下的該資料夾
-  const handleMoveFiles = (sourceNames: string[], targetFolderName: string) => {
-    const srcRel = toApiPath(currentPath);
-    return moveNamesToDir(sourceNames, srcRel ? `${srcRel}/${targetFolderName}` : targetFolderName);
-  };
+  const handleMoveFiles = (sourceNames: string[], targetFolderName: string) =>
+    moveNamesToDir(sourceNames, joinPath(currentPath, targetFolderName));
 
   // 拖到 breadcrumb:搬到該祖先路徑(Home = 根)
-  const handleMoveToPath = (sourceNames: string[], destPath: string) => {
-    return moveNamesToDir(sourceNames, toApiPath(destPath));
-  };
+  const handleMoveToPath = (sourceNames: string[], destPath: string) =>
+    moveNamesToDir(sourceNames, destPath);
 
   const handleCreateFolder = async () => {
     try {
@@ -1018,7 +1021,7 @@ export const Finder = ({ windowId }: FinderProps) => {
       await pollRefetchUntil((list) => list.some((f) => f.name === name));
     } catch (error) {
       console.error("Failed to create folder:", error);
-      alert("Failed to create folder");
+      toast.error(getApiErrorMessage(error, "建立資料夾失敗"));
     }
   };
 

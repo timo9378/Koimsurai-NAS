@@ -8,7 +8,7 @@ import {
   useBatchDelete,
   useDelete,
 } from "@/features/files/api/useFiles";
-import { getApiErrorStatus } from "@/lib/errors";
+import { getApiErrorMessage, getApiErrorStatus } from "@/lib/errors";
 import { useWindowStore } from "@/store/window-store";
 import { useQueryClient } from "@tanstack/react-query";
 import type { FileInfo } from "@/types/api";
@@ -23,6 +23,7 @@ import {
 } from "@dnd-kit/core";
 import { DraggableDesktopIcon } from "./DraggableDesktopIcon";
 import { defaultIconPosition, GRID_STEP, type IconPosition, movePositionBy } from "./icon-grid";
+import { toast } from "sonner";
 
 /**
  * 鍵盤拖曳時，方向鍵一次走**一整格**而不是 dnd-kit 預設的 25px。
@@ -196,7 +197,7 @@ export const DesktopIcons = () => {
         }
       } catch (error) {
         console.error("Failed to create folder:", error);
-        alert("建立資料夾失敗");
+        toast.error(getApiErrorMessage(error, "建立資料夾失敗"));
       }
     };
 
@@ -224,7 +225,7 @@ export const DesktopIcons = () => {
           setSelectedFiles(new Set());
         } catch (error) {
           console.error("Delete failed:", error);
-          alert("刪除失敗");
+          toast.error(getApiErrorMessage(error, "刪除失敗"));
         }
       }
     };
@@ -337,7 +338,7 @@ export const DesktopIcons = () => {
       setRenamingFile(null);
     } catch (error) {
       console.error("Rename failed:", error);
-      alert("重新命名失敗");
+      toast.error(getApiErrorMessage(error, "重新命名失敗"));
       setRenamingFile(null);
     }
   };
