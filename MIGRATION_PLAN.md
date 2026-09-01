@@ -804,6 +804,18 @@ C/組語密碼庫）、`jni`（Java Native Interface）、`clap`、`figment`。�
 `tus-js-client` 的三個呼叫串起來，由 `e2e/tus-upload.spec.ts` 守著，
 在 vitest 裡硬湊 mock 只會測到 mock 本身。
 
+#### ⚠️ 本機跑 E2E 的注意事項
+
+在**這台機器**上，`pnpm e2e` 緊接在 CPU 吃重的指令之後（`pnpm build`、
+`pnpm mutate`）有機率紅一條，重跑就過。三次失敗的共同點都是前一個指令
+把 CPU 榨滿，而 Playwright 的 timeout（測試 30s、斷言 10s）在機器忙的時候
+不夠 —— 這台就是跑著實際服務的 NAS 本體。
+
+CI 有獨立的 runner，不受影響（實測本機紅、同一個 commit 在 CI 綠）。
+
+**不要為了這個放寬 timeout** —— 那會讓真正的逾時問題也被蓋掉。
+本機要連跑的話，中間讓機器喘一下。
+
 #### Lighthouse 基準線
 
 2026-08-31 在開發機量（三次中位數，量 `/login`）：
