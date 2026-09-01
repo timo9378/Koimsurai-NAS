@@ -54,6 +54,7 @@ import { X, Plus } from "lucide-react";
 import { activateOnKey } from "@/lib/a11y";
 import { selectOnClick } from "./finder/selection";
 import { dirName, joinPath, toApiPath } from "@/lib/paths";
+import { onAppCommand, type AppCommand } from "@/lib/app-commands";
 import { filterByQuery, sortFiles } from "./finder/sorting";
 import { planRename } from "./finder/rename";
 import { getApiErrorMessage } from "@/lib/errors";
@@ -412,6 +413,57 @@ export const Finder = ({ windowId }: FinderProps) => {
     setCurrentPath(path);
     setSelectedFiles(new Set());
   };
+
+  // 頂端選單列送進來的指令。
+  //
+  // ⚠️ 訂閱要帶 windowId —— 桌面可能同時開好幾個 Finder，無差別的全域事件會讓
+  // 每一個都往回走一步。`onAppCommand` 就是為了這件事而存在的。
+  //
+  // 處理函式放在 ref 裡：它用到的東西（currentFiles、history、handleNavigate……）
+  // 每次 render 都會變，但**訂閱本身**只跟 windowId 有關。直接寫進依賴陣列會讓
+  // 事件監聽器每一幀重掛一次，而漏寫又會抓到過期的閉包。
+  const commandHandlerRef = React.useRef<(command: AppCommand) => void>(() => undefined);
+  commandHandlerRef.current = (command: AppCommand) => {
+    switch (command) {
+      case "new-folder":
+        void handleCreateFolder();
+        break;
+      case "select-all":
+        setSelectedFiles(new Set((currentFiles ?? []).map((f) => f.name)));
+        break;
+      case "nav-back":
+      case "nav-forward": {
+        const nav: NavHistory = { entries: history, index: historyIndex };
+        const next = command === "nav-back" ? goBack(nav) : goForward(nav);
+        const path = currentHistoryPath(next);
+        if (path !== undefined && next.index !== nav.index) {
+          setHistoryIndex(next.index);
+          setCurrentPath(path);
+        }
+        break;
+      }
+      case "nav-parent":
+        if (currentPath !== "/") handleNavigate(dirName(currentPath));
+        break;
+      case "nav-home":
+        handleNavigate("/");
+        break;
+      case "nav-desktop":
+        handleNavigate("/Desktop");
+        break;
+      case "view-icons":
+        setViewMode("grid");
+        break;
+      case "view-list":
+        setViewMode("list");
+        break;
+    }
+  };
+
+  useEffect(
+    () => onAppCommand(windowId, (command) => commandHandlerRef.current(command)),
+    [windowId],
+  );
 
   // Watch for new folder to appear in files list, then enter rename mode
   //

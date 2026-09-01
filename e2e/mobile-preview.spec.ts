@@ -39,6 +39,21 @@ test("手機點一下檔案會開全螢幕預覽，關掉會回到列表", async
   );
   expect(uploaded, "建立測試檔案").toBe(true);
 
+  // ⚠️ tus 落地之後檔案還要經過 watcher／indexer 才會進到列表（列表是 DB 撐的）。
+  // 只 reload 一次再等 DOM 是不夠的 —— 頁面不會自己重抓，機器忙的時候就會紅。
+  // 先等後端真的列得出來，再 reload。
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async (n: string) => {
+          const res = await fetch("/api/files");
+          const list = (await res.json()) as { name: string }[];
+          return list.some((f) => f.name === n);
+        }, name),
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+
   await page.reload();
 
   const row = page.getByText(name, { exact: true });

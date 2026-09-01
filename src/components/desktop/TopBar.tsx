@@ -31,6 +31,8 @@ import { SpotlightSearch } from "./SpotlightSearch";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import type { AppType } from "@/store/window-store";
+import { getMenuItemsForApp, type MenuCommand } from "./menu-bar";
+import { dispatchAppCommand } from "@/lib/app-commands";
 import { useWindowStore } from "@/store/window-store";
 
 import { useTransferStore, formatSpeed } from "@/store/transfer-store";
@@ -322,69 +324,36 @@ const NotificationCenter = () => {
   );
 };
 
-// Menu items for different app types
-const getMenuItemsForApp = (appType: string | null) => {
-  switch (appType) {
-    case "finder":
-      return {
-        appName: "Finder",
-        menus: [
-          { label: "File", items: ["New Folder", "New Window", "Close Window"] },
-          { label: "Edit", items: ["Cut", "Copy", "Paste", "Select All"] },
-          { label: "View", items: ["as Icons", "as List", "as Columns", "Show Preview"] },
-          { label: "Go", items: ["Back", "Forward", "Enclosing Folder", "Home", "Desktop"] },
-        ],
-      };
-    case "photos":
-      return {
-        appName: "Photos",
-        menus: [
-          { label: "File", items: ["Import", "Export", "Share"] },
-          { label: "Edit", items: ["Rotate", "Crop", "Adjust Color"] },
-          { label: "View", items: ["Show Sidebar", "Zoom In", "Zoom Out"] },
-        ],
-      };
-    case "terminal":
-      return {
-        appName: "Terminal",
-        menus: [
-          { label: "Shell", items: ["New Window", "New Tab", "Close Tab"] },
-          { label: "Edit", items: ["Copy", "Paste", "Select All", "Clear"] },
-          { label: "View", items: ["Increase Font Size", "Decrease Font Size"] },
-        ],
-      };
-    case "docker":
-      return {
-        appName: "Docker Manager",
-        menus: [
-          { label: "File", items: ["Refresh", "Settings"] },
-          { label: "Container", items: ["Start", "Stop", "Restart", "Remove"] },
-          { label: "View", items: ["Show Logs", "Show Stats"] },
-        ],
-      };
-    default:
-      return {
-        appName: "Desktop",
-        menus: [
-          { label: "File", items: ["New Folder", "Get Info"] },
-          { label: "Edit", items: ["Undo", "Redo"] },
-          { label: "View", items: ["Clean Up", "Sort By"] },
-        ],
-      };
-  }
-};
-
 export const TopBar = () => {
   const [time, setTime] = useState(formatClock);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const logoutMutation = useLogout();
   const { data: systemStatus } = useSystemStatus();
   const { theme, setTheme } = useTheme();
-  const { windows, activeWindowId, showDesktop, toggleShowDesktop, openWindow } = useWindowStore();
+  const { windows, activeWindowId, showDesktop, toggleShowDesktop, openWindow, closeWindow } =
+    useWindowStore();
   const { uploadSpeed, downloadSpeed } = useTransferStore();
 
   const activeWindow = windows.find((w) => w.id === activeWindowId);
   const menuConfig = getMenuItemsForApp(activeWindow?.appType || null);
+
+  const runMenuCommand = (command: MenuCommand) => {
+    switch (command.kind) {
+      case "app":
+        // 只送給目前作用中的那個視窗 —— 桌面可能同時開好幾個 Finder。
+        if (activeWindowId) dispatchAppCommand(activeWindowId, command.command);
+        break;
+      case "open":
+        openWindow(command.appType);
+        break;
+      case "close":
+        if (activeWindowId) closeWindow(activeWindowId);
+        break;
+      case "event":
+        window.dispatchEvent(new Event(command.event));
+        break;
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -475,14 +444,21 @@ export const TopBar = () => {
               </span>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="bg-black/80 backdrop-blur-xl border-white/10 text-white">
-              {menu.items.map((item) => (
-                <DropdownMenuItem
-                  key={item}
-                  className="focus:bg-white/10 focus:text-white cursor-default"
-                >
-                  {item}
-                </DropdownMenuItem>
-              ))}
+              {menu.items.map((item) => {
+                const command = item.command;
+                return (
+                  <DropdownMenuItem
+                    key={item.label}
+                    // 沒有 command 的項目變灰。原本這裡每一項都沒有 handler ——
+                    // 按下去完全沒有反應，而 macOS 本來就會把當下不能用的項目變灰。
+                    disabled={command === undefined}
+                    onSelect={command ? () => runMenuCommand(command) : undefined}
+                    className="focus:bg-white/10 focus:text-white"
+                  >
+                    {item.label}
+                  </DropdownMenuItem>
+                );
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
         ))}

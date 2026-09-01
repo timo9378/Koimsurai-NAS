@@ -173,7 +173,7 @@ const DockItem = ({
   onCloseWindow,
   onFocusWindow,
 }: DockItemProps) => {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLButtonElement>(null);
   const [isHovered, setIsHovered] = useState(false);
 
   const distance = useTransform(mouseX, (val) => {
@@ -201,8 +201,14 @@ const DockItem = ({
       <Tooltip.Provider>
         <Tooltip.Root>
           <Tooltip.Trigger asChild>
-            <motion.div
+            {/* ⚠️ 這裡原本是帶 onClick 的裸 <motion.div>：整條 Dock（Settings 以外）
+                鍵盤到不了、讀螢幕的人也看不到 —— 而那是這個桌面的主要導覽。
+                axe 沒有抓到，因為「div 上掛 onClick」不在它的規則裡。
+                換成 motion.button 之後放大動畫與 whileTap 都照舊。 */}
+            <motion.button
               ref={ref}
+              type="button"
+              aria-label={label}
               style={{ width }}
               className="aspect-square rounded-xl bg-white/10 border border-white/20 backdrop-blur-md flex items-center justify-center cursor-pointer hover:bg-white/20 transition-colors relative z-10"
               onClick={onClick}
@@ -218,7 +224,7 @@ const DockItem = ({
               {isOpen && (
                 <div className="absolute -bottom-2 w-1 h-1 rounded-full bg-white/80 shadow-[0_0_4px_rgba(255,255,255,0.5)]" />
               )}
-            </motion.div>
+            </motion.button>
           </Tooltip.Trigger>
           {!isHovered && (
             <Tooltip.Portal>
@@ -485,11 +491,14 @@ export const Dock = () => {
           {settingsApps.map((app) =>
             app.id === "settings" ? (
               <Popover.Root key={app.id} open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-                <Popover.Trigger asChild>
-                  {/* 同 TopBar：Radix 的 aria-* 需要一個允許它們的角色，
-                      而 div 不允許，Tab 也到不了。用不帶樣式的 button 包住，
-                      實際外觀仍由 DockItem 決定。 */}
-                  <button type="button" aria-label={app.label} className="contents">
+                {/* ⚠️ 用 Anchor 而不是 Trigger。DockItem 本身已經是
+                    <button aria-label>，再包一層 button 是無效的 HTML；而包一層
+                    div 的話，Trigger 會把 aria-expanded / aria-haspopup 掛到
+                    div 上 —— axe 的 aria-allowed-attr 會直接判 critical。
+                    Anchor 只負責定位、不加任何 aria，開關由 DockItem 的 onClick
+                    與底下受控的 open/onOpenChange 負責。 */}
+                <Popover.Anchor asChild>
+                  <div className="contents">
                     <DockItem
                       mouseX={mouseX}
                       icon={app.icon}
@@ -502,8 +511,8 @@ export const Dock = () => {
                       onCloseWindow={closeWindow}
                       onFocusWindow={focusWindow}
                     />
-                  </button>
-                </Popover.Trigger>
+                  </div>
+                </Popover.Anchor>
                 <Popover.Portal>
                   <Popover.Content
                     side={

@@ -65,3 +65,29 @@ test("桌面版面的可及性沒有比現況更差", async ({ page }) => {
     `桌面版面的 serious/critical 違規：\n${summarise(violations)}`,
   ).toBeLessThanOrEqual(KNOWN_ISSUES.desktop);
 });
+
+/**
+ * Dock 是這個桌面的主要導覽，而它原本每一顆圖示都是帶 `onClick` 的裸 `<div>`
+ * —— 鍵盤到不了、讀螢幕的人也看不到。axe 沒抓到（「div 上掛 onClick」不在它的
+ * 規則裡），所以這條要自己寫：每一顆都要是有名字、按得到的按鈕。
+ */
+test("Dock 的每一顆圖示都可以用鍵盤到達，而且有名字", async ({ page }) => {
+  await registerAndLogin(page, "dock");
+
+  const icons = page.locator('[data-context-type="dock-icon"]');
+  const count = await icons.count();
+  expect(count, "Dock 應該有圖示").toBeGreaterThan(0);
+
+  for (let i = 0; i < count; i++) {
+    const icon = icons.nth(i);
+    await expect(icon).toHaveRole("button");
+    await expect(icon).toHaveAttribute("aria-label", /.+/);
+  }
+
+  // 鍵盤真的到得了：聚焦第一顆之後按 Enter 會開起一個視窗。
+  await icons.first().focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator('[data-context-type="window-title"]').first()).toBeVisible({
+    timeout: 15_000,
+  });
+});
