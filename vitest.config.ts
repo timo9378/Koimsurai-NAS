@@ -35,16 +35,19 @@ export default defineConfig({
       // 加一段還沒測到的新功能不該當場擋下，但「刪掉一批測試」會被抓到。
       // 補了測試就把數字往上調。
       //
-      // ⚠️ 實測 9.26%（statements 408/4402）。這個數字看起來很低，但它是**誠實**
+      // ⚠️ 實測 12.93%（statements 574/4439）。這個數字看起來很低，但它是**誠實**
       // 的那個 —— 不加 `all` + `include` 的話會顯示 51.84%，那是「已測檔案的
       // 品質」，差了 5.6 倍。
       //
-      // 該看的是分佈而不是總數：有測的集中在抽出來的純邏輯（finder 的
-      // history / selection / marquee、chunk-plan、errors、file-icons、a11y、
-      // 兩個 store）與三支元件；Finder / FileList / DesktopIcons /
-      // MobileLayout 這四支大元件（合計約 3600 行）仍然沒有測試，
-      // 而那正是分母的大宗。
-      thresholds: { lines: 8, functions: 7, branches: 6, statements: 8 },
+      // 該看的是分佈而不是總數：有測的集中在**抽出來的純邏輯** —— finder 的
+      // history / selection / marquee / sorting / tabs / rename / move、
+      // paths、format、chunk-plan、errors、file-icons、a11y、tus-upload、
+      // trash、new-folder、upload-progress、mobile 的 sheets 與 actions，
+      // 加上四支元件（ShareDialog、Terminal、socket-provider、u.$id）。
+      // Finder / FileList / DesktopIcons / MobileLayout 這四支大元件
+      // （合計約 3600 行）仍然沒有測試，而那正是分母的大宗 ——
+      // 今天找到的 bug 幾乎都在那四支裡面，方法是「抽出來再測」而不是直接測它們。
+      thresholds: { lines: 12, functions: 11, branches: 11, statements: 12 },
       // 不列入分母的：型別定義、產生的檔案、入口、以及 shadcn 的 vendored UI
       exclude: [
         "src/routeTree.gen.ts",
