@@ -322,8 +322,23 @@ pub async fn worker(
                         continue;
                     }
 
-                    let file_name = src_path.file_name().unwrap_or_default();
-                    let target_path = dest_path.join(file_name);
+                    let file_name = src_path.file_name().unwrap_or_default().to_string_lossy();
+
+                    // ⚠️ 不能把資料夾複製到它自己底下 —— `copy_recursive` 會一邊
+                    // 讀一邊往裡面寫，遞迴到磁碟滿為止。`starts_with` 是逐段比對
+                    // 的（不是字串前綴），所以 `/a/bc` 不會被當成 `/a/b` 底下。
+                    if dest_path.starts_with(&src_path) {
+                        error!("拒絕把 {:?} 複製到它自己底下（{:?}）", src_path, dest_path);
+                        success = false;
+                        error_msg = "不能把資料夾複製到它自己底下".to_string();
+                        continue;
+                    }
+
+                    // ⚠️ 一定要挑一個沒被佔用的名字。`fs::copy` 撞名是直接覆寫，
+                    // 而「貼到同一個資料夾」時來源與目的地是同一個檔案 ——
+                    // 它會先 truncate 目的地，於是來源在被讀之前就空了，
+                    // 「複製」的結果是原檔變成 0 byte。
+                    let target_path = crate::utils::naming::available_path(&dest_path, &file_name);
 
                     if src_path.is_dir() {
                         if let Err(e) = copy_recursive(&src_path, &target_path).await {

@@ -46,6 +46,15 @@ pub async fn spawn_app() -> TestApp {
     let storage_dir = TempDir::new().expect("Failed to create temp dir for storage");
     let storage_path = storage_dir.path().to_path_buf();
 
+    // ⚠️ 背景 job 的 worker 沒有 AppState，它用 `StorageRoot::from_env()` 自己
+    // 重建根路徑。不設這個環境變數的話，worker 會拿預設的 `"storage"`（相對於
+    // cwd），跟測試的 TempDir 是兩個不同的地方 —— 於是任何靠 job 完成的斷言
+    // 都在觀察一個永遠不會變的目錄，測試會**假綠**（我第一版的複製測試就是
+    // 這樣，它「通過」了一條斷言「不該遞迴」，因為那裡根本什麼都沒發生）。
+    //
+    // nextest 是 process-per-test，所以設 process 層級的環境變數不會互相污染。
+    std::env::set_var("STORAGE_PATH", &storage_path);
+
     let app = create_app(pool.clone(), storage_path).await;
 
     // 綁定到隨機埠口

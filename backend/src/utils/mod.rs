@@ -4,6 +4,7 @@ pub mod hash;
 pub mod image;
 pub mod jwt;
 pub mod metadata;
+pub mod naming;
 pub mod queue;
 pub mod totp;
 pub mod versioning;

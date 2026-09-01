@@ -126,28 +126,16 @@ pub async fn restore_file(
     }
 
     // Handle name collision at restore destination
-    let final_restore_path = if restore_path.exists() {
-        let stem = restore_path
-            .file_stem()
-            .map_or_else(|| filename.clone(), |s| s.to_string_lossy().to_string());
-        let ext = restore_path
-            .extension()
-            .map(|e| format!(".{}", e.to_string_lossy()))
-            .unwrap_or_default();
+    // 撞名時挑 `名字 (1).ext`。這段跟複製共用同一個 helper —— 原本兩邊各寫一次，
+    // 而這正是這個 codebase 一再出問題的形狀。
+    let final_restore_path = {
         let parent = restore_path
             .parent()
             .unwrap_or_else(|| state.storage_path.as_path());
-        let mut counter = 1;
-        loop {
-            let new_name = format!("{stem} ({counter}){ext}");
-            let candidate = parent.join(&new_name);
-            if !candidate.exists() {
-                break candidate;
-            }
-            counter += 1;
-        }
-    } else {
-        restore_path
+        let desired = restore_path
+            .file_name()
+            .map_or_else(|| filename.clone(), |n| n.to_string_lossy().to_string());
+        crate::utils::naming::available_path(parent, &desired)
     };
 
     fs::rename(&trash_path, &final_restore_path)
