@@ -13,23 +13,17 @@ import {
   Search,
   X,
   FolderPlus,
-  Download,
-  Share2,
-  Edit2,
   Trash2,
-  StarOff,
   Plus,
   LogOut,
   Loader2,
   RefreshCw,
-  Info,
   Activity,
   Cpu,
   HardDrive,
   Zap,
   BatteryCharging,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FileInfo } from "@/types/api";
 import {
@@ -52,6 +46,7 @@ import { useUploadStore } from "@/store/upload-store";
 import { overallProgress } from "@/features/files/upload-progress";
 import { createFolderWithUniqueName } from "@/features/files/new-folder";
 import { FileInfoRows } from "@/components/files/FileInfoRows";
+import { sheetActions } from "./actions";
 import { useLogout } from "@/features/auth/api/useAuth";
 import { FileTypeIcon } from "@/lib/file-icons";
 import { useThumbnail } from "@/features/files/api/useFiles";
@@ -108,25 +103,7 @@ interface ActionSheetProps {
 }
 const ActionSheet = ({ file, onClose, onAction, isTrash }: ActionSheetProps) => {
   if (!file) return null;
-  // 明確宣告：只有部分項目帶 danger，交給 TS 推論會得到不含該欄位的聯集，
-  // 原本就是因此才寫成 `(action as any).danger`。
-  const actions: { id: string; label: string; icon: LucideIcon; danger?: boolean }[] = isTrash
-    ? [
-        { id: "restore", label: "Restore", icon: RefreshCw },
-        { id: "delete-permanent", label: "Delete Permanently", icon: Trash2, danger: true },
-      ]
-    : [
-        // 資料夾沒有下載 —— `download_file` 要求 `is_file()`，點下去只會拿到 404。
-        // 「⋮」按鈕對資料夾列也會開這個面板，所以這裡真的會被看到。
-        ...(file.is_dir ? [] : [{ id: "download", label: "Download", icon: Download }]),
-        { id: "share", label: "Share", icon: Share2 },
-        { id: "rename", label: "Rename", icon: Edit2 },
-        ...(file.is_starred
-          ? [{ id: "unstar", label: "Remove from Favorites", icon: StarOff }]
-          : [{ id: "star", label: "Add to Favorites", icon: Star }]),
-        { id: "info", label: "File Info", icon: Info },
-        { id: "delete", label: "Move to Trash", icon: Trash2, danger: true },
-      ];
+  const actions = sheetActions(file, isTrash ?? false);
 
   return (
     <>
