@@ -14,8 +14,9 @@ export * from "@koimsurai/nas-api-types";
 /**
  * ⚠️ 與後端不符。Rust 的 `WsServerMessage::DockerStats` payload 欄位是
  * `cpu_percent`（不是 `cpu_percentage`），而且還多了 network/block 四個欄位。
- * 目前 socket-provider 比對的訊息 type 也對不上（見該檔註解），這條路徑實際上沒在運作。
- * 修好協定之後應改用產生版的 `WsServerMessage`。
+ * ⚠️ 註解的後半已過期：socket-provider 早就改用產生版的 `WsServerMessage` 了，
+ * WebSocket 那條路徑是通的。沒通的只有**這個型別本身** —— 它已經沒有任何
+ * 呼叫點，純粹是殘留，確認之後可以直接刪。
  */
 export interface DockerStats {
   container_id: string;
