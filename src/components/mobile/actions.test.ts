@@ -13,6 +13,15 @@ describe("sheetActions", () => {
     expect(ids(FILE)).toContain("download");
   });
 
+  it("資料夾不提供開啟 —— 資料夾是點一下進去，不是預覽", () => {
+    expect(ids(FOLDER)).not.toContain("open");
+    expect(ids(FILE)).toContain("open");
+  });
+
+  it("開啟排在最前面，跟桌面右鍵選單一致", () => {
+    expect(ids(FILE)[0]).toBe("open");
+  });
+
   it("星號是二選一，不會同時出現", () => {
     expect(ids(FILE)).toContain("star");
     expect(ids(FILE)).not.toContain("unstar");

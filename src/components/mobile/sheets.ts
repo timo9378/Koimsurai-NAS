@@ -27,7 +27,8 @@ export type SheetState<T extends SheetTarget = SheetTarget> =
   | { readonly kind: "none" }
   | { readonly kind: "action"; readonly file: T }
   | { readonly kind: "info"; readonly file: T }
-  | { readonly kind: "rename"; readonly file: T };
+  | { readonly kind: "rename"; readonly file: T }
+  | { readonly kind: "preview"; readonly file: T };
 
 /**
  * ⚠️ 型別參數要保留。`SheetState<SheetTarget>` **不能**指派給
@@ -56,6 +57,16 @@ export function openRename<T extends SheetTarget>(file: T): SheetState<T> {
   return { kind: "rename", file };
 }
 
+/**
+ * 全螢幕預覽。
+ *
+ * ⚠️ 它是全螢幕而不是底部面板，但仍然放進同一個聯集：同時只會開一個的
+ * 不變式對它一樣成立，另外開一個 `useState` 就等於把那個保證放掉。
+ */
+export function openPreview<T extends SheetTarget>(file: T): SheetState<T> {
+  return { kind: "preview", file };
+}
+
 export function closeSheet<T extends SheetTarget>(): SheetState<T> {
   return { kind: "none" };
 }
@@ -63,7 +74,7 @@ export function closeSheet<T extends SheetTarget>(): SheetState<T> {
 /** 目前這種面板是不是開著的，是的話回它的目標檔案。 */
 export function sheetFile<T extends SheetTarget>(
   state: SheetState<T>,
-  kind: "action" | "info" | "rename",
+  kind: "action" | "info" | "rename" | "preview",
 ): T | null {
   return state.kind === kind ? state.file : null;
 }

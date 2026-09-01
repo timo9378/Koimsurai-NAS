@@ -47,6 +47,7 @@ import { overallProgress } from "@/features/files/upload-progress";
 import { createFolderWithUniqueName } from "@/features/files/new-folder";
 import { FileInfoRows } from "@/components/files/FileInfoRows";
 import { sheetActions } from "./actions";
+import { FilePreview } from "@/components/apps/FilePreview";
 import { useLogout } from "@/features/auth/api/useAuth";
 import { FileTypeIcon } from "@/lib/file-icons";
 import { useThumbnail } from "@/features/files/api/useFiles";
@@ -61,6 +62,7 @@ import {
   closeSheet,
   NO_SHEET,
   openAction,
+  openPreview,
   openInfo,
   openRename,
   type SheetState,
@@ -396,6 +398,7 @@ export const MobileLayout = () => {
   const actionFile = sheetFile(sheet, "action");
   const infoFile = sheetFile(sheet, "info");
   const renameFile = sheetFile(sheet, "rename");
+  const previewFile = sheetFile(sheet, "preview");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ─── API hooks ────────────────
@@ -453,17 +456,28 @@ export const MobileLayout = () => {
       setActiveTab("files");
       navigateTo(file.path.startsWith("/") ? file.path : `/${file.path}`);
     } else {
-      setSheet(openAction(file));
+      setSheet(openPreview(withFullPath(file)));
     }
   };
+
+  // FilePreview 是靠 file.path 組下載網址的，而列表回來的 path 不一定是滿的。
+  const withFullPath = (file: FileInfo): FileInfo => ({
+    ...file,
+    path: file.path || joinPath(currentPath, file.name),
+  });
 
   const handleFileTap = (file: FileInfo) => {
     if (file.is_dir) {
       if (isTrashMode) return; // Don't navigate in trash
       navigateTo(joinPath(currentPath, file.name));
-    } else {
-      // For non-directory files, open action sheet (mobile-appropriate)
+    } else if (isTrashMode) {
+      // 垃圾桶裡的項目沒有可預覽的路徑（扁平檔名），只給動作面板。
       setSheet(openAction(file));
+    } else {
+      // ⚠️ 原本點檔案是開動作面板 —— 也就是**手機完全沒有預覽**：一個 NAS 的
+      // 手機介面看不了自己的照片，只能下載或分享。桌面按兩下一直都會開預覽。
+      // 現在點一下＝開預覽（對應桌面的雙擊），「⋮」才是動作面板。
+      setSheet(openPreview(withFullPath(file)));
     }
   };
 
@@ -471,6 +485,9 @@ export const MobileLayout = () => {
   const handleAction = async (action: string, file: FileInfo) => {
     const fullPath = file.path || joinPath(currentPath, file.name);
     switch (action) {
+      case "open":
+        setSheet(openPreview(withFullPath(file)));
+        break;
       case "download":
         downloadFile.mutate(fullPath);
         break;
@@ -961,6 +978,32 @@ export const MobileLayout = () => {
       </AnimatePresence>
       <AnimatePresence>
         {infoFile && <FileInfoSheet file={infoFile} onClose={() => setSheet(closeSheet())} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {previewFile && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[300] bg-white dark:bg-zinc-950 flex flex-col safe-area-inset-top"
+          >
+            <div className="shrink-0 h-12 flex items-center gap-2 px-2 border-b border-gray-200 dark:border-zinc-800">
+              <button
+                onClick={() => setSheet(closeSheet())}
+                aria-label="Close preview"
+                className="p-2 -ml-1"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <span className="flex-1 min-w-0 truncate text-sm font-medium">
+                {previewFile.name}
+              </span>
+            </div>
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <FilePreview file={previewFile} />
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
       {/* 只在有目標檔案時掛載：每次開啟都是新的 mount，`useState(name)` 就
           是正確的初始值，不必再用 effect 補一次。 */}

@@ -1,5 +1,6 @@
 import {
   Download,
+  Eye,
   Edit2,
   Info,
   RefreshCw,
@@ -40,7 +41,14 @@ export function sheetActions(
   }
 
   return [
-    ...(file.is_dir ? [] : [{ id: "download", label: "Download", icon: Download }]),
+    // 資料夾是用點一下進去的，不需要「開啟」；檔案的預覽在點一下與這裡都能到，
+    // 跟桌面右鍵選單第一項是 Open 一致。
+    ...(file.is_dir
+      ? []
+      : [
+          { id: "open", label: "Open", icon: Eye },
+          { id: "download", label: "Download", icon: Download },
+        ]),
     { id: "share", label: "Share", icon: Share2 },
     { id: "rename", label: "Rename", icon: Edit2 },
     file.is_starred

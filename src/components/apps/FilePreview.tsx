@@ -83,7 +83,10 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <a
-            href={`/api/download${file.path}`}
+            // ⚠️ 用上面算好的 fileUrl，不要重組。原本是 `/api/download${file.path}`：
+            // path 沒有前導斜線時會變成 `/api/downloadfoo.txt`，而且完全沒有編碼
+            // —— 檔名裡有 # 或 ? 就直接斷在那裡。
+            href={fileUrl}
             download
             className="p-1.5 hover:bg-black/5 dark:hover:bg-white/10 rounded transition-colors"
             title="Download"
