@@ -49,6 +49,7 @@ import {
 } from "@/features/files/api/useFiles";
 import { useFileUpload } from "@/features/files/hooks/useFileUpload";
 import { useUploadStore } from "@/store/upload-store";
+import { overallProgress } from "@/features/files/upload-progress";
 import { useLogout } from "@/features/auth/api/useAuth";
 import { FileTypeIcon } from "@/lib/file-icons";
 import { useThumbnail } from "@/features/files/api/useFiles";
@@ -487,8 +488,8 @@ export const MobileLayout = () => {
   const restoreFromTrash = useRestoreFromTrash();
   const emptyTrash = useEmptyTrash();
   const createShare = useCreateShare();
-  const { handleUploadFiles } = useFileUpload();
-  const { tasks: uploadTasks } = useUploadStore();
+  const { handleUploadFiles, resumeUpload } = useFileUpload();
+  const { tasks: uploadTasks, removeTask: removeUploadTask } = useUploadStore();
   const logoutMutation = useLogout();
 
   const currentFiles = isTrashMode
@@ -653,10 +654,11 @@ export const MobileLayout = () => {
 
   // ─── Upload progress ──────────
   const activeTasks = Object.values(uploadTasks).filter((t) => t.status === "uploading");
-  const totalProgress =
-    activeTasks.length > 0
-      ? Math.round(activeTasks.reduce((s, t) => s + t.progress, 0) / activeTasks.length)
-      : 0;
+  const totalProgress = overallProgress(activeTasks);
+  // ⚠️ 失敗的上傳原本在手機上是**完全靜默**的：進度條只看 status === "uploading"，
+  // 而 useFileUpload 失敗時不發 toast，錯誤只存在 task 裡。手機恰恰是最容易斷線的
+  // 地方，桌面版一直都有「繼續」按鈕，這裡卻連上傳失敗了都看不出來。
+  const failedTasks = Object.values(uploadTasks).filter((t) => t.status === "error");
 
   return (
     <div className="fixed inset-0 flex flex-col bg-gray-50 dark:bg-zinc-950 text-gray-900 dark:text-gray-100">
@@ -770,6 +772,31 @@ export const MobileLayout = () => {
             />
           </div>
         )}
+
+        {/* 上傳失敗 —— tus 的斷點還在，按一下就能從斷掉的地方繼續 */}
+        {failedTasks.map((task) => (
+          <div
+            key={task.id}
+            className="flex items-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-950/40 border-t border-red-200 dark:border-red-900"
+          >
+            <span className="flex-1 min-w-0 truncate text-xs text-red-700 dark:text-red-300">
+              {task.file.name} — upload failed
+            </span>
+            <button
+              onClick={() => void resumeUpload(task.id)}
+              className="shrink-0 flex items-center gap-1 px-2 py-1 rounded text-xs text-red-700 dark:text-red-300"
+            >
+              <RefreshCw className="w-3 h-3" /> Resume
+            </button>
+            <button
+              onClick={() => removeUploadTask(task.id)}
+              aria-label={`Dismiss upload error for ${task.file.name}`}
+              className="shrink-0 p-1 rounded text-red-700 dark:text-red-300"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        ))}
       </header>
 
       {/* ─── Content ───────────────────────── */}
