@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import type {
-  AuthResponse,
   LoginRequest,
   LoginResult,
   RegisterRequest,
@@ -59,8 +58,10 @@ export const useLogout = () => {
 export const useRegister = () => {
   return useMutation({
     mutationFn: async (data: RegisterRequest) => {
-      const response = await apiClient.post<AuthResponse>("/auth/register", data);
-      return response.data;
+      // 後端回 201 且**沒有 body**（認證走 cookie）。這裡原本標成
+      // `AuthResponse { token: string }` 並把它 return 出去 —— 那個 token 從來
+      // 不存在，只是沒有人讀所以沒被發現。
+      await apiClient.post("/auth/register", data);
     },
   });
 };
@@ -125,28 +126,3 @@ export const useTwoFactorDisable = () => {
 };
 
 // Simple API helpers
-export const authApi = {
-  login: async (data: LoginRequest) => {
-    const response = await apiClient.post<LoginResult>("/auth/login", data);
-    return response.data;
-  },
-
-  twoFactorLogin: async (data: TwoFactorLoginRequest) => {
-    await apiClient.post("/auth/2fa/login", data);
-  },
-
-  logout: async () => {
-    await apiClient.post("/auth/logout");
-  },
-
-  fetchWithAuth: apiClient,
-
-  isLoggedIn: async () => {
-    try {
-      await apiClient.get("/system/status");
-      return true;
-    } catch {
-      return false;
-    }
-  },
-};

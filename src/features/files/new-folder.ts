@@ -1,6 +1,6 @@
 import { getApiErrorStatus } from "@/lib/errors";
 
-export const NEW_FOLDER_BASE = "新資料夾";
+const NEW_FOLDER_BASE = "新資料夾";
 
 /**
  * 在既有名稱之外挑一個還沒被用掉的名字：`base`、`base1`、`base2`……

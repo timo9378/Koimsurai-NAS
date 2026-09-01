@@ -5,7 +5,7 @@ export type TimelineRow =
   | { readonly type: "header"; readonly date: string; readonly count: number }
   | { readonly type: "row"; readonly items: FileInfo[] };
 
-export const PHOTOS_PER_ROW = 6;
+const PHOTOS_PER_ROW = 6;
 
 /** 名稱包含關鍵字的才留下（大小寫不分）。空字串代表不過濾。 */
 export function filterTimeline(timeline: readonly TimelineGroup[], query: string): TimelineGroup[] {

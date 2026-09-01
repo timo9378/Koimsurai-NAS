@@ -6,7 +6,7 @@
  * 復原到的會是**上一次**刪的同名檔案。production 的垃圾桶裡現在就有三個
  * 帶時間戳的項目，這條路徑是真的會走到的。
  */
-export interface TrashedItem {
+interface TrashedItem {
   /** 使用者看到的原檔名，只拿來組訊息。 */
   name: string;
   /** 垃圾桶裡的實際檔名，復原與永久刪除都用這個。 */

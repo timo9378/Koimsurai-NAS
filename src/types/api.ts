@@ -6,50 +6,12 @@
 export * from "@koimsurai/nas-api-types";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 以下是**後端沒有對應型別**的殘留，逐一標明狀態。
-// 它們是人工同步時期留下的產物，每一個都代表一處前後端不一致，
-// 不要當成「還沒搬過來的型別」直接沿用。
+// 人工同步時期的殘留只剩下面這一個。
+//
+// 原本還有四個（DockerStats、DockerContainer、TagRequest、AuthResponse），
+// 每一個都標著「與後端不符」。逐一追過呼叫點之後全部是死的，已經刪掉 ——
+// 留著一個標明「這是錯的」的型別，只會讓下一個人照它去追不存在的 bug。
 // ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * ⚠️ 與後端不符。Rust 的 `WsServerMessage::DockerStats` payload 欄位是
- * `cpu_percent`（不是 `cpu_percentage`），而且還多了 network/block 四個欄位。
- * ⚠️ 註解的後半已過期：socket-provider 早就改用產生版的 `WsServerMessage` 了，
- * WebSocket 那條路徑是通的。沒通的只有**這個型別本身** —— 它已經沒有任何
- * 呼叫點，純粹是殘留，確認之後可以直接刪。
- */
-export interface DockerStats {
-  container_id: string;
-  cpu_percentage: number;
-  memory_usage: number;
-  memory_limit: number;
-}
-
-/**
- * ⚠️ 與後端不符。`GET /api/docker/containers` 回的是產生版的 `ContainerSummary`：
- * `names: string[]`（複數、陣列）、`state`、`created`、`ports`，
- * **沒有** `name`、`cpu_usage`、`memory_usage` 這三個欄位。
- * 要改用 `ContainerSummary` 並調整取值處。
- */
-export interface DockerContainer {
-  id: string;
-  name: string;
-  image: string;
-  status: "running" | "stopped" | "paused" | "exited";
-  cpu_usage: string;
-  memory_usage: string;
-}
-
-/**
- * ⚠️ 與後端不符。Rust 的 `AddTagRequest` 欄位叫 `tag_name`，不是 `name`。
- * **已經沒有任何呼叫點**（上面那句「useFiles.ts 的 useAddTag 在用」已過期，
- * 那個 hook 早就不在了）。實際在用的 `hooks/use-tags.ts` 送的是正確的
- * `tag_name`。也就是說這個型別純粹是殘留，確認之後可以直接刪。
- */
-export interface TagRequest {
-  name: string;
-  color: string;
-}
 
 /**
  * 產生版對應 `LoginResponse`（`EmptyResponse | { requires_2fa, temp_token }`）。
@@ -57,8 +19,3 @@ export interface TagRequest {
  * 這裡是字面量 `true`。新程式碼請用 `LoginResponse`。
  */
 export type LoginResult = Record<string, never> | { requires_2fa: true; temp_token: string };
-
-/** 後端沒有這個型別（認證走 cookie，不回 token body）。確認無人使用後即可刪。 */
-export interface AuthResponse {
-  token: string;
-}
