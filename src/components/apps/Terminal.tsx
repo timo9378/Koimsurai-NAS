@@ -7,6 +7,7 @@ import "@xterm/xterm/css/xterm.css";
 import { cn } from "@/lib/utils";
 import { RefreshCw, Plus, X, ChevronDown, Copy, ClipboardPaste } from "lucide-react";
 import { activateOnKey } from "@/lib/a11y";
+import { onAppCommand, type AppCommand } from "@/lib/app-commands";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,7 +42,7 @@ interface TerminalProps {
   windowId?: string;
 }
 
-export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
+export const Terminal = ({ windowId }: TerminalProps) => {
   const [tabs, setTabs] = useState<TerminalTab[]>(() => [makeTab(1)]);
   // ⚠️ 這個初始值一定要跟上面那個分頁對上。
   //
@@ -78,6 +79,23 @@ export const Terminal = ({ windowId: _windowId }: TerminalProps) => {
       }
     },
     [tabs, activeTabId],
+  );
+
+  // 頂端選單列的 Shell → New Tab / Close Tab。
+  //
+  // ⚠️ 訂閱要帶 windowId：可以同時開好幾個 Terminal 視窗，指令只該作用在
+  // 目前作用中的那一個。處理函式放 ref 裡 —— 它依賴 tabs／activeTabId，
+  // 每次 render 都會變，但訂閱本身只跟 windowId 有關。
+  const commandHandlerRef = useRef<(command: AppCommand) => void>(() => undefined);
+  commandHandlerRef.current = (command: AppCommand) => {
+    if (command === "new-tab") createNewTab();
+    // 最後一個分頁不關 —— 關掉之後畫面上什麼都沒有，而視窗還在。
+    else if (command === "close-tab" && activeTabId && tabs.length > 1) closeTab(activeTabId);
+  };
+
+  useEffect(
+    () => onAppCommand(windowId, (command) => commandHandlerRef.current(command)),
+    [windowId],
   );
 
   const initializeTerminal = useCallback(

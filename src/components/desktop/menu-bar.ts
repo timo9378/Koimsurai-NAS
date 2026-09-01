@@ -103,8 +103,10 @@ export function getMenuItemsForApp(appType: string | null): MenuBarConfig {
             label: "Shell",
             items: [
               { label: "New Window", command: { kind: "open", appType: "terminal" } },
-              { label: "New Tab" },
-              { label: "Close Tab", command: { kind: "close" } },
+              { label: "New Tab", command: app("new-tab") },
+              // ⚠️ Close **Tab**，不是關視窗。第一版接成 `{ kind: "close" }`
+              // —— 那會把整個終端機關掉，比停用還糟：使用者以為只會少一個分頁。
+              { label: "Close Tab", command: app("close-tab") },
             ],
           },
           {

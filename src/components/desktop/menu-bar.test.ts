@@ -47,6 +47,18 @@ describe("getMenuItemsForApp", () => {
     expect(container?.items.every((i) => i.command === undefined)).toBe(true);
   });
 
+  it("Terminal 的 Close Tab 是送給 app 的指令，不是關視窗", () => {
+    // ⚠️ 第一版接成 `{ kind: "close" }` —— 那會把整個終端機關掉。
+    // 「按了做出比預期更大的事」比「按了沒反應」更糟。
+    const shell = getMenuItemsForApp("terminal").menus.find((m) => m.label === "Shell");
+    const closeTab = shell?.items.find((i) => i.label === "Close Tab");
+    expect(closeTab?.command).toEqual({ kind: "app", command: "close-tab" });
+
+    // Finder 的 Close Window 才是真的關視窗。
+    const file = getMenuItemsForApp("finder").menus.find((m) => m.label === "File");
+    expect(file?.items.find((i) => i.label === "Close Window")?.command).toEqual({ kind: "close" });
+  });
+
   it("有 command 的項目，command 的形狀是完整的", () => {
     for (const appType of APPS) {
       for (const item of allItems(appType)) {

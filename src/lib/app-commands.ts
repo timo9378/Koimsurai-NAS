@@ -15,7 +15,9 @@ export type AppCommand =
   | "nav-home"
   | "nav-desktop"
   | "view-icons"
-  | "view-list";
+  | "view-list"
+  | "new-tab"
+  | "close-tab";
 
 const EVENT = "app-command";
 
