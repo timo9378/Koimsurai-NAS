@@ -377,6 +377,16 @@ async fn finalize(state: &AppState, uid: &UploadId, meta: &Response) -> Result<(
         .await
         .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
 
+    // ⚠️ 覆寫既有檔案之前先存一份版本。舊的分塊上傳（`handlers/upload.rs`）
+    // 一直都這麼做，而 tus 這條沒有 —— 同一個動作（上傳一個已經存在的檔名）
+    // 在兩條路徑上行為不同，而**新的主要路徑是會把舊內容直接毀掉的那條**。
+    // `File::create` 是 truncate，寫失敗的話舊內容也回不來了。
+    if tokio::fs::try_exists(&dest).await.unwrap_or(false) {
+        if let Err(e) = crate::utils::versioning::create_version(&dest, state.storage_path.as_path()).await {
+            tracing::error!("覆寫前存版本失敗（{dest:?}）：{e:?}");
+        }
+    }
+
     let mut file = tokio::fs::File::create(&dest).await.map_err(AppError::from)?;
     let mut stream = download.body;
     while let Some(chunk) = stream.next().await {

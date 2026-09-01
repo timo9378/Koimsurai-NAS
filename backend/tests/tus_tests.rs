@@ -302,3 +302,48 @@ async fn terminate_removes_an_unfinished_upload() {
         .expect("head");
     assert_eq!(head.status(), StatusCode::NOT_FOUND, "刪掉之後再查應該是 404");
 }
+
+/// tus 覆寫既有檔案之前要先存一份版本。
+///
+/// ⚠️ 舊的分塊上傳（`handlers/upload.rs`）一直都會在覆寫前呼叫
+/// `create_version`，而 tus 這條沒有 —— 同一個動作（上傳一個已經存在的檔名）
+/// 在兩條路徑上行為不同，而 tus 是現在的**主要**路徑。`File::create` 是
+/// truncate，舊內容直接消失且沒有任何備份。
+#[tokio::test]
+async fn overwriting_via_tus_keeps_a_version_of_the_old_content() {
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "tus_overwriter").await;
+
+    let name = "overwrite.txt";
+    std::fs::write(app.storage_dir.path().join(name), b"old contents").expect("既有檔案");
+
+    let id = create(
+        &app,
+        &client,
+        b"new contents".len(),
+        &format!("filename {},path {}", b64(name), b64("")),
+    )
+    .await;
+    assert!(patch(&app, &client, &id, 0, b"new contents")
+        .await
+        .status()
+        .is_success());
+
+    let current = std::fs::read_to_string(app.storage_dir.path().join(name)).expect("新內容");
+    assert_eq!(current, "new contents", "檔案本身要換成新的");
+
+    // `.versions/<父目錄>/<timestamp>_<檔名>`；父目錄是根，所以直接在 .versions 底下。
+    let versions_dir = app.storage_dir.path().join(".versions");
+    let saved: Vec<String> = std::fs::read_dir(&versions_dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy().ends_with(name))
+        .map(|e| std::fs::read_to_string(e.path()).unwrap_or_default())
+        .collect();
+
+    assert!(
+        saved.iter().any(|c| c == "old contents"),
+        "覆寫前的內容要留在 .versions 裡，實際找到 {saved:?}"
+    );
+}

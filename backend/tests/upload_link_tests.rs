@@ -320,3 +320,42 @@ async fn folder_upload_keeps_the_directory_structure() {
         "資料夾上傳要保留階層"
     );
 }
+
+/// 一個請求裡塞很多個檔案，數量限制一樣要擋。
+///
+/// ⚠️ 檢查原本在 multipart 迴圈**外面**只做一次，也就是「限制 1 個檔案」的
+/// 連結，一個請求帶 5 個檔案會全部被收下 —— 而這條端點不需要登入。
+#[tokio::test]
+async fn max_files_limit_counts_files_within_one_request() {
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "bulk_uploader").await;
+    let id = create_link(&app, &client, json!({ "target_path": "/", "max_files": 2 })).await;
+
+    let mut form = multipart::Form::new();
+    for i in 0..5 {
+        form = form.part(
+            "file",
+            multipart::Part::bytes(b"x".to_vec()).file_name(format!("bulk{i}.txt")),
+        );
+    }
+
+    let res = Client::new()
+        .post(format!("{}/api/upload-link/{id}/upload", app.address))
+        .multipart(form)
+        .send()
+        .await
+        .expect("上傳");
+
+    assert_eq!(
+        res.status(),
+        StatusCode::TOO_MANY_REQUESTS,
+        "超過限制的那一個要被擋下來"
+    );
+
+    let landed = std::fs::read_dir(app.storage_dir.path())
+        .expect("讀目錄")
+        .filter_map(Result::ok)
+        .filter(|e| e.file_name().to_string_lossy().starts_with("bulk"))
+        .count();
+    assert!(landed <= 2, "最多只能落地 2 個，實際 {landed} 個");
+}

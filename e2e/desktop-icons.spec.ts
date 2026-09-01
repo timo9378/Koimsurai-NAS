@@ -28,19 +28,40 @@ test("桌面圖示可以用鍵盤移動", async ({ page }) => {
       left: (el as HTMLElement).style.left,
       top: (el as HTMLElement).style.top,
     }));
+  // ⚠️ 等清單抓完再開始拖。`useFiles` 沒有設 staleTime，reload 之後那次
+  // 重抓完成時會重新 render —— 拖曳序列如果跨在那個瞬間上，按鍵會落空。
+  await page.waitForLoadState("networkidle");
   const before = await readPos();
 
   // 空白鍵拿起 → 方向鍵移動一格 → 空白鍵放下
   //
-  // ⚠️ 用 locator.press() 而不是 page.keyboard.press()：前者每次都重新解析
-  // 元素並先聚焦。桌面的檔案清單會因為 react-query 重新抓取而重新渲染，
-  // 用 page.keyboard 的話按鍵可能落在 body 上，整個序列靜靜地沒有作用
-  // （實測偶發過一次）。dnd-kit 的拖曳狀態在 DndContext 裡而不是 DOM 節點上，
-  // 所以中途重新聚焦同一個元素是安全的。
+  // ⚠️ 只有**第一下**用 locator.press()（它會先聚焦），拿起之後改用
+  // page.keyboard.press()。
+  //
+  // 原本整段都用 locator.press()，而它每次都重新聚焦 —— 實測有約 25% 的機率
+  // 方向鍵不生效，拖曳以「位置沒變」收場。加了 aria-live 的觀測才看清楚：
+  // 「Picked up」每次都出現，位置卻只在放下那一刻才變（拖曳期間 dnd-kit 用
+  // transform，不動 inline style），所以壞掉的是中間的方向鍵。
+  // dnd-kit 的 KeyboardSensor 在拖曳期間監聽的是 document，不需要再聚焦，
+  // 而拖曳中重新 focus 同一個節點反而會打斷它。
   await icon.press("Space");
-  await icon.press("ArrowRight");
-  await icon.press("ArrowDown");
-  await icon.press("Space");
+  await expect(page.getByText(/Picked up draggable item/)).toBeVisible();
+
+  // ⚠️ 「Picked up」出現**不代表** KeyboardSensor 已經在處理方向鍵了。量出來的行為：
+  //   - 拿起後立刻按 ArrowRight → 位移被丟掉（連按兩次也一樣，兩次都丟）
+  //   - 等 400ms 再按一次 ArrowRight → 正常移動一格（4/4）
+  // 所以這是**拿起之後的一小段時序窗口**，不是「第一個鍵被吃掉」。
+  //
+  // 真人從按空白鍵到伸手按方向鍵遠不止這段時間，所以這是測試端的問題而不是
+  // 產品 bug —— 這也是為什麼原本這支會偶發紅：整段用 locator.press() 時，
+  // 每次的 focus() 帶來的延遲有時剛好夠、有時不夠。
+  //
+  // 這裡用固定等待而不是輪詢「按到動為止」：實測後者更糟（連續快按會讓
+  // 位移對不上，放下時 delta 是 0）。等待的長度有實測依據，不是猜的。
+  await page.waitForTimeout(500);
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Space");
 
   await expect.poll(readPos, { message: "鍵盤拖曳之後圖示的位置應該改變" }).not.toEqual(before);
 

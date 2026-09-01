@@ -210,7 +210,8 @@ pub async fn upload_via_link(
         }
     }
 
-    // 檢查檔案數量限制
+    // 早退：一開始就滿了的話連 multipart 都不用讀。真正的把關在迴圈裡，
+    // 因為一個請求可以帶很多個檔案（見下面的「預約」）。
     if let Some(max) = max_files {
         if uploaded_count >= max {
             return Err(AppError::Status(StatusCode::TOO_MANY_REQUESTS));
@@ -248,6 +249,29 @@ pub async fn upload_via_link(
             )
         };
         pending_relative_path = None; // Reset for next iteration
+
+        // ⚠️ 每一個檔案都要**先原子性地佔一個名額**，寫檔在後。
+        //
+        // 原本的檢查有兩個洞：
+        //  1. 它在迴圈**外面**只做一次。限制 5 個檔案的連結，一個 multipart
+        //     請求塞 100 個檔案會全部被收下 —— 而這條端點不需要登入。
+        //  2. 它是 check-then-act。兩個並行請求會讀到同一個 uploaded_count，
+        //     一起通過檢查，一起上傳。
+        //
+        // 條件式 UPDATE 把「檢查」與「增加」變成一個動作；rows_affected 為 0
+        // 就表示名額用完了。SQLite 的單一 UPDATE 是原子的。
+        let reserved = sqlx::query(
+            "UPDATE upload_links SET uploaded_count = uploaded_count + 1
+             WHERE id = ? AND (max_files IS NULL OR uploaded_count < max_files)",
+        )
+        .bind(&id)
+        .execute(&state.pool)
+        .await
+        .map_err(AppError::from)?;
+
+        if reserved.rows_affected() == 0 {
+            return Err(AppError::Status(StatusCode::TOO_MANY_REQUESTS));
+        }
 
         // ⚠️ save_name 在沒有 relative_path 欄位時就是 multipart 的 `filename`，
         // 一個字元都沒過濾，而這條端點**完全不需要登入**。
@@ -313,13 +337,7 @@ pub async fn upload_via_link(
         files_uploaded += 1;
     }
 
-    // 更新上傳計數
-    sqlx::query("UPDATE upload_links SET uploaded_count = uploaded_count + ? WHERE id = ?")
-        .bind(files_uploaded)
-        .bind(&id)
-        .execute(&state.pool)
-        .await
-        .map_err(AppError::from)?;
+    // 計數在迴圈裡就已經逐檔加過了（見上面的「預約」），這裡不能再加一次。
 
     Ok(Json(serde_json::json!({
         "success": true,
