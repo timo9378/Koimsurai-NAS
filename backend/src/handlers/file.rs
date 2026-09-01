@@ -371,7 +371,29 @@ pub async fn list_files(
         _ => "ASC",
     };
 
-    let _ = write!(sql, " ORDER BY is_dir DESC, {sort_column} {order}");
+    // ⚠️ 依名稱排序時要 `COLLATE NOCASE`。
+    //
+    // SQLite 預設的 BINARY 定序是**逐位元組**比較，於是大寫全部排在小寫前面：
+    //
+    //     ABC, Banana, Zebra, abc, apple, cherry
+    //
+    // `ABC` 跟 `abc` 中間隔著整個字母表 —— 沒有任何檔案管理器是這樣排的，
+    // 而這是使用者在一般檢視裡看到的順序。
+    //
+    // ⚠️ 排序一定要在 SQL 裡做，不能撈出來再由前端排：分頁是伺服器端的
+    // （LIMIT/OFFSET），前端只拿得到一頁，對一頁排序等於排錯。
+    //
+    // NOCASE 只折疊 ASCII 大小寫，CJK 仍然是碼位順序 —— 要真正的語言感知
+    // 定序得引入 ICU，那是另一回事。這裡先把最明顯的錯處理掉。
+    let name_collation = if sort_column == "name" {
+        " COLLATE NOCASE"
+    } else {
+        ""
+    };
+    let _ = write!(
+        sql,
+        " ORDER BY is_dir DESC, {sort_column}{name_collation} {order}"
+    );
 
     // Pagination
     // ⚠️ limit 由查詢字串控制，原本沒有上限 —— 客戶端送 limit=100000 就能讓單一

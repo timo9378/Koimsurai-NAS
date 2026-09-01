@@ -212,3 +212,58 @@ async fn limit_is_capped_so_a_huge_value_cannot_blow_up_the_query() {
     let files: Vec<Value> = res.json().await.expect("parse json");
     find(&files, "solo");
 }
+
+/// 依名稱排序要對大小寫不敏感。
+///
+/// ⚠️ SQLite 預設的 BINARY 定序是逐位元組比較，於是大寫全部排在小寫前面：
+/// `ABC, Banana, Zebra, abc, apple, cherry` —— `ABC` 跟 `abc` 中間隔著整個
+/// 字母表。沒有任何檔案管理器是這樣排的，而這是使用者在一般檢視裡看到的順序。
+///
+/// （順帶：標籤檢視走的是前端的 `localeCompare`，兩者本來排出完全不同的
+/// 順序。這條讓 ASCII 的部分對齊；CJK 仍然是碼位順序，要真正的語言感知
+/// 定序得引入 ICU。）
+#[tokio::test]
+async fn sorting_by_name_is_case_insensitive() {
+    let app = spawn_app().await;
+    let client = common::register_and_login(&app, "sorter").await;
+
+    // 刻意交錯大小寫
+    for name in ["banana.txt", "Apple.txt", "cherry.txt", "ABC.txt", "abc2.txt"] {
+        let form = reqwest::multipart::Form::new().part(
+            "file",
+            reqwest::multipart::Part::bytes(b"x".to_vec()).file_name(name.to_string()),
+        );
+        let res = client
+            .post(format!("{}/api/upload/sortcase", app.address))
+            .header("Origin", app.origin_header())
+            .multipart(form)
+            .send()
+            .await
+            .expect("upload");
+        assert!(res.status().is_success(), "{name} 上傳失敗：{}", res.status());
+    }
+
+    let listing: serde_json::Value = client
+        .get(format!(
+            "{}/api/files/sortcase?sort_by=name&order=asc",
+            app.address
+        ))
+        .send()
+        .await
+        .expect("list")
+        .json()
+        .await
+        .expect("json");
+    let names: Vec<&str> = listing
+        .as_array()
+        .expect("陣列")
+        .iter()
+        .filter_map(|f| f["name"].as_str())
+        .collect();
+
+    assert_eq!(
+        names,
+        vec!["ABC.txt", "abc2.txt", "Apple.txt", "banana.txt", "cherry.txt"],
+        "大小寫不該把名稱拆開排"
+    );
+}

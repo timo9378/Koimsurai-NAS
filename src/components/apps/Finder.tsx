@@ -43,6 +43,7 @@ import { X, Plus } from "lucide-react";
 import { activateOnKey } from "@/lib/a11y";
 import { selectOnClick } from "./finder/selection";
 import { dirName, joinPath, toApiPath } from "@/lib/paths";
+import { filterByQuery, sortFiles } from "./finder/sorting";
 import {
   currentPath as currentHistoryPath,
   goBack,
@@ -404,37 +405,11 @@ export const Finder = ({ windowId }: FinderProps) => {
       const sourceFiles = tagFilteredFiles;
       if (!sourceFiles) return undefined;
 
-      let filtered = sourceFiles;
-
-      // Apply search filter for tag mode (backend search doesn't apply here)
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        filtered = filtered.filter((f) => f.name.toLowerCase().includes(query));
-      }
-
-      // Apply sorting for tag-filtered files (client-side since these come from tag API)
-      const sorted = [...filtered].sort((a, b) => {
-        // Folders first
-        if (a.is_dir && !b.is_dir) return -1;
-        if (!a.is_dir && b.is_dir) return 1;
-
-        let comparison = 0;
-        switch (sortBy) {
-          case "name":
-            comparison = a.name.localeCompare(b.name);
-            break;
-          case "size":
-            comparison = a.size - b.size;
-            break;
-          case "modified":
-            comparison = new Date(a.modified).getTime() - new Date(b.modified).getTime();
-            break;
-        }
-
-        return sortDirection === "asc" ? comparison : -comparison;
-      });
-
-      return sorted;
+      // ⚠️ 只有標籤檢視在前端排序 —— 那條路徑的資料來自 tag API、不分頁。
+      // 一般檢視的排序在後端（`ORDER BY is_dir DESC, name COLLATE NOCASE`），
+      // 因為分頁也是伺服器端的，對單一頁排序等於排錯。
+      // 兩者的差異與對齊程度見 finder/sorting.ts 的說明。
+      return sortFiles(filterByQuery(sourceFiles, searchQuery), sortBy, sortDirection);
     }
 
     // For normal file listing and trash mode: backend already handles sorting & search

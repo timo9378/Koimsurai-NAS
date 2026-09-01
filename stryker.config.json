@@ -14,6 +14,7 @@
     "src/components/apps/finder/history.ts",
     "src/components/apps/finder/marquee.ts",
     "src/components/apps/finder/selection.ts",
+    "src/components/apps/finder/sorting.ts",
     "src/components/desktop/icon-grid.ts",
     "src/features/files/tus-upload.ts",
     "src/lib/a11y.ts",
