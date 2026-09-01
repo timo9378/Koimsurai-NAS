@@ -1,58 +1,31 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api-client";
 import type { FileInfo } from "@/types/api";
+import { useMediaTimeline } from "@/features/files/api/useFiles";
+import { flattenTimeline, filterTimeline } from "./photos/timeline";
+import { toApiPath } from "@/lib/paths";
 import { format, parseISO } from "date-fns";
 import { Search, Image as ImageIcon, Film, Calendar } from "lucide-react";
 import { Virtuoso } from "react-virtuoso";
 import { FilePreview } from "./FilePreview";
 
-interface MediaItem extends FileInfo {
-  date: string; // YYYY-MM-DD
-}
-
-interface TimelineGroup {
-  date: string;
-  items: MediaItem[];
-}
-
 export const Photos = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [previewFile, setPreviewFile] = useState<FileInfo | null>(null);
 
-  const { data: timeline, isLoading } = useQuery({
-    queryKey: ["media", "timeline", searchQuery],
-    queryFn: async () => {
-      // In a real implementation, we would pass searchQuery to the backend
-      // For now, we fetch all and filter client-side or assume backend handles it
-      const res = await apiClient.get<TimelineGroup[]>(`/api/media/timeline?group_by=day`);
-      return res.data;
-    },
-  });
+  // ⚠️ 這裡原本是自己寫的 useQuery，打 `/api/media/timeline` —— 而 apiClient 的
+  // baseURL 就是 `/api`，實際請求變成 `/api/api/media/timeline`，永遠 404。
+  // 也就是 Photos 從來沒有顯示過任何東西。`useMediaTimeline` 一直都在，
+  // 網址是對的，只是沒有任何呼叫點（knip 的「零呼叫點」清單裡就有它）。
+  const { data: timeline, isLoading } = useMediaTimeline("day");
 
-  // Flatten the timeline into a list of items for Virtuoso
-  // Each item can be a header (date) or a row of photos
-  const flattenedItems = useMemo(() => {
-    if (!timeline) return [];
-    const items: (
-      | { type: "header"; date: string; count: number }
-      | { type: "row"; items: MediaItem[] }
-    )[] = [];
-
-    timeline.forEach((group) => {
-      items.push({ type: "header", date: group.date, count: group.items.length });
-
-      // Chunk items into rows of 6 (matching the grid layout)
-      const chunkSize = 6;
-      for (let i = 0; i < group.items.length; i += chunkSize) {
-        items.push({ type: "row", items: group.items.slice(i, i + chunkSize) });
-      }
-    });
-
-    return items;
-  }, [timeline]);
+  // 搜尋原本只是塞進 queryKey 裡，沒有送給後端也沒有在前端過濾 ——
+  // 那個輸入框打字完全沒有作用。時間軸是一次抓回來的，在這裡過濾就好。
+  const flattenedItems = useMemo(
+    () => flattenTimeline(filterTimeline(timeline ?? [], searchQuery)),
+    [timeline, searchQuery],
+  );
 
   return (
     <div className="flex h-full bg-white/50 dark:bg-black/50 backdrop-blur-xl rounded-lg overflow-hidden border border-white/20 shadow-2xl flex-col">
@@ -117,7 +90,11 @@ export const Photos = () => {
                         onClick={() => setPreviewFile(photo)}
                       >
                         <img
-                          src={`/api/thumbnail/medium${photo.path}`}
+                          // path 沒有前導斜線時，直接串會變成 `/api/thumbnail/mediumfoo.jpg`。
+                          src={`/api/thumbnail/medium/${toApiPath(photo.path)
+                            .split("/")
+                            .map(encodeURIComponent)
+                            .join("/")}`}
                           alt={photo.name}
                           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
                           loading="lazy"
