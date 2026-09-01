@@ -1,7 +1,7 @@
 # Litestream Configuration for Koimsurai NAS
-# 
+#
 # Litestream 是一個 SQLite 的持續備份工具，它會自動將 WAL 變更串流到 S3 相容的儲存空間。
-# Litestream is a streaming replication tool for SQLite that continuously backs up 
+# Litestream is a streaming replication tool for SQLite that continuously backs up
 # WAL changes to S3-compatible storage.
 #
 # 安裝 Litestream:

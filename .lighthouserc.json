@@ -4,9 +4,7 @@
       "startServerCommand": "./scripts/e2e-server.sh",
       "startServerReadyPattern": "running on",
       "startServerReadyTimeout": 60000,
-      "url": [
-        "http://127.0.0.1:3098/login"
-      ],
+      "url": ["http://127.0.0.1:3098/login"],
       "numberOfRuns": 3,
       "settings": {
         "preset": "desktop",
@@ -34,21 +32,15 @@
             "minScore": 0.95
           }
         ],
-        "categories:seo": [
-          "off"
-        ],
+        "categories:seo": ["off"],
         "total-byte-weight": [
           "warn",
           {
             "maxNumericValue": 3000000
           }
         ],
-        "unused-javascript": [
-          "off"
-        ],
-        "uses-responsive-images": [
-          "off"
-        ],
+        "unused-javascript": ["off"],
+        "uses-responsive-images": ["off"],
         "first-contentful-paint": [
           "warn",
           {

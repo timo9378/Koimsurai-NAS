@@ -5,14 +5,14 @@ Next.js 16 → Vite + TanStack Router（純 SPA），收攏後端成 monorepo，
 
 ## 進度
 
-| Phase | 狀態 |
-|---|---|
-| 0 · monorepo 收攏 | ✅ `829f069`（外加資安事件處理，見 §9）|
-| 1 · Next → Vite SPA | ✅ `0f638a6` |
-| 2 · 型別橋（specta）| ✅ `5b76798` + `2334724`（發現並修掉 5 處前後端不一致，見 §10）|
-| 3 · 工具鏈落地 | ✅ 後端 clippy/-D warnings + rustfmt 全綠；前端 oxlint/oxfmt/vitest 就位；CI 三個 job 上線 |
-| 4 · 部署 | ✅ ServeDir + Dockerfile + compose + nginx 切換 + GlitchTip（含 source map 上傳）全數上線 |
-| 5 · 品質基準線 | 🔶 oxlint 存量歸零並改成真的擋；前端測試 76 條；cargo-mutants 接 Actions。覆蓋率門檻／E2E／knip 未接，見 §12 |
+| Phase                | 狀態                                                                                                         |
+| -------------------- | ------------------------------------------------------------------------------------------------------------ |
+| 0 · monorepo 收攏    | ✅ `829f069`（外加資安事件處理，見 §9）                                                                      |
+| 1 · Next → Vite SPA  | ✅ `0f638a6`                                                                                                 |
+| 2 · 型別橋（specta） | ✅ `5b76798` + `2334724`（發現並修掉 5 處前後端不一致，見 §10）                                              |
+| 3 · 工具鏈落地       | ✅ 後端 clippy/-D warnings + rustfmt 全綠；前端 oxlint/oxfmt/vitest 就位；CI 三個 job 上線                   |
+| 4 · 部署             | ✅ ServeDir + Dockerfile + compose + nginx 切換 + GlitchTip（含 source map 上傳）全數上線                    |
+| 5 · 品質基準線       | 🔶 oxlint 存量歸零並改成真的擋；前端測試 76 條；cargo-mutants 接 Actions。覆蓋率門檻／E2E／knip 未接，見 §12 |
 
 **Phase 3 已補完**：oxlint 存量從 594 清到 0（其中 177 個是 `no-unsafe-*` /
 `no-explicit-any`，那批不是清理而是替 `catch (e: any)` 與未型別化 props 補型別的
@@ -24,15 +24,15 @@ Next.js 16 → Vite + TanStack Router（純 SPA），收攏後端成 monorepo，
 
 ## 0. 現況體檢
 
-| 項目 | 數字 |
-|---|---|
-| 前端 TS/TSX 檔案 | 73 |
-| 標了 `'use client'` | 53 |
-| Server Actions | **0** |
-| 有資料抓取的 Server Component | **0** |
-| 路由總數 | **4**（`/`、`/login`、`/s/:id`、`/u/:id`）|
-| 後端 models | 289 行 / 27 個 derive 區塊 |
-| 後端既有測試 | `auth` / `file` / `concurrency` / `proptest_security` |
+| 項目                          | 數字                                                  |
+| ----------------------------- | ----------------------------------------------------- |
+| 前端 TS/TSX 檔案              | 73                                                    |
+| 標了 `'use client'`           | 53                                                    |
+| Server Actions                | **0**                                                 |
+| 有資料抓取的 Server Component | **0**                                                 |
+| 路由總數                      | **4**（`/`、`/login`、`/s/:id`、`/u/:id`）            |
+| 後端 models                   | 289 行 / 27 個 derive 區塊                            |
+| 後端既有測試                  | `auth` / `file` / `concurrency` / `proptest_security` |
 
 Next.js 在這包的實際貢獻 = 一個 dev server + 一個 `/api` rewrite proxy。
 SSR / RSC / streaming 一個都沒用到 —— `src/app/page.tsx` 開頭就是 `"use client"`
@@ -41,15 +41,15 @@ SSR / RSC / streaming 一個都沒用到 —— `src/app/page.tsx` 開頭就是 
 
 ### Next 專屬 API 的接觸面
 
-| 現在 | 換成 | 影響檔案 |
-|---|---|---|
-| `next/font/google` (Geist) | `@fontsource-variable/*` | `src/app/layout.tsx` |
-| `next/navigation` `useParams`/`useRouter` | TanStack Router hooks | 2 檔 |
-| `next/dynamic` | `React.lazy` + `Suspense` | 2 檔 |
-| `metadata` / `viewport` export | `index.html` `<head>` | 1 檔 |
-| `manifest.ts` | 靜態 `public/manifest.webmanifest` | 1 檔 |
-| `next.config` rewrites | Vite `server.proxy`（dev）+ nginx（prod，已存在）| — |
-| `next-themes` | **原地留著**（不依賴 next，Vite 下正常跑）| — |
+| 現在                                      | 換成                                              | 影響檔案             |
+| ----------------------------------------- | ------------------------------------------------- | -------------------- |
+| `next/font/google` (Geist)                | `@fontsource-variable/*`                          | `src/app/layout.tsx` |
+| `next/navigation` `useParams`/`useRouter` | TanStack Router hooks                             | 2 檔                 |
+| `next/dynamic`                            | `React.lazy` + `Suspense`                         | 2 檔                 |
+| `metadata` / `viewport` export            | `index.html` `<head>`                             | 1 檔                 |
+| `manifest.ts`                             | 靜態 `public/manifest.webmanifest`                | 1 檔                 |
+| `next.config` rewrites                    | Vite `server.proxy`（dev）+ nginx（prod，已存在） | —                    |
+| `next-themes`                             | **原地留著**（不依賴 next，Vite 下正常跑）        | —                    |
 
 TanStack Query / Zustand / Radix / Tailwind v4 / framer-motion / xterm / recharts
 —— 全部零改動。
@@ -105,38 +105,38 @@ Koimsurai-NAS/                    # monorepo root（就是這個 repo）
 
 ### 2.1 前端
 
-| 層 | 工具 | 備註 |
-|---|---|---|
-| 套件管理 | pnpm 12 workspace | `allowBuilds` + CVE `overrides` |
-| Bundler | Vite 8 + `@vitejs/plugin-react` | |
-| Router | TanStack Router 1.170（file-based）| |
-| 資料層 | TanStack Query 5.101 | **已在用** |
-| CSS | Tailwind v4 via `@tailwindcss/vite` | `postcss.config.mjs` 消失 |
-| JS/TS **Lint** | oxlint 1.75 + `oxlint-tsgolint`（type-aware）+ `@eslint-react` | `.oxlintrc.json` 複製 |
-| JS/TS **Format** | **★ oxfmt 0.65** | **`web` 缺這塊，見 §3** |
-| CSS Format/Lint | biome 2.5 | `javascript`/`json` formatter 關掉 |
-| TypeScript | 6.0 | |
-| 單元測試 | vitest 4 + testing-library + jsdom + **fast-check** | property-based |
-| 覆蓋率 | `@vitest/coverage-v8` ✅ 已接 CI | ⚠️ `v8-to-istanbul` / `@bcoe/v8-coverage` **沒有安裝** —— 它們只有在要把 E2E 的覆蓋率併進單元測試報告時才需要，而那個沒做（見下）|
-| 突變測試 | Stryker 10 | ✅ `mutation.yml`（dispatch + 每週）。⚠️ 盤點原本寫「本機工具，不接 CI」—— 反過來了：開發機就是 NAS 本體，**不能**在本機跑，只能在 Actions 上 |
-| E2E | Playwright + `@axe-core/playwright` | ✅ `e2e.yml`（push / PR）|
-| 效能預算 | `@lhci/cli` | ✅ `e2e.yml` 的第二個 job |
-| 死碼 | knip 6 | ✅ 已接 CI |
+| 層               | 工具                                                           | 備註                                                                                                                                          |
+| ---------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 套件管理         | pnpm 12 workspace                                              | `allowBuilds` + CVE `overrides`                                                                                                               |
+| Bundler          | Vite 8 + `@vitejs/plugin-react`                                |                                                                                                                                               |
+| Router           | TanStack Router 1.170（file-based）                            |                                                                                                                                               |
+| 資料層           | TanStack Query 5.101                                           | **已在用**                                                                                                                                    |
+| CSS              | Tailwind v4 via `@tailwindcss/vite`                            | `postcss.config.mjs` 消失                                                                                                                     |
+| JS/TS **Lint**   | oxlint 1.75 + `oxlint-tsgolint`（type-aware）+ `@eslint-react` | `.oxlintrc.json` 複製                                                                                                                         |
+| JS/TS **Format** | **★ oxfmt 0.65**                                               | **`web` 缺這塊，見 §3**                                                                                                                       |
+| CSS Format/Lint  | biome 2.5                                                      | `javascript`/`json` formatter 關掉                                                                                                            |
+| TypeScript       | 6.0                                                            |                                                                                                                                               |
+| 單元測試         | vitest 4 + testing-library + jsdom + **fast-check**            | property-based                                                                                                                                |
+| 覆蓋率           | `@vitest/coverage-v8` ✅ 已接 CI                               | ⚠️ `v8-to-istanbul` / `@bcoe/v8-coverage` **沒有安裝** —— 它們只有在要把 E2E 的覆蓋率併進單元測試報告時才需要，而那個沒做（見下）             |
+| 突變測試         | Stryker 10                                                     | ✅ `mutation.yml`（dispatch + 每週）。⚠️ 盤點原本寫「本機工具，不接 CI」—— 反過來了：開發機就是 NAS 本體，**不能**在本機跑，只能在 Actions 上 |
+| E2E              | Playwright + `@axe-core/playwright`                            | ✅ `e2e.yml`（push / PR）                                                                                                                     |
+| 效能預算         | `@lhci/cli`                                                    | ✅ `e2e.yml` 的第二個 job                                                                                                                     |
+| 死碼             | knip 6                                                         | ✅ 已接 CI                                                                                                                                    |
 
 ### 2.2 後端
 
-| 層 | 工具 |
-|---|---|
-| 型別橋 | specta 2.0-rc.25 + specta-typescript + specta-serde |
-| 格式 | `cargo fmt`（`rustfmt.toml`：`max_width=110`，**不帶** `use_small_heuristics`；見 §4.4）|
-| Lint | `cargo clippy --locked --all-targets -- -D warnings` |
-| 測試 | **`cargo nextest run --no-fail-fast`** |
-| 覆蓋率 | `cargo llvm-cov nextest --fail-under-regions N` |
-| 突變測試 | `cargo mutants --file <單檔>` |
-| 未用相依 | `cargo shear` |
-| 漏洞 | `cargo audit` |
-| 錯字 | `typos` |
-| API fuzz | schemathesis（吃 utoipa 的 OpenAPI）|
+| 層       | 工具                                                                                     |
+| -------- | ---------------------------------------------------------------------------------------- |
+| 型別橋   | specta 2.0-rc.25 + specta-typescript + specta-serde                                      |
+| 格式     | `cargo fmt`（`rustfmt.toml`：`max_width=110`，**不帶** `use_small_heuristics`；見 §4.4） |
+| Lint     | `cargo clippy --locked --all-targets -- -D warnings`                                     |
+| 測試     | **`cargo nextest run --no-fail-fast`**                                                   |
+| 覆蓋率   | `cargo llvm-cov nextest --fail-under-regions N`                                          |
+| 突變測試 | `cargo mutants --file <單檔>`                                                            |
+| 未用相依 | `cargo shear`                                                                            |
+| 漏洞     | `cargo audit`                                                                            |
+| 錯字     | `typos`                                                                                  |
+| API fuzz | schemathesis（吃 utoipa 的 OpenAPI）                                                     |
 
 ### 2.3 ⚠️ 不在 CI、但屬於工具鏈的（容易被漏掉的那半）
 
@@ -165,12 +165,12 @@ cargo audit    # Cargo.lock 在 workspace root，在 backend/ 底下跑會找不
 變異分數只有 43%，抓出「驗證鏈的 `&&` 全換成 `||` 測試照樣綠」。
 NAS 這邊對應該跑的檔案（錯了會安靜地錯的）：
 
-| 檔案 | 為什麼值得跑 |
-|---|---|
-| 權限 / 路徑檢查 | 守衛被削弱不會有任何症狀，只是安靜地放行 |
-| `share` 的過期與密碼判定 | 邏輯反了 = 分享連結永不過期，功能「正常」 |
-| 2FA 的 TOTP window / backup code 消耗 | 少消耗一次 = 可重放，測試不會紅 |
-| 配額 / 分頁 offset 算式 | 不會 crash，只會永遠回錯的數字 |
+| 檔案                                  | 為什麼值得跑                              |
+| ------------------------------------- | ----------------------------------------- |
+| 權限 / 路徑檢查                       | 守衛被削弱不會有任何症狀，只是安靜地放行  |
+| `share` 的過期與密碼判定              | 邏輯反了 = 分享連結永不過期，功能「正常」 |
+| 2FA 的 TOTP window / backup code 消耗 | 少消耗一次 = 可重放，測試不會紅           |
+| 配額 / 分頁 offset 算式               | 不會 crash，只會永遠回錯的數字            |
 
 ---
 
@@ -188,7 +188,7 @@ oxfmt 正好補這塊，而且跟 oxlint 同一個 Oxc 工具鏈、同一份 AST
 ```jsonc
 // .oxfmtrc.json
 {
-  "$schema": "./node_modules/oxfmt/configuration_schema.json"
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
   // 預設就對齊 prettier，先不覆寫；有分歧再逐條加
 }
 ```
@@ -232,6 +232,7 @@ AIForce 那條線的 `Rust框架規範.md`（§4.1 / §9.1 / §11.3）。
    —— 判準：資料「一次查得完」→ N+1（bug）；資料「本來就分批到達」→ streaming（正確形狀）。
 
 加兩條：
+
 - **鎖內不呼叫擴充點**（collect-then-emit）—— callback 是開放擴充點，
   鎖內呼叫等於把「這裡不可重入」交給未來每個改 callback 的人**記得**。
   三行的 collect-then-emit 把前提從「人要記得」變成「結構上不可能」。
@@ -239,18 +240,18 @@ AIForce 那條線的 `Rust框架規範.md`（§4.1 / §9.1 / §11.3）。
 
 ### 4.2 已裁示的寫法（不建議 → 改寫成）
 
-| 不建議 | 改成 | 理由 |
-|---|---|---|
-| `let _ = ...` 吞錯 | `tracing::warn!` / `error!` | 靜靜失敗沒人發現 |
-| regex 每次呼叫重編譯 | `std::sync::LazyLock` | 熱路徑 |
-| async 內 `std::fs` | `tokio::fs` 或 `spawn_blocking` | 卡 worker |
-| `contains_key` 後 `get().unwrap()` | `if let` / `unwrap_or` 單一表達式 | 消除 guard-drift panic |
-| `as` 截斷 | `try_from().unwrap_or(...)` | 靜默截斷 |
-| `&String` / `&Vec<T>` 簽名 | `&str` / `&[T]` | |
-| 複雜巢狀型別 | type alias | `clippy::type_complexity` |
-| handler 內 `reqwest::Client::new()` | 走 `state.http` | |
-| 硬編外部 URL | 注入點（`ExternalUrls` 之類）| **測試會真的打外網，結果取決於別人的服務今天有沒有掛** |
-| 裸 `#[allow(...)]` | 一律帶 `reason = "..."` | |
+| 不建議                              | 改成                              | 理由                                                   |
+| ----------------------------------- | --------------------------------- | ------------------------------------------------------ |
+| `let _ = ...` 吞錯                  | `tracing::warn!` / `error!`       | 靜靜失敗沒人發現                                       |
+| regex 每次呼叫重編譯                | `std::sync::LazyLock`             | 熱路徑                                                 |
+| async 內 `std::fs`                  | `tokio::fs` 或 `spawn_blocking`   | 卡 worker                                              |
+| `contains_key` 後 `get().unwrap()`  | `if let` / `unwrap_or` 單一表達式 | 消除 guard-drift panic                                 |
+| `as` 截斷                           | `try_from().unwrap_or(...)`       | 靜默截斷                                               |
+| `&String` / `&Vec<T>` 簽名          | `&str` / `&[T]`                   |                                                        |
+| 複雜巢狀型別                        | type alias                        | `clippy::type_complexity`                              |
+| handler 內 `reqwest::Client::new()` | 走 `state.http`                   |                                                        |
+| 硬編外部 URL                        | 注入點（`ExternalUrls` 之類）     | **測試會真的打外網，結果取決於別人的服務今天有沒有掛** |
+| 裸 `#[allow(...)]`                  | 一律帶 `reason = "..."`           |                                                        |
 
 ### 4.3 測試慣例
 
@@ -280,14 +281,14 @@ nextest 是一個測試一個行程；`cargo test` 同行程平行跑執行緒�
 
 實測（11546 行，`cargo fmt --check` 的 diff 區塊數）：
 
-| 設定 | diff 區塊 |
-|---|---|
-| `max_width=100`（rustfmt 預設）| 598 |
-| **`max_width=110`** | **590** ← 採用 |
-| `max_width=120` | 582 |
-| `max_width=110` + `use_small_heuristics="Max"`（web 那份）| 600 |
-| `max_width=120` + `Max` | 608 |
-| `max_width=100` + `Max` | 586 |
+| 設定                                                       | diff 區塊      |
+| ---------------------------------------------------------- | -------------- |
+| `max_width=100`（rustfmt 預設）                            | 598            |
+| **`max_width=110`**                                        | **590** ← 採用 |
+| `max_width=120`                                            | 582            |
+| `max_width=110` + `use_small_heuristics="Max"`（web 那份） | 600            |
+| `max_width=120` + `Max`                                    | 608            |
+| `max_width=100` + `Max`                                    | 586            |
 
 全部落在 582–608（差距 4%）—— 沒有既有風格可貼合，所以沒有哪個設定省得下來。
 既然一次性重排的成本都一樣，就**按優劣選**而不是按 churn 選：
@@ -309,12 +310,14 @@ max_width = 110
 ## 5. 執行階段
 
 ### Phase 0 — monorepo 收攏
+
 - `git tag pre-monorepo`（唯一不可逆步驟前的保險）
 - `git subtree add --prefix=backend ../Koimsurai-NAS-backend main`
 - 根 `Cargo.toml` workspace / `pnpm-workspace.yaml` / `packages/api-types` 空殼
 - `engines.node >=26`、`packageManager: pnpm@12.1.0`
 
 ### Phase 1 — Next → Vite SPA
+
 - 移除 `next`、`eslint-config-next`、`postcss.config.mjs`、`next-env.d.ts`、`next.config.ts`
 - `index.html` / `src/main.tsx` / `src/router.tsx`（無 SSR 版，不掛 `router-ssr-query`）
 - `src/app/*` → `src/routes/*`；Provider 樹 → `src/routes/__root.tsx`
@@ -323,23 +326,28 @@ max_width = 110
 - **路由/視窗級 code split**：Monaco、xterm、recharts、DockerManager 切出 entry chunk
 
 ### Phase 2 — 型別橋（specta）
+
 現況 `src/types/api.ts` 是 **225 行手寫**、與 Rust struct 靠人工同步。
+
 - backend 加 specta 三件組，27 個 struct 加 `#[derive(specta::Type)]`
 - `backend/src/bin/export_types.rs` → `packages/api-types/index.ts`
 - 前端刪 `src/types/api.ts`，改 import `@koimsurai/api-types`
 - CI 加 **drift check**：重跑匯出後 `git diff --exit-code`
 
 ### Phase 3 — 工具鏈落地
+
 §2 每一項獨立 commit。`.oxlintrc.json` 複製 `web` 那份只改 `ignorePatterns`。
 oxfmt 用 `/migrate-oxfmt` 導入後釘死版本。
 `scripts/hooks/pre-commit`：ts/tsx → oxfmt + tsc + oxlint；`backend/*.rs` → fmt + clippy。
 
 ### Phase 4 — 部署（已拍板：Rust ServeDir）
+
 ```rust
 // backend/src/lib.rs, create_app 末端
 let spa = ServeDir::new("static").not_found_service(ServeFile::new("static/index.html"));
 app.fallback_service(spa)
 ```
+
 `tower-http` 的 `fs` feature **已在 `Cargo.toml`**，零新依賴。
 Dockerfile 改多階段（node build → COPY 進 rust image 的 `static/`）；
 nginx `nas-koimsurai` 的 `location /` 由 `13001` 改指 `127.0.0.1:3000`；
@@ -372,13 +380,13 @@ nginx `nas-koimsurai` 的 `location /` 由 `13001` 改指 `127.0.0.1:3000`；
 
 ## 7. 效能預期
 
-| 項目 | 現在 | 之後 |
-|---|---|---|
-| Production Node 進程 | 1 | **0** |
-| 首屏 | HTML shell → hydrate → 打 auth | 直接打 auth（少一輪）|
-| Entry bundle | Monaco/xterm/recharts 幾乎全塞一包 | 開哪個 app 才載哪包 |
-| Dev HMR | Next 秒級 | Vite 毫秒級 |
-| 部署單位 | 2 容器 | 1 顆 Rust binary |
+| 項目                 | 現在                               | 之後                  |
+| -------------------- | ---------------------------------- | --------------------- |
+| Production Node 進程 | 1                                  | **0**                 |
+| 首屏                 | HTML shell → hydrate → 打 auth     | 直接打 auth（少一輪） |
+| Entry bundle         | Monaco/xterm/recharts 幾乎全塞一包 | 開哪個 app 才載哪包   |
+| Dev HMR              | Next 秒級                          | Vite 毫秒級           |
+| 部署單位             | 2 容器                             | 1 顆 Rust binary      |
 
 ---
 
@@ -401,18 +409,19 @@ nginx `nas-koimsurai` 的 `location /` 由 `13001` 改指 `127.0.0.1:3000`；
 在該 repo 的整個生命週期都是公開可讀的。
 
 成因是 `.gitignore` 寫成 `! .env`，兩層都失效：
+
 1. 驚嘆號後面有空格，不是有效的 gitignore 語法
 2. 就算語法對，它是「取消忽略」—— 而前面根本沒有任何忽略 `.env` 的規則
 
 ### 已處理
 
-| 項目 | 做法 |
-|---|---|
-| 金鑰輪替 | 三個金鑰換新值，其餘 20 個鍵逐字元不變（`.env.bak-pre-rotation-*` 留底）|
-| 歷史清除 | `git filter-repo --invert-paths --path .env`，40 個 commit 全清後 force push |
-| gitignore | 兩邊都修好；`.env.bak-*` 也一併擋掉（裡面是舊金鑰）|
-| 備份 | `/home/timo9378/Server/backup-*-20260830-012053.git` 兩個 mirror |
-| monorepo | subtree 重做一次，接的是清理後的後端歷史，`.env` 從未進入本 repo |
+| 項目      | 做法                                                                         |
+| --------- | ---------------------------------------------------------------------------- |
+| 金鑰輪替  | 三個金鑰換新值，其餘 20 個鍵逐字元不變（`.env.bak-pre-rotation-*` 留底）     |
+| 歷史清除  | `git filter-repo --invert-paths --path .env`，40 個 commit 全清後 force push |
+| gitignore | 兩邊都修好；`.env.bak-*` 也一併擋掉（裡面是舊金鑰）                          |
+| 備份      | `/home/timo9378/Server/backup-*-20260830-012053.git` 兩個 mirror             |
+| monorepo  | subtree 重做一次，接的是清理後的後端歷史，`.env` 從未進入本 repo             |
 
 ⚠️ **`git filter-repo` 會連工作區的檔案一起刪掉**（`.env` 當時是被追蹤的），
 重跑類似操作前要先另存一份。
@@ -461,28 +470,28 @@ let p = state.storage_path.join(&user);               // 錯，長得一樣
 `StorageRoot` 把根路徑收成私有欄位，不實作 `Deref`／`AsRef<Path>`，也沒有
 `join`。`AppState.storage_path` 換成它之後，那些寫法**編譯不過**。
 
-| 方法 | 用途 |
-|---|---|
-| `resolve(&str)` | 唯一的正規入口，會驗證 |
+| 方法                                | 用途                                                                                     |
+| ----------------------------------- | ---------------------------------------------------------------------------------------- |
+| `resolve(&str)`                     | 唯一的正規入口，會驗證                                                                   |
 | `resolve_under(&'static str, &str)` | 內部目錄底下的使用者路徑（`.trash/<檔名>`）；`&'static str` 讓使用者輸入放不進第一個參數 |
-| `internal(&'static str)` | 純字面常數的內部目錄 |
-| `relativize(&Path)` | 轉回相對路徑 |
-| `as_path()` | 逃生口，只給不涉及使用者輸入的地方（`WalkDir`／WebDAV／`strip_prefix`）|
+| `internal(&'static str)`            | 純字面常數的內部目錄                                                                     |
+| `relativize(&Path)`                 | 轉回相對路徑                                                                             |
+| `as_path()`                         | 逃生口，只給不涉及使用者輸入的地方（`WalkDir`／WebDAV／`strip_prefix`）                  |
 
 換型別後編譯器報了 **46 個錯誤**，那份清單就是這次的稽核結果。
 
 ### 因此發現的漏洞
 
-| 位置 | 攻擊 | 需要什麼 | 後果 |
-|---|---|---|---|
-| `share.rs` 建立＋存取 | `file_path: "../../.."` | 一個一般帳號 | `/api/share/<id>/download` 讓**未登入者**下載／打包整棵上層目錄 —— SQLite（密碼雜湊）、`.env`（JWT secret）|
-| `upload_link.rs` 上傳 | multipart `filename="../../../x"` | **不需要帳號** | 以 server 身分任意寫檔（本機容器掛 docker.sock + `pid: host`）|
-| `upload_link.rs` 建立 | `target_path: ".."` | 一個一般帳號 | 同上 |
-| `file.rs` `batch_copy` | `paths` / `destination` 帶 `..` | 一個一般帳號 | worker 端任意複製 |
-| `trash.rs` `permanent_delete` | `..%2F..%2Fx`（axum 的 `Path` 會解碼 `%2F`）| 一個一般帳號 | 任意刪檔 |
-| `trash.rs` `restore_file` | 同上 | 一個一般帳號 | 把儲存根外的檔案搬進自己的目錄 |
-| `version.rs` `restore_version` | `version_id` 直接 join | —— | 目前被路由參數數量不符擋住（見下），修了以防日後打通 |
-| `tag.rs` / `file.rs:409` / `indexer.rs` | DB 欄位直接 join | 低 | 索引器寫入的路徑不該當可信輸入 |
+| 位置                                    | 攻擊                                         | 需要什麼       | 後果                                                                                                        |
+| --------------------------------------- | -------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------- |
+| `share.rs` 建立＋存取                   | `file_path: "../../.."`                      | 一個一般帳號   | `/api/share/<id>/download` 讓**未登入者**下載／打包整棵上層目錄 —— SQLite（密碼雜湊）、`.env`（JWT secret） |
+| `upload_link.rs` 上傳                   | multipart `filename="../../../x"`            | **不需要帳號** | 以 server 身分任意寫檔（本機容器掛 docker.sock + `pid: host`）                                              |
+| `upload_link.rs` 建立                   | `target_path: ".."`                          | 一個一般帳號   | 同上                                                                                                        |
+| `file.rs` `batch_copy`                  | `paths` / `destination` 帶 `..`              | 一個一般帳號   | worker 端任意複製                                                                                           |
+| `trash.rs` `permanent_delete`           | `..%2F..%2Fx`（axum 的 `Path` 會解碼 `%2F`） | 一個一般帳號   | 任意刪檔                                                                                                    |
+| `trash.rs` `restore_file`               | 同上                                         | 一個一般帳號   | 把儲存根外的檔案搬進自己的目錄                                                                              |
+| `version.rs` `restore_version`          | `version_id` 直接 join                       | ——             | 目前被路由參數數量不符擋住（見下），修了以防日後打通                                                        |
+| `tag.rs` / `file.rs:409` / `indexer.rs` | DB 欄位直接 join                             | 低             | 索引器寫入的路徑不該當可信輸入                                                                              |
 
 全部有 `backend/tests/path_escape_tests.rs` 的 PoC，且逐一**反向驗證**過
 （拆掉修正確認會紅）。
@@ -520,22 +529,22 @@ POST /api/versions/restore/abc
 
 ### 已修
 
-| # | 問題 | 影響 |
-|---|---|---|
-| 1 | `f32/f64` 實際是 `number \| null`（serde_json 把 NaN/Infinity 序列化成 null），手寫型別宣告成 `number` | `cpu_usage` 讀不到取樣時是 NaN → `.toFixed(1)` 當場拋錯。13 處補 `?? 0` |
-| 2 | `InitUploadResponse.uploaded_size` 是 `Option<i64>` → 序列化成 **null 而非省略欄位** | `!== undefined` 永遠成立，斷點續傳的 `startOffset` 被設成 `null` |
-| 3 | `LoginRequest` 只有 `username`/`password`，前端多送 `remember` | serde 靜默丟棄 → **登入頁的「記住我」從來沒作用過**。已停止送出並標 TODO |
-| 4 | `JobUpdate` 沒有 `type` 欄位 | 手寫版憑空多宣告，toast 顯示 `undefined` |
+| #   | 問題                                                                                                   | 影響                                                                     |
+| --- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| 1   | `f32/f64` 實際是 `number \| null`（serde_json 把 NaN/Infinity 序列化成 null），手寫型別宣告成 `number` | `cpu_usage` 讀不到取樣時是 NaN → `.toFixed(1)` 當場拋錯。13 處補 `?? 0`  |
+| 2   | `InitUploadResponse.uploaded_size` 是 `Option<i64>` → 序列化成 **null 而非省略欄位**                   | `!== undefined` 永遠成立，斷點續傳的 `startOffset` 被設成 `null`         |
+| 3   | `LoginRequest` 只有 `username`/`password`，前端多送 `remember`                                         | serde 靜默丟棄 → **登入頁的「記住我」從來沒作用過**。已停止送出並標 TODO |
+| 4   | `JobUpdate` 沒有 `type` 欄位                                                                           | 手寫版憑空多宣告，toast 顯示 `undefined`                                 |
 
 ### 已修：WebSocket 協定（`2334724`）
 
 原本這條 socket 上有**兩種不相容的封包格式**，而且整條路徑壞掉卻毫無症狀：
 
-| 來源 | 送出的形狀 |
-|---|---|
-| `queue.rs` 的 broadcast | 裸 `JobUpdate`，**沒有 `type` 欄位** |
-| `WsServerMessage` | `{ "type": "DockerStats", "payload": … }`（PascalCase）|
-| 前端比對的 | `'docker_stats'` / `'job_update'` / `'file_change'` |
+| 來源                    | 送出的形狀                                              |
+| ----------------------- | ------------------------------------------------------- |
+| `queue.rs` 的 broadcast | 裸 `JobUpdate`，**沒有 `type` 欄位**                    |
+| `WsServerMessage`       | `{ "type": "DockerStats", "payload": … }`（PascalCase） |
+| 前端比對的              | `'docker_stats'` / `'job_update'` / `'file_change'`     |
 
 三者互不相符 → `switch (msg.type)` 沒有分支命中 → 背景工作的進度與完成通知
 從來沒有送達過。沒有錯誤、沒有 log。
@@ -598,15 +607,15 @@ build 時 `sentry-cli sourcemaps inject` + `upload`、`VITE_RELEASE` 版本標�
 目前部署的映像建於 `26dbb64`。之後的品質整頓（oxlint 594→0、前端測試 0→76）
 裡修掉了好幾個**真的會影響使用的 bug**，那些都還沒上線：
 
-| 修掉的 | 症狀 |
-|---|---|
-| Terminal 卸載不關 WebSocket | 每開關一次視窗就留一條連線與一個 xterm 實例 |
-| Terminal 初始分頁 | （本輪自己弄壞又修好的）terminal 從來沒連上過 |
-| 拖放上傳不檢查大小 | `handleDrop` 抓到初次 render 的閉包，`max_file_size` 整段跳過 |
-| 切分頁後鍵盤／滑鼠側鍵作用在舊分頁 | setter wrapper 沒進 deps，抓到舊的 `activeTabId` |
-| Dock 的視窗預覽縮圖 | 讀 `props.url`，但沒有人設過那個欄位——分支從沒渲染過 |
-| 上傳連結頁的 `max_files: 0` | JSX 把 0 印在畫面上，且外層判斷把 0 當成「沒有限制」 |
-| 分享／上傳連結的「永不過期」 | 手抄的型別寫成 `string \| undefined`，後端送的是 `null` |
+| 修掉的                             | 症狀                                                          |
+| ---------------------------------- | ------------------------------------------------------------- |
+| Terminal 卸載不關 WebSocket        | 每開關一次視窗就留一條連線與一個 xterm 實例                   |
+| Terminal 初始分頁                  | （本輪自己弄壞又修好的）terminal 從來沒連上過                 |
+| 拖放上傳不檢查大小                 | `handleDrop` 抓到初次 render 的閉包，`max_file_size` 整段跳過 |
+| 切分頁後鍵盤／滑鼠側鍵作用在舊分頁 | setter wrapper 沒進 deps，抓到舊的 `activeTabId`              |
+| Dock 的視窗預覽縮圖                | 讀 `props.url`，但沒有人設過那個欄位——分支從沒渲染過          |
+| 上傳連結頁的 `max_files: 0`        | JSX 把 0 印在畫面上，且外層判斷把 0 當成「沒有限制」          |
+| 分享／上傳連結的「永不過期」       | 手抄的型別寫成 `string \| undefined`，後端送的是 `null`       |
 
 重新部署：
 
@@ -618,11 +627,11 @@ VITE_RELEASE=$(git -C Koimsurai-NAS rev-parse --short HEAD) \
 
 ### 已安裝但完全沒接的工具
 
-| 工具 | 現況 | 接上要做什麼 |
-|---|---|---|
-| `fast-check` | ✅ 已用（5 個純函式模組各有 property test） | 見下 |
-| `knip` | ✅ 已接 CI（`knip.json` + `pnpm knip`） | 導入時掃出 4 個沒人 import 的檔案與 5 個沒用到的套件 |
-| `@vitest/coverage-v8` | ✅ 已接 CI，門檻 statements/lines 8、functions 7、branches 6 | 見下 |
+| 工具                  | 現況                                                         | 接上要做什麼                                         |
+| --------------------- | ------------------------------------------------------------ | ---------------------------------------------------- |
+| `fast-check`          | ✅ 已用（5 個純函式模組各有 property test）                  | 見下                                                 |
+| `knip`                | ✅ 已接 CI（`knip.json` + `pnpm knip`）                      | 導入時掃出 4 個沒人 import 的檔案與 5 個沒用到的套件 |
+| `@vitest/coverage-v8` | ✅ 已接 CI，門檻 statements/lines 8、functions 7、branches 6 | 見下                                                 |
 
 **⚠️ 前端覆蓋率的數字差了 5.6 倍，取決於怎麼設定。**
 
@@ -644,20 +653,20 @@ history / selection / marquee、`chunk-plan`、`errors`、`file-icons`、`a11y`�
 
 盤點表列的工具**全部引入並接上 CI**，只有兩項例外，兩項都是刻意的：
 
-| 未做 | 為什麼 |
-|---|---|
-| `v8-to-istanbul` / `@bcoe/v8-coverage` | 這兩個只有在要把 **E2E 的覆蓋率併進單元測試報告**時才需要（盤點的備註「合併 dump 一定要用 `mergeScriptCovs`」講的就是那件事）。合併需要對 production bundle 做 instrumentation、從 Chromium 的 CDP 收 v8 dump、再合併 —— 而目前真正有用的訊號（**哪些檔案一條測試都沒有**）逐檔表已經看得到了。要一個「合併後比較好看的數字」不值得這些工。|
-| `dnd-kit` 只用在桌面圖示 | Finder 的檔案拖放仍是 HTML5 原生 DnD，因為它跟「從 OS 拖檔進來上傳」交織在一起，後者需要 `dataTransfer.files`，dnd-kit 拿不到。硬換會弄壞上傳。要做得先把「內部搬移」與「OS 上傳」兩條路徑拆開，那是獨立的一次重構。|
+| 未做                                   | 為什麼                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `v8-to-istanbul` / `@bcoe/v8-coverage` | 這兩個只有在要把 **E2E 的覆蓋率併進單元測試報告**時才需要（盤點的備註「合併 dump 一定要用 `mergeScriptCovs`」講的就是那件事）。合併需要對 production bundle 做 instrumentation、從 Chromium 的 CDP 收 v8 dump、再合併 —— 而目前真正有用的訊號（**哪些檔案一條測試都沒有**）逐檔表已經看得到了。要一個「合併後比較好看的數字」不值得這些工。 |
+| `dnd-kit` 只用在桌面圖示               | Finder 的檔案拖放仍是 HTML5 原生 DnD，因為它跟「從 OS 拖檔進來上傳」交織在一起，後者需要 `dataTransfer.files`，dnd-kit 拿不到。硬換會弄壞上傳。要做得先把「內部搬移」與「OS 上傳」兩條路徑拆開，那是獨立的一次重構。                                                                                                                        |
 
 ### 工具鏈盤點列的東西已全部引入
 
-| 工具 | 接在哪 | 導入當天抓到什麼 |
-|---|---|---|
-| Playwright | `e2e.yml`（push / PR） | SPA fallback 的兩半（深層路由回 index.html、`/api` 不被接走）先前只有後端測試守著 |
-| `@axe-core/playwright` | 同上 | **兩個 critical**，見下 |
-| Stryker | `mutation.yml`（dispatch + 每週） | **7 個真的斷言缺口**，見下 |
-| `@lhci/cli` | `e2e.yml` 的第二個 job | 基準線見下 |
-| schemathesis | `api-fuzz.yml` | 28 個 panic + 4 個使用者會踩到的 bug（先前記錄） |
+| 工具                   | 接在哪                            | 導入當天抓到什麼                                                                  |
+| ---------------------- | --------------------------------- | --------------------------------------------------------------------------------- |
+| Playwright             | `e2e.yml`（push / PR）            | SPA fallback 的兩半（深層路由回 index.html、`/api` 不被接走）先前只有後端測試守著 |
+| `@axe-core/playwright` | 同上                              | **兩個 critical**，見下                                                           |
+| Stryker                | `mutation.yml`（dispatch + 每週） | **7 個真的斷言缺口**，見下                                                        |
+| `@lhci/cli`            | `e2e.yml` 的第二個 job            | 基準線見下                                                                        |
+| schemathesis           | `api-fuzz.yml`                    | 28 個 panic + 4 個使用者會踩到的 bug（先前記錄）                                  |
 
 #### axe 抓到的兩個 critical
 
@@ -708,11 +717,11 @@ history / selection / marquee、`chunk-plan`、`errors`、`file-icons`、`a11y`�
 原本是手刻的 `mousedown` / `mousemove` / `mouseup`（`DraggableDesktopIcon`
 裡約 60 行狀態機）。換掉它修好三件事：
 
-| 問題 | 原本 | 現在 |
-|---|---|---|
-| **鍵盤完全不能移動圖示** | 只聽滑鼠事件 | 空白鍵拿起、方向鍵一格一格移、空白鍵放下、Esc 取消 |
-| **觸控裝置完全不能移動圖示** | `mousedown` 在觸控上不會觸發 | `PointerSensor` 一次涵蓋滑鼠／觸控／觸控筆 |
-| **落點用游標而不是圖示位置** | `snapToGrid(e.clientX, e.clientY)` | `movePositionBy(位置, 位移)` |
+| 問題                         | 原本                               | 現在                                               |
+| ---------------------------- | ---------------------------------- | -------------------------------------------------- |
+| **鍵盤完全不能移動圖示**     | 只聽滑鼠事件                       | 空白鍵拿起、方向鍵一格一格移、空白鍵放下、Esc 取消 |
+| **觸控裝置完全不能移動圖示** | `mousedown` 在觸控上不會觸發       | `PointerSensor` 一次涵蓋滑鼠／觸控／觸控筆         |
+| **落點用游標而不是圖示位置** | `snapToGrid(e.clientX, e.clientY)` | `movePositionBy(位置, 位移)`                       |
 
 第三個是真的 bug：抓著圖示的**右下角**拖，放手時它會跳到游標所在的格子，
 而不是它看起來所在的格子 —— 偏移將近一格。用位移就跟「抓在哪裡」無關了。
@@ -754,13 +763,13 @@ C/組語密碼庫）、`jni`（Java Native Interface）、`clap`、`figment`。�
 換到的是**落地流程仍然在我們手上**：檔案要落到哪走的是
 `StorageRoot::resolve`，不是第三方 crate 的 storage 抽象。
 
-| 端點 | |
-|---|---|
-| `OPTIONS /api/tus` | 能力探索 |
-| `POST /api/tus` | 建立上傳（含 creation-with-upload）|
-| `HEAD /api/tus/{id}` | 問傳到哪 |
-| `PATCH /api/tus/{id}` | 續傳；補完最後一塊時觸發落地 |
-| `DELETE /api/tus/{id}` | 放棄 |
+| 端點                   |                                     |
+| ---------------------- | ----------------------------------- |
+| `OPTIONS /api/tus`     | 能力探索                            |
+| `POST /api/tus`        | 建立上傳（含 creation-with-upload） |
+| `HEAD /api/tus/{id}`   | 問傳到哪                            |
+| `PATCH /api/tus/{id}`  | 續傳；補完最後一塊時觸發落地        |
+| `DELETE /api/tus/{id}` | 放棄                                |
 
 前端 `tus-js-client`。除了「用套件而不是手刻」之外的實際差別：
 
@@ -820,9 +829,9 @@ CI 有獨立的 runner，不受影響（實測本機紅、同一個 commit 在 C
 
 2026-08-31 在開發機量（三次中位數，量 `/login`）：
 
-| performance | accessibility | best-practices | seo | FCP | LCP | TBT | CLS | 總傳輸 |
-|---|---|---|---|---|---|---|---|---|
-| 86 | 93 | 100 | 92 | 1144ms | 2168ms | 0ms | 0 | 2288 KiB |
+| performance | accessibility | best-practices | seo | FCP    | LCP    | TBT | CLS | 總傳輸   |
+| ----------- | ------------- | -------------- | --- | ------ | ------ | --- | --- | -------- |
+| 86          | 93            | 100            | 92  | 1144ms | 2168ms | 0ms | 0   | 2288 KiB |
 
 ⚠️ **只有不受機器速度影響的項目設成 error**（可及性分數、CLS）。GitHub 的
 runner 慢得多，把 FCP/LCP/TBT 設成 error 會變成隨機紅燈，而一個會隨機紅的
@@ -853,16 +862,16 @@ CI 門檻 `--fail-under-regions 46`。
 根本進不了函式本體（見 §9-bis）。`trash.rs` 只有 5.24%：路徑逃逸的測試
 只碰到提早 return 的分支。
 
-| 檔案 | 覆蓋率 | 備註 |
-|---|---|---|
-| `handlers/share.rs` | 0 → **91.9%** | 密碼與過期判定；邏輯反了 = 連結永不過期 |
-| `handlers/upload_link.rs` | 0 → **88.7%** | 唯一免身分就能寫檔案的端點 |
-| `middleware/auth.rs` | 48 → **94.6%** | 補測試時抓到一個 CSRF 繞過，見下 |
-| `utils/jwt.rs` | 52 → **90.0%** | 含金鑰輪替後舊 token 失效 |
-| `handlers/terminal.rs` | 0 → **64.3%** | 白名單 + cd／補全；抓到五個逃逸，見下 |
-| `handlers/upload.rs` | 0 → **87.4%** | 分塊續傳；抓到一個 IDOR，見下 |
-| `utils/image.rs` | 0 → **63.4%** | magic bytes 判斷那半 |
-| `handlers/media.rs` | 0 → **27.8%** | 路徑處理那半；抓到三個路徑漏洞，見下 |
+| 檔案                      | 覆蓋率         | 備註                                    |
+| ------------------------- | -------------- | --------------------------------------- |
+| `handlers/share.rs`       | 0 → **91.9%**  | 密碼與過期判定；邏輯反了 = 連結永不過期 |
+| `handlers/upload_link.rs` | 0 → **88.7%**  | 唯一免身分就能寫檔案的端點              |
+| `middleware/auth.rs`      | 48 → **94.6%** | 補測試時抓到一個 CSRF 繞過，見下        |
+| `utils/jwt.rs`            | 52 → **90.0%** | 含金鑰輪替後舊 token 失效               |
+| `handlers/terminal.rs`    | 0 → **64.3%**  | 白名單 + cd／補全；抓到五個逃逸，見下   |
+| `handlers/upload.rs`      | 0 → **87.4%**  | 分塊續傳；抓到一個 IDOR，見下           |
+| `utils/image.rs`          | 0 → **63.4%**  | magic bytes 判斷那半                    |
+| `handlers/media.rs`       | 0 → **27.8%**  | 路徑處理那半；抓到三個路徑漏洞，見下    |
 
 **補測試時抓到的 CSRF 繞過**：`middleware/auth.rs` 原本用
 `origin_host.starts_with(host_val)` 比對 Origin 與 Host。Host 是
@@ -909,11 +918,11 @@ id 會出現在日誌、瀏覽器歷史、使用者自己貼出來的錯誤訊�
 **`starts_with` 稽核抓到的三個路徑漏洞**（既然同一個模式已經出事兩次，
 把後端所有 `starts_with` 與「把使用者輸入 join 到 storage 後面」的地方掃了一遍）：
 
-| 端點 | 問題 | 嚴重度 |
-|---|---|---|
-| `GET /api/media/hls/serve` | **任意檔案讀取** | 高 |
-| `POST /api/upload/init` | **任意檔案寫入**（`file_name` 沒驗） | 高 |
-| `GET /api/media/stream`、`/hls/status` | 檔案存在性探測 | 中 |
+| 端點                                   | 問題                                 | 嚴重度 |
+| -------------------------------------- | ------------------------------------ | ------ |
+| `GET /api/media/hls/serve`             | **任意檔案讀取**                     | 高     |
+| `POST /api/upload/init`                | **任意檔案寫入**（`file_name` 沒驗） | 高     |
+| `GET /api/media/stream`、`/hls/status` | 檔案存在性探測                       | 中     |
 
 `hls_serve` 那個最嚴重：`cache.join(file)` 之後用 `Path::starts_with` 檢查包含
 關係，但**那是純字面比對，不解析 `..`**——
@@ -994,12 +1003,12 @@ schemathesis 之後可以直接吃它，不必先起伺服器也不必偽造登�
    破壞性的 operation（restore / delete / terminate）第一次呼叫就把資源消耗掉，
    所以每一種種 **25 份**（`--max-examples 20` 用得完）。
 
-| | 之前 | 之後 |
-|---|---|---|
-| 產生的案例 | 1427 | **1610** |
-| fuzzing 階段耗時 | 6.9s | **19.1s** |
-| schema 約束對不上 | 16 | 13 |
-| 拿不到有效資料 | 9 | 8 |
+|                   | 之前 | 之後      |
+| ----------------- | ---- | --------- |
+| 產生的案例        | 1427 | **1610**  |
+| fuzzing 階段耗時  | 6.9s | **19.1s** |
+| schema 約束對不上 | 16   | 13        |
+| 拿不到有效資料    | 9    | 8         |
 
 ⚠️ **剩下的 8 個是有狀態 fuzz 的固有上限，不打算再追。** fuzzer 自己會用
 DELETE/restore/terminate 把種好的資源打壞，之後的案例就一路 404。要歸零得在
@@ -1043,11 +1052,11 @@ DELETE、清垃圾桶、刪檔。
 
 第一次跑就撞出 **28 個 panic**（3 種）：
 
-| 位置 | 觸發 | 說明 |
-|---|---|---|
+| 位置          | 觸發                       | 說明                                                                                                                                                    |
+| ------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `audit.rs:38` | `page` 或 `limit` 是大整數 | `(page - 1) * limit`：`page=i64::MIN` 時減法先 underflow，大 page 時乘法 overflow。limit 這裡還**完全沒有上限**（file.rs 早先修過同一件事，這支被漏掉） |
-| `file.rs:385` | 同上 | `.max(0)` 在減法**之後**才執行，救不到 underflow |
-| `chrono` | `expires_in_seconds` 很大 | `Duration::seconds` 超範圍是 **panic** 不是回 Err，而那個值直接來自 body。這條 release build 也會 panic |
+| `file.rs:385` | 同上                       | `.max(0)` 在減法**之後**才執行，救不到 underflow                                                                                                        |
+| `chrono`      | `expires_in_seconds` 很大  | `Duration::seconds` 超範圍是 **panic** 不是回 Err，而那個值直接來自 body。這條 release build 也會 panic                                                 |
 
 ⚠️ 前兩個在 release build 的整數溢位預設是 **wrapping** —— 不會 panic，
 只是算出一個荒謬的 offset。那比 panic 更難查。
@@ -1159,14 +1168,14 @@ schemathesis 給的重現指令、keep-alive 連線重用、`Transfer-Encoding: 
 現在補上的不變式（定樁測試很難蓋到的那種，因為它們是「輸入空間全體」或
 「兩次呼叫之間的關係」）：
 
-| 模組 | 不變式 |
-|---|---|
-| `chunk-plan` | 分塊剛好鋪滿 `[offset, size)`，不重疊也沒有洞；續傳不重送任何已傳的位元組 |
-| `finder/history` | `index` 永遠落在 `entries` 範圍內（破了就是 `/files/undefined`）；上一頁再下一頁回到原位；邊界回傳同一個物件 |
-| `finder/selection` | 選取內容永遠是清單裡真實存在的檔名；`anchorIndex` 不越界；Ctrl+Click 兩次自我反轉；Shift 只增不減 |
-| `finder/marquee` | **框變大時選取只增不減**（單調性）；兩角互換結果相同；索引遞增不重複 |
-| `desktop/icon-grid` | `snapToGrid ∘ gridToPixels = id`；永不回負值；不同 index 不落同格 |
-| 後端 `validate_path` | 回 Ok 就一定在 base 底下且結果不含 `ParentDir`；任何含 NUL 一律拒絕；一般相對路徑一定通過 |
+| 模組                 | 不變式                                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `chunk-plan`         | 分塊剛好鋪滿 `[offset, size)`，不重疊也沒有洞；續傳不重送任何已傳的位元組                                    |
+| `finder/history`     | `index` 永遠落在 `entries` 範圍內（破了就是 `/files/undefined`）；上一頁再下一頁回到原位；邊界回傳同一個物件 |
+| `finder/selection`   | 選取內容永遠是清單裡真實存在的檔名；`anchorIndex` 不越界；Ctrl+Click 兩次自我反轉；Shift 只增不減            |
+| `finder/marquee`     | **框變大時選取只增不減**（單調性）；兩角互換結果相同；索引遞增不重複                                         |
+| `desktop/icon-grid`  | `snapToGrid ∘ gridToPixels = id`；永不回負值；不同 index 不落同格                                            |
+| 後端 `validate_path` | 回 Ok 就一定在 base 底下且結果不含 `ParentDir`；任何含 NUL 一律拒絕；一般相對路徑一定通過                    |
 
 後端那組是針對這輪五個路徑類漏洞補的 —— 它們的共同特徵是「只有特定形狀的
 輸入才會破」（同前綴的兄弟目錄、元件前綴通過但解析後跑出去、NUL 要碰檔案

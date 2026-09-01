@@ -4,7 +4,7 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
@@ -957,6 +957,16 @@ pub async fn move_to_trash(
     Ok(trash_name)
 }
 
+/// 刪除後回給前端的垃圾桶檔名。
+///
+/// ⚠️ 這個欄位**不是**原檔名。`.trash` 是扁平的，撞名時 `move_to_trash` 會
+/// 改存成 `原名.<timestamp>`；復原與永久刪除都要用這個名字，用原檔名會 404。
+/// production 的垃圾桶裡目前就有三個帶時間戳的項目，這條路徑是會走到的。
+#[derive(Serialize, ToSchema, specta::Type)]
+pub struct DeleteFileResponse {
+    pub trash_name: String,
+}
+
 #[utoipa::path(
     delete,
     path = "/api/files/{path}",
@@ -964,14 +974,14 @@ pub async fn move_to_trash(
         ("path" = String, Path, description = "File path")
     ),
     responses(
-        (status = 200, description = "File moved to trash")
+        (status = 200, description = "File moved to trash", body = DeleteFileResponse)
     )
 )]
 pub async fn delete_file(
     State(state): State<AppState>,
     Extension(user_id): Extension<i64>,
     AxumPath(path): AxumPath<String>,
-) -> Result<StatusCode, AppError> {
+) -> Result<Json<DeleteFileResponse>, AppError> {
     // Check write permission
     let has_permission =
         sqlx::query_scalar::<_, bool>("SELECT can_write FROM permissions WHERE user_id = ? AND path = ?")
@@ -987,7 +997,7 @@ pub async fn delete_file(
         }
     }
 
-    move_to_trash(&state.storage_path, &state.pool, &path, user_id).await?;
+    let trash_name = move_to_trash(&state.storage_path, &state.pool, &path, user_id).await?;
 
     // Audit Log
     let () = state
@@ -1001,7 +1011,7 @@ pub async fn delete_file(
         )
         .await;
 
-    Ok(StatusCode::OK)
+    Ok(Json(DeleteFileResponse { trash_name }))
 }
 
 #[derive(Deserialize, ToSchema, specta::Type)]

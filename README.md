@@ -5,12 +5,14 @@
 ## ✨ 主要特色
 
 ### 🖥️ 桌面環境 (Desktop Environment)
+
 - **視窗管理系統**：支援多視窗開啟、拖曳、縮放、最小化與最大化。
 - **Dock 工具列**：快速啟動應用程式，類似 macOS 的操作體驗。
 - **全域搜尋 (Spotlight)**：快速搜尋檔案與應用程式。
 - **主題切換**：支援深色 (Dark) 與淺色 (Light) 模式。
 
 ### 📂 檔案管理 (Finder)
+
 - **完整檔案操作**：瀏覽、上傳、下載、刪除、重新命名、移動檔案。
 - **進階上傳**：支援大檔案分塊上傳 (Chunked Upload) 與斷點續傳。
 - **預覽功能**：支援圖片、影片與程式碼檔案預覽。
@@ -18,6 +20,7 @@
 - **分享功能**：可建立檔案分享連結。
 
 ### 🐳 系統與容器管理
+
 - **儀表板 (Dashboard)**：即時監控 CPU、記憶體 (RAM) 與儲存空間使用率，提供視覺化圖表。
 - **Docker 管理器**：
   - 查看容器列表與狀態。
@@ -26,10 +29,12 @@
   - 快速開啟 Web 服務連結。
 
 ### 🛠️ 其他工具
+
 - **終端機 (Terminal)**：整合 xterm.js 的網頁版終端機。
 - **系統設定**：客製化桌面體驗。
 
 ### 🔐 認證機制 (Authentication)
+
 - **HttpOnly Cookie**：使用安全的 HttpOnly Cookie 儲存 Access Token 與 Refresh Token，前端不直接接觸 Token。
 - **自動續期 (Auto Refresh)**：攔截 401 錯誤，自動呼叫 `/api/auth/refresh` 進行 Token 續期並重試請求。
 - **API 封裝**：提供 `login`, `logout`, `fetchWithAuth`, `isLoggedIn` 等簡易 API 介面。
@@ -48,6 +53,7 @@
 ## 📦 安裝與執行
 
 ### 前置需求
+
 - Node.js (建議 v18 或以上)
 - pnpm (建議) 或 npm/yarn
 
@@ -103,4 +109,5 @@ frontend/
 歡迎提交 Pull Request 或 Issue 來改進這個專案。
 
 ---
+
 Powered by Next.js & React

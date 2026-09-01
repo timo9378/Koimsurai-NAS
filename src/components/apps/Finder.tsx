@@ -22,6 +22,7 @@ import type { FileInfo, UploadLinkResponse } from "@/types/api";
 import { useUploadStore } from "@/store/upload-store";
 import { useWindowStore } from "@/store/window-store";
 import { useFileUpload } from "@/features/files/hooks/useFileUpload"; // Updated import
+import { collectTrashed } from "@/features/files/trash";
 import { useUserTags, useFilesByTag } from "@/hooks/use-tags";
 import {
   Dialog,
@@ -488,23 +489,43 @@ export const Finder = ({ windowId }: FinderProps) => {
             };
           });
 
-          filesToDelete.forEach(({ path }) => deleteFile.mutate(path));
           setSelectedFiles(new Set());
 
-          const fileNames = filesToDelete.map((f) => f.name);
-          const label =
-            fileNames.length === 1
-              ? `「${fileNames[0]}」已移至垃圾桶`
-              : `${fileNames.length} 個項目已移至垃圾桶`;
+          // ⚠️ 復原要送**垃圾桶檔名**，不是原檔名 —— 撞名時後端會存成
+          // `原名.<timestamp>`，用原檔名會復原到上一次刪的那個同名檔案。
+          // 也因此 toast 必須等刪除回來才跳：原本是先跳 toast 再射出 mutate，
+          // 刪除失敗時使用者仍然看到「已移至垃圾桶」跟一個沒用的復原鈕。
+          void Promise.allSettled(
+            filesToDelete.map(({ path }) => deleteFile.mutateAsync(path)),
+          ).then((results) => {
+            const { trashed, failed } = collectTrashed(
+              filesToDelete.map((f) => f.name),
+              results,
+            );
 
-          toast(label, {
-            action: {
-              label: "復原",
-              onClick: () => {
-                fileNames.forEach((name) => restoreFromTrash.mutate(name));
+            if (failed.length > 0) {
+              toast.error(
+                failed.length === 1
+                  ? `「${failed[0]}」刪除失敗`
+                  : `${failed.length} 個項目刪除失敗`,
+              );
+            }
+            if (trashed.length === 0) return;
+
+            const label =
+              trashed.length === 1
+                ? `「${trashed[0]?.name}」已移至垃圾桶`
+                : `${trashed.length} 個項目已移至垃圾桶`;
+
+            toast(label, {
+              action: {
+                label: "復原",
+                onClick: () => {
+                  trashed.forEach(({ trashName }) => restoreFromTrash.mutate(trashName));
+                },
               },
-            },
-            duration: 6000,
+              duration: 6000,
+            });
           });
         }
       }
@@ -653,16 +674,20 @@ export const Finder = ({ windowId }: FinderProps) => {
 
   const handleDelete = (file: FileInfo) => {
     const fullPath = file.path || joinPath(currentPath, file.name);
-    deleteFile.mutate(fullPath);
-
-    toast(`「${file.name}」已移至垃圾桶`, {
-      action: {
-        label: "復原",
-        onClick: () => {
-          restoreFromTrash.mutate(file.name);
-        },
+    // toast 放進 onSuccess：復原要用後端回傳的垃圾桶檔名（見 features/files/trash.ts），
+    // 而且刪除失敗時不該還跳一句「已移至垃圾桶」配一個沒用的復原鈕。
+    deleteFile.mutate(fullPath, {
+      onSuccess: ({ trash_name }) => {
+        toast(`「${file.name}」已移至垃圾桶`, {
+          action: {
+            label: "復原",
+            onClick: () => {
+              restoreFromTrash.mutate(trash_name);
+            },
+          },
+          duration: 6000,
+        });
       },
-      duration: 6000,
     });
   };
 
@@ -1173,6 +1198,13 @@ export const Finder = ({ windowId }: FinderProps) => {
           onRenameSubmit={() => void submitRename()}
           onRenameCancel={() => setRenamingFile(null)}
           onRestore={(name) => restoreFromTrash.mutate(name)}
+          onPermanentDelete={(trashName) => {
+            // 右鍵選單的「Delete Immediately」原本是一個**沒有 onClick 的**
+            // ContextMenuItem —— 按下去什麼都不會發生。桌面唯一能永久刪除的
+            // 路徑是 Shift+Delete，而手機版的動作面板一直都做得到。
+            setFilesToPermanentlyDelete([trashName]);
+            setIsPermanentDeleteConfirmOpen(true);
+          }}
           onDelete={handleDelete}
           onDownload={(path) => downloadFile.mutate(path)}
           onShare={handleShare}

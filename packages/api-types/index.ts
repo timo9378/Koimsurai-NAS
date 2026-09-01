@@ -125,6 +125,17 @@ export type CreateUploadLinkRequest = {
 	max_file_size: number | null,
 };
 
+/**
+ *  刪除後回給前端的垃圾桶檔名。
+ * 
+ *  ⚠️ 這個欄位**不是**原檔名。`.trash` 是扁平的，撞名時 `move_to_trash` 會
+ *  改存成 `原名.<timestamp>`；復原與永久刪除都要用這個名字，用原檔名會 404。
+ *  production 的垃圾桶裡目前就有三個帶時間戳的項目，這條路徑是會走到的。
+ */
+export type DeleteFileResponse = {
+	trash_name: string,
+};
+
 export type DiskInfo = {
 	name: string,
 	mount_point: string,

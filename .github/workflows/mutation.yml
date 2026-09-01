@@ -21,7 +21,7 @@ on:
   schedule:
     # 每週日 21:00 UTC = 週一 05:00 Asia/Taipei
     # （mutants 19:00、api-fuzz 20:00，三個錯開一小時避免互相排隊）
-    - cron: '0 21 * * 0'
+    - cron: "0 21 * * 0"
 
 concurrency:
   group: mutation-${{ github.ref }}

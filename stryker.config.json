@@ -3,9 +3,7 @@
   "_comment": "變異測試：把程式改壞，看測試會不會紅。覆蓋率只說「這行跑過」，變異分數說「這行壞掉會不會被抓到」——後端的 cargo-mutants 就是靠這個抓到四個斷言缺口。範圍刻意只涵蓋抽出來的純邏輯模組：那些是變異測試唯一划算的地方（快、決定性、每個突變都對應一個真的行為改變）。整個 src 跑一次要數十分鐘，而元件的突變大多產生無意義的等價變體。",
   "packageManager": "pnpm",
   "testRunner": "vitest",
-  "plugins": [
-    "@stryker-mutator/vitest-runner"
-  ],
+  "plugins": ["@stryker-mutator/vitest-runner"],
   "_plugins_comment": "pnpm 的嚴格 node_modules 下 Stryker 自動掃不到 plugin，要顯式列出，否則報 \"no TestRunner plugins were loaded\"。",
   "vitest": {
     "configFile": "vitest.config.ts"
@@ -43,12 +41,7 @@
     ".github"
   ],
   "_ignore_comment": "沒有這段的話 Stryker 會把 node_modules 一起算進專案（實測 54031 個檔案），然後複製整包到 sandbox —— 表現成卡在 \"Creating test runner process(es)\" 不動。",
-  "reporters": [
-    "clear-text",
-    "progress",
-    "html",
-    "json"
-  ],
+  "reporters": ["clear-text", "progress", "html", "json"],
   "htmlReporter": {
     "fileName": "reports/mutation/index.html"
   },

@@ -1,5 +1,5 @@
 packages:
-  - 'packages/*'
+  - "packages/*"
 
 # pnpm 12 起 CLI 是 Rust 原生 binary，靠 postinstall 的 install.js 把它放到位。
 # 不核可的話 packageManager 自動接手會裝出一個**佔位符**，執行時報 "Syntax error"
@@ -9,4 +9,4 @@ allowBuilds:
   esbuild: true
   # postinstall 下載平台對應的 binary（source map 上傳用，見 Dockerfile）。
   # 不核可的話 pnpm install 會噴 ERR_PNPM_IGNORED_BUILDS。
-  '@sentry/cli': true
+  "@sentry/cli": true

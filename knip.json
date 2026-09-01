@@ -2,17 +2,8 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "entry": [
-        "src/routes/**/*.tsx",
-        "public/sw.js",
-        "src/components/ui/**",
-        "e2e/**/*.spec.ts"
-      ],
-      "project": [
-        "src/**/*.{ts,tsx}",
-        "e2e/**/*.ts",
-        "*.config.ts"
-      ]
+      "entry": ["src/routes/**/*.tsx", "public/sw.js", "src/components/ui/**", "e2e/**/*.spec.ts"],
+      "project": ["src/**/*.{ts,tsx}", "e2e/**/*.ts", "*.config.ts"]
     }
   },
   "ignoreDependencies": [

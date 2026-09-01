@@ -103,6 +103,8 @@ interface FileListProps {
   onRenameCancel: () => void;
   // Context Menu Actions
   onRestore?: (name: string) => void;
+  /** 收到的是**垃圾桶檔名**（trash mode 下 `file.name` 就是它），不是原始路徑。 */
+  onPermanentDelete?: (trashName: string) => void;
   onDelete?: (file: FileInfo) => void;
   onDownload?: (path: string) => void;
   onShare?: (file: FileInfo) => void;
@@ -162,6 +164,7 @@ export const FileList = ({
   onRenameSubmit,
   onRenameCancel,
   onRestore,
+  onPermanentDelete,
   onDelete,
   onDownload,
   onShare,
@@ -482,7 +485,10 @@ export const FileList = ({
                           <Move className="mr-2 h-4 w-4" /> Put Back
                         </ContextMenuItem>
                         <ContextMenuSeparator />
-                        <ContextMenuItem className="text-red-600">
+                        <ContextMenuItem
+                          className="text-red-600"
+                          onClick={() => onPermanentDelete?.(file.name)}
+                        >
                           <Trash2 className="mr-2 h-4 w-4" /> Delete Immediately
                         </ContextMenuItem>
                       </>
@@ -491,13 +497,16 @@ export const FileList = ({
                         <ContextMenuItem onClick={() => onFileDoubleClick(file)}>
                           <Folder className="mr-2 h-4 w-4" /> Open
                         </ContextMenuItem>
-                        <ContextMenuItem
-                          onClick={() =>
-                            onDownload?.(file.path || joinPath(currentPath, file.name))
-                          }
-                        >
-                          <Download className="mr-2 h-4 w-4" /> Download
-                        </ContextMenuItem>
+                        {/* 資料夾沒有下載 —— 後端的 download_file 要求 is_file()，會回 404。 */}
+                        {!file.is_dir && (
+                          <ContextMenuItem
+                            onClick={() =>
+                              onDownload?.(file.path || joinPath(currentPath, file.name))
+                            }
+                          >
+                            <Download className="mr-2 h-4 w-4" /> Download
+                          </ContextMenuItem>
+                        )}
                         <ContextMenuItem onClick={() => onShare?.(file)}>
                           <Share2 className="mr-2 h-4 w-4" /> Share
                         </ContextMenuItem>
@@ -677,7 +686,10 @@ export const FileList = ({
                               <Move className="mr-2 h-4 w-4" /> Put Back
                             </ContextMenuItem>
                             <ContextMenuSeparator />
-                            <ContextMenuItem className="text-red-600">
+                            <ContextMenuItem
+                              className="text-red-600"
+                              onClick={() => onPermanentDelete?.(file.name)}
+                            >
                               <Trash2 className="mr-2 h-4 w-4" /> Delete Immediately
                             </ContextMenuItem>
                           </>
@@ -686,13 +698,16 @@ export const FileList = ({
                             <ContextMenuItem onClick={() => onFileDoubleClick(file)}>
                               <Folder className="mr-2 h-4 w-4" /> Open
                             </ContextMenuItem>
-                            <ContextMenuItem
-                              onClick={() =>
-                                onDownload?.(file.path || joinPath(currentPath, file.name))
-                              }
-                            >
-                              <Download className="mr-2 h-4 w-4" /> Download
-                            </ContextMenuItem>
+                            {/* 資料夾沒有下載 —— 後端的 download_file 要求 is_file()，會回 404。 */}
+                            {!file.is_dir && (
+                              <ContextMenuItem
+                                onClick={() =>
+                                  onDownload?.(file.path || joinPath(currentPath, file.name))
+                                }
+                              >
+                                <Download className="mr-2 h-4 w-4" /> Download
+                              </ContextMenuItem>
+                            )}
                             <ContextMenuItem onClick={() => onShare?.(file)}>
                               <Share2 className="mr-2 h-4 w-4" /> Share
                             </ContextMenuItem>

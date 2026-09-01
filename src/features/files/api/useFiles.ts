@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import { dirName, joinPath, toApiPath } from "@/lib/paths";
 import type {
+  DeleteFileResponse,
   FileInfo,
   Job,
   ShareLinkResponse,
@@ -200,7 +201,10 @@ export const useDelete = () => {
       const cleanPath = toApiPath(path);
       // URL encode path components to handle special characters (dashes, spaces, etc.)
       const encodedPath = cleanPath.split("/").map(encodeURIComponent).join("/");
-      await apiClient.delete(`/files/${encodedPath}`);
+      // 回傳的是**垃圾桶裡的檔名**，撞名時會是 `原名.<timestamp>`。
+      // 「復原」一定要用它，用原檔名會復原到別的檔案（見 backend/tests/file_tests.rs）。
+      const { data } = await apiClient.delete<DeleteFileResponse>(`/files/${encodedPath}`);
+      return data;
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["files"] });

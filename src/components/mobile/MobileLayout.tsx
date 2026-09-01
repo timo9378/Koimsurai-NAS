@@ -113,7 +113,9 @@ const ActionSheet = ({ file, onClose, onAction, isTrash }: ActionSheetProps) => 
         { id: "delete-permanent", label: "Delete Permanently", icon: Trash2, danger: true },
       ]
     : [
-        { id: "download", label: "Download", icon: Download },
+        // 資料夾沒有下載 —— `download_file` 要求 `is_file()`，點下去只會拿到 404。
+        // 「⋮」按鈕對資料夾列也會開這個面板，所以這裡真的會被看到。
+        ...(file.is_dir ? [] : [{ id: "download", label: "Download", icon: Download }]),
         { id: "share", label: "Share", icon: Share2 },
         { id: "rename", label: "Rename", icon: Edit2 },
         ...(file.is_starred
@@ -565,10 +567,16 @@ export const MobileLayout = () => {
         setSheet(openInfo(file));
         break;
       case "delete":
-        deleteFile.mutate(fullPath);
-        toast(`"${file.name}" moved to Trash`, {
-          action: { label: "Undo", onClick: () => restoreFromTrash.mutate(file.name) },
-          duration: 5000,
+        // 復原要送**垃圾桶檔名**，撞名時後端會存成 `原名.<timestamp>`；
+        // 原本傳的是 file.name，同名檔案刪第二次之後那個 Undo 會復原錯的檔案。
+        // 也因此 toast 移進 onSuccess —— 刪除失敗時不該還顯示「moved to Trash」。
+        deleteFile.mutate(fullPath, {
+          onSuccess: ({ trash_name }) => {
+            toast(`"${file.name}" moved to Trash`, {
+              action: { label: "Undo", onClick: () => restoreFromTrash.mutate(trash_name) },
+              duration: 5000,
+            });
+          },
         });
         break;
       case "restore":

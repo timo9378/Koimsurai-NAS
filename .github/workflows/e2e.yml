@@ -29,7 +29,7 @@ permissions:
 
 env:
   # 這些只在 job 內的臨時實例裡用，不是任何真實環境的值
-  E2E_PORT: '3098'
+  E2E_PORT: "3098"
   E2E_INVITE_CODE: e2e_invite
 
 jobs:
@@ -113,7 +113,7 @@ jobs:
 
       - name: lhci autorun
         env:
-          CHROME_PATH: ''
+          CHROME_PATH: ""
         run: |
           set -euo pipefail
           # Playwright 把 chromium 放在 ~/.cache/ms-playwright/chromium-*/chrome-linux/chrome
