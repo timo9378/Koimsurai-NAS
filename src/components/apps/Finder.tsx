@@ -44,6 +44,8 @@ import { activateOnKey } from "@/lib/a11y";
 import { selectOnClick } from "./finder/selection";
 import { dirName, joinPath, toApiPath } from "@/lib/paths";
 import { filterByQuery, sortFiles } from "./finder/sorting";
+import { planRename } from "./finder/rename";
+import { getApiErrorMessage } from "@/lib/errors";
 import {
   addTab as addTabTo,
   closeTab as closeTabIn,
@@ -666,20 +668,34 @@ export const Finder = ({ windowId }: FinderProps) => {
   };
 
   const submitRename = async () => {
-    if (!renamingFile || !renameValue || renameValue === renamingFile) {
+    // ⚠️ 先把 null 擋掉，後面 renamingFile 就是 string —— 用 `as string`
+    // 斷言的話等於把型別保證丟掉，而這裡本來就有現成的早退。
+    if (renamingFile === null) return;
+
+    // 判定規則（trim、空白、不合法字元）抽在 finder/rename.ts，那裡有測試
+    const plan = planRename(renamingFile, renameValue);
+
+    if (plan.kind === "cancel") {
       setRenamingFile(null);
+      return;
+    }
+
+    if (plan.kind === "invalid") {
+      // ⚠️ 當場說明哪裡不行，不要送出去等一個籠統的失敗。含 `/` 的名稱
+      // 後端會以 403 擋下，而使用者只會看到 "Failed to rename file"。
+      toast.error(plan.reason);
       return;
     }
 
     try {
       await renameFile.mutateAsync({
         path: joinPath(currentPath, renamingFile),
-        newName: renameValue,
+        newName: plan.name,
       });
       setRenamingFile(null);
     } catch (error) {
       console.error("Rename failed:", error);
-      alert("Failed to rename file");
+      toast.error(getApiErrorMessage(error, "重新命名失敗"));
     }
   };
 

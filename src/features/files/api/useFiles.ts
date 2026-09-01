@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
+import { dirName, joinPath, toApiPath } from "@/lib/paths";
 import type {
   FileInfo,
   Job,
@@ -31,7 +32,7 @@ export const useFiles = ({
     queryKey: ["files", path, sortBy, order, page, limit, search],
     queryFn: async () => {
       // Clean path but preserve structure for backend wildcard matching
-      const cleanPath = path.startsWith("/") ? path.slice(1) : path;
+      const cleanPath = toApiPath(path);
       const endpoint = cleanPath === "" ? "/files" : `/files/${cleanPath}`; // Use path directly, backend handles wildcard routes
 
       // Map frontend sort key to backend sort key ('modified' -> 'date')
@@ -59,7 +60,7 @@ export const useFileVersions = (path: string) => {
     queryKey: ["files", "versions", path],
     queryFn: async () => {
       if (!path) return [];
-      const cleanPath = path.startsWith("/") ? path.slice(1) : path;
+      const cleanPath = toApiPath(path);
       // Use path directly for backend wildcard routes
       const response = await apiClient.get<FileVersion[]>(
         `/versions/file/${cleanPath}?_t=${Date.now()}`,
@@ -77,7 +78,7 @@ export const useUpload = () => {
       formData.append("file", file);
 
       // Remove leading slash if present to ensure correct path handling
-      const cleanPath = path.startsWith("/") ? path.slice(1) : path;
+      const cleanPath = toApiPath(path);
 
       // Construct the full path including the filename
       // If uploading to root (cleanPath is empty), just use filename
@@ -124,10 +125,11 @@ export const useRename = () => {
 
   return useMutation({
     mutationFn: async ({ path, newName }: { path: string; newName: string }) => {
-      const cleanPath = path.startsWith("/") ? path.slice(1) : path;
+      const cleanPath = toApiPath(path);
       // Build new_path as the same directory + newName so the backend receives the full target path
-      const dir = cleanPath.includes("/") ? cleanPath.substring(0, cleanPath.lastIndexOf("/")) : "";
-      const newPath = dir ? `${dir}/${newName}` : newName;
+      // ⚠️ 後端的 new_path 是**完整路徑**（它會走 StorageRoot::resolve），
+      // 不是只有檔名 —— 只送檔名的話 /Documents/a.txt 會被搬到儲存根。
+      const newPath = toApiPath(joinPath(dirName(path), newName));
       // URL encode path components to handle special characters (dashes, spaces, etc.)
       const encodedPath = cleanPath.split("/").map(encodeURIComponent).join("/");
       await apiClient.put(`/files/${encodedPath}`, { new_path: newPath });
@@ -145,7 +147,7 @@ export const useCreateFolder = () => {
     mutationFn: async ({ path, name }: { path: string; name: string }) => {
       // Backend expects: POST /api/files/folder with body { "path": "parent_path", "folder_name": "name" }
       // Clean the path - remove leading slash
-      const cleanPath = path.startsWith("/") ? path.slice(1) : path;
+      const cleanPath = toApiPath(path);
 
       await apiClient.post("/files/folder", {
         path: cleanPath,
@@ -166,7 +168,7 @@ export const useCreateFolder = () => {
       const pathVariants = [
         variables.path,
         `/${variables.path}`.replace("//", "/"),
-        variables.path.replace(/^\//, ""),
+        toApiPath(variables.path),
       ];
 
       for (const p of pathVariants) {
@@ -195,7 +197,7 @@ export const useDelete = () => {
       if (!path) {
         throw new Error("Path is required for deletion");
       }
-      const cleanPath = path.startsWith("/") ? path.slice(1) : path;
+      const cleanPath = toApiPath(path);
       // URL encode path components to handle special characters (dashes, spaces, etc.)
       const encodedPath = cleanPath.split("/").map(encodeURIComponent).join("/");
       await apiClient.delete(`/files/${encodedPath}`);
@@ -252,7 +254,7 @@ export const useToggleStar = () => {
 
   return useMutation({
     mutationFn: async (path: string) => {
-      const cleanPath = path.startsWith("/") ? path.slice(1) : path;
+      const cleanPath = toApiPath(path);
       // Use path directly for backend wildcard routes
       await apiClient.post(`/star/file/${cleanPath}`);
     },
@@ -352,7 +354,7 @@ export const useDownload = () => {
     // 回傳 Promise，async 拿不掉。
     // oxlint-disable-next-line typescript/require-await
     mutationFn: async (path: string) => {
-      const cleanPath = path.startsWith("/") ? path.slice(1) : path;
+      const cleanPath = toApiPath(path);
       // Encode each path segment to handle special characters (Chinese, spaces, etc.)
       const encodedPath = cleanPath.split("/").map(encodeURIComponent).join("/");
 
@@ -382,7 +384,7 @@ export const useThumbnail = (path: string, size: "small" | "medium" | "large" = 
     queryKey: ["thumbnail", path, size],
     queryFn: async () => {
       if (!path) return null;
-      const cleanPath = path.startsWith("/") ? path.slice(1) : path;
+      const cleanPath = toApiPath(path);
       // Backend expects: GET /api/thumbnail/:size/*path
       const response = await apiClient.get<Blob>(`/thumbnail/${size}/${cleanPath}`, {
         responseType: "blob",
@@ -413,7 +415,7 @@ export const useSearch = (query: string) => {
 export const useCreateShare = () => {
   return useMutation({
     mutationFn: async (data: { file_path: string; password?: string; expires?: number }) => {
-      const cleanPath = data.file_path.startsWith("/") ? data.file_path.slice(1) : data.file_path;
+      const cleanPath = toApiPath(data.file_path);
       const response = await apiClient.post<ShareLinkResponse>("/share", {
         file_path: cleanPath,
         password: data.password,

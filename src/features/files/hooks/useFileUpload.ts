@@ -5,6 +5,7 @@ import { apiClient } from "@/lib/api-client";
 import { startTusUpload } from "../tus-upload";
 import type { FileInfo } from "@/types/api";
 import { getApiErrorMessage, isNetworkError } from "@/lib/errors";
+import { toApiPath } from "@/lib/paths";
 
 // Concurrency-limited upload queue utility
 const createUploadQueue = (concurrency: number) => {
@@ -80,7 +81,7 @@ export const useFileUpload = () => {
             await queryClient.invalidateQueries({ queryKey: ["files"] });
 
             try {
-              const cleanPath = currentPath.startsWith("/") ? currentPath.slice(1) : currentPath;
+              const cleanPath = toApiPath(currentPath);
               const endpoint = cleanPath === "" ? "/files" : `/files/${cleanPath}`;
               const params = new URLSearchParams();
               params.append("sort_by", "name");
