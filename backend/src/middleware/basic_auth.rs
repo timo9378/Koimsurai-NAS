@@ -117,12 +117,16 @@ fn decode_base64(s: &str) -> Option<Vec<u8>> {
 
 /// 回 401 並附上 `WWW-Authenticate`，客戶端才會跳出帳密輸入框。
 fn challenge() -> Response {
-    let mut res = StatusCode::UNAUTHORIZED.into_response();
-    res.headers_mut().insert(
+    with_challenge(StatusCode::UNAUTHORIZED.into_response())
+}
+
+/// 把 `WWW-Authenticate` 補到一個既有的回應上。
+fn with_challenge(mut response: Response) -> Response {
+    response.headers_mut().insert(
         header::WWW_AUTHENTICATE,
         HeaderValue::from_static(r#"Basic realm="Koimsurai NAS", charset="UTF-8""#),
     );
-    res
+    response
 }
 
 // ⚠️ 回 `Response` 而不是 `Result<Response, Response>`：clippy 的
@@ -139,8 +143,20 @@ pub async fn basic_auth(State(state): State<AppState>, request: Request, next: N
 
     // 不是 Basic 就交給後面的 require_auth（Bearer / cookie）處理。
     // ⚠️ 這裡**不能**直接拒絕：網頁前端也會打 /webdav，它帶的是 cookie。
+    //
+    // ⚠️ 但如果下游回了 401，一定要補上 WWW-Authenticate —— WebDAV 客戶端的
+    // **第一個請求本來就不帶憑證**，它要靠那個標頭才知道該跳出帳密輸入框。
+    // 少了它，Finder／檔案總管顯示的是「連不上」而不是「請輸入密碼」，
+    // 於是整個 Basic 認證等於沒接（部署後實測抓到的：未帶憑證的 401 是裸的）。
     if !header_value.starts_with("Basic ") {
-        return next.run(request).await;
+        let response = next.run(request).await;
+        return if response.status() == StatusCode::UNAUTHORIZED
+            && !response.headers().contains_key(header::WWW_AUTHENTICATE)
+        {
+            with_challenge(response)
+        } else {
+            response
+        };
     }
 
     let Some((username, password)) = parse_basic(&header_value) else {

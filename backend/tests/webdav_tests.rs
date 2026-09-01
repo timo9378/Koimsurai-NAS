@@ -302,3 +302,33 @@ async fn a_2fa_enabled_account_cannot_use_basic_auth() {
         "開了 2FA 的帳號不該讓 Basic 過 —— 密碼正確也不行，那正是重點"
     );
 }
+
+/// **完全不帶憑證**的 401 也必須帶 `WWW-Authenticate`。
+///
+/// ⚠️ `WebDAV` 客戶端的第一個請求本來就不帶憑證 —— 它要靠這個標頭才知道
+/// 該跳出帳密輸入框。少了它，Finder／檔案總管顯示的是「連不上」而不是
+/// 「請輸入密碼」，於是 Basic 認證等於沒接。
+///
+/// 這條是**部署之後實測**才補的：先前只測了「帳密錯誤」的情況，
+/// 而那條路徑走的是另一個分支。第一次接觸的情境反而沒守到。
+#[tokio::test]
+async fn an_anonymous_request_gets_a_challenge_too() {
+    let app = spawn_app().await;
+
+    for (method, path) in [("GET", "/"), ("PROPFIND", "/"), ("PUT", "/x.txt")] {
+        let res = Client::new()
+            .request(
+                reqwest::Method::from_bytes(method.as_bytes()).expect("method"),
+                dav(&app, path),
+            )
+            .header("Depth", "1")
+            .send()
+            .await
+            .expect("request");
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED, "{method} {path}");
+        assert!(
+            res.headers().contains_key("www-authenticate"),
+            "{method} {path} 的 401 沒有 WWW-Authenticate —— 客戶端不會提示輸入帳密"
+        );
+    }
+}
