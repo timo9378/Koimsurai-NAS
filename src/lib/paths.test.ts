@@ -15,6 +15,12 @@ describe("joinPath", () => {
     expect(joinPath("/a/b", "c")).toBe("/a/b/c");
   });
 
+  it("目錄中間的連續斜線也會被收掉", () => {
+    // ⚠️ property test 抽到的反例。原本只去尾，"a//b" 會產生 "a//b/x"。
+    expect(joinPath("/a//b", "x")).toBe("/a/b/x");
+    expect(joinPath("//", "x")).toBe("/x");
+  });
+
   it("目錄帶結尾斜線也不會雙斜線", () => {
     expect(joinPath("/Documents/", "報告.txt")).toBe("/Documents/報告.txt");
     expect(joinPath("/a//", "b")).toBe("/a/b");

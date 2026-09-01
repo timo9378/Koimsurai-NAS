@@ -19,6 +19,7 @@
     "src/components/apps/finder/sorting.ts",
     "src/components/apps/finder/tabs.ts",
     "src/components/desktop/icon-grid.ts",
+    "src/components/mobile/sheets.ts",
     "src/features/files/tus-upload.ts",
     "src/lib/a11y.ts",
     "src/lib/errors.ts",

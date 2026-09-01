@@ -56,6 +56,15 @@ import { useSystemStatus } from "@/features/system/api/useSystem";
 import { activateOnKey } from "@/lib/a11y";
 import { formatBytes } from "@/lib/format";
 import { dirName, joinPath, pathSegments } from "@/lib/paths";
+import {
+  closeSheet,
+  NO_SHEET,
+  openAction,
+  openInfo,
+  openRename,
+  type SheetState,
+  sheetFile,
+} from "./sheets";
 
 // ─── Thumbnail component ────────────────────────────────
 const MobileFileThumb = ({ file, currentPath }: { file: FileInfo; currentPath: string }) => {
@@ -441,9 +450,14 @@ export const MobileLayout = () => {
   const [isTrashMode, setIsTrashMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [actionFile, setActionFile] = useState<FileInfo | null>(null);
-  const [infoFile, setInfoFile] = useState<FileInfo | null>(null);
-  const [renameFile, setRenameFile] = useState<FileInfo | null>(null);
+  // ⚠️ 三個面板共用**一個**狀態。原本是三個各自獨立的 useState，而它們在
+  // JSX 裡是平行渲染的兄弟節點 —— 「同時只開一個」完全靠呼叫順序維持，
+  // 沒有任何東西強制它。判別式聯集讓「兩個同時開著」寫不出來。
+  // 轉換規則見 mobile/sheets.ts。
+  const [sheet, setSheet] = useState<SheetState<FileInfo>>(NO_SHEET);
+  const actionFile = sheetFile(sheet, "action");
+  const infoFile = sheetFile(sheet, "info");
+  const renameFile = sheetFile(sheet, "rename");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ─── API hooks ────────────────
@@ -500,7 +514,7 @@ export const MobileLayout = () => {
       setActiveTab("files");
       navigateTo(file.path.startsWith("/") ? file.path : `/${file.path}`);
     } else {
-      setActionFile(file);
+      setSheet(openAction(file));
     }
   };
 
@@ -510,7 +524,7 @@ export const MobileLayout = () => {
       navigateTo(joinPath(currentPath, file.name));
     } else {
       // For non-directory files, open action sheet (mobile-appropriate)
-      setActionFile(file);
+      setSheet(openAction(file));
     }
   };
 
@@ -537,14 +551,14 @@ export const MobileLayout = () => {
         }
         break;
       case "rename":
-        setRenameFile(file);
+        setSheet(openRename(file));
         break;
       case "star":
       case "unstar":
         toggleStar.mutate(fullPath);
         break;
       case "info":
-        setInfoFile(file);
+        setSheet(openInfo(file));
         break;
       case "delete":
         deleteFile.mutate(fullPath);
@@ -810,7 +824,7 @@ export const MobileLayout = () => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setActionFile(file);
+                        setSheet(openAction(file));
                       }}
                       className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-800"
                     >
@@ -858,7 +872,7 @@ export const MobileLayout = () => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setActionFile(file);
+                        setSheet(openAction(file));
                       }}
                       className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-800"
                     >
@@ -945,21 +959,21 @@ export const MobileLayout = () => {
         {actionFile && (
           <ActionSheet
             file={actionFile}
-            onClose={() => setActionFile(null)}
+            onClose={() => setSheet(closeSheet())}
             onAction={(...args) => void handleAction(...args)}
             isTrash={isTrashMode}
           />
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {infoFile && <FileInfoSheet file={infoFile} onClose={() => setInfoFile(null)} />}
+        {infoFile && <FileInfoSheet file={infoFile} onClose={() => setSheet(closeSheet())} />}
       </AnimatePresence>
       {/* 只在有目標檔案時掛載：每次開啟都是新的 mount，`useState(name)` 就
           是正確的初始值，不必再用 effect 補一次。 */}
       {renameFile && (
         <RenameDialog
           name={renameFile.name}
-          onClose={() => setRenameFile(null)}
+          onClose={() => setSheet(closeSheet())}
           onConfirm={(...args) => void handleRename(...args)}
         />
       )}
