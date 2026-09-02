@@ -1248,6 +1248,8 @@ export const Finder = ({ windowId }: FinderProps) => {
                   </span>
                   {tabs.length > 1 && (
                     <button
+                      type="button"
+                      aria-label={`關閉分頁「${tab.path}」`}
                       onClick={(e) => {
                         e.stopPropagation();
                         closeTab(tab.id);
