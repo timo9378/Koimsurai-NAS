@@ -295,30 +295,58 @@ pub async fn upload_via_link(
                 .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
         }
 
-        // 串流寫入檔案（避免將整個檔案載入記憶體）
-        let mut file = fs::File::create(&full_path)
+        // ⚠️ 先寫到**同一個目錄底下**的暫存檔，完整寫完才 rename 過去。
+        //
+        // 原本是直接 `File::create(full_path)` 就地寫，只有「超過大小上限」那條
+        // 路徑會把半成品收掉。其餘任何失敗 —— 磁碟滿、I/O 錯誤、客戶端傳到一半
+        // 斷線 —— 都會把一個殘缺的檔案留在使用者的資料夾裡，而且**這條端點
+        // 不需要登入**：任何拿到連結的人斷線一次就留下一個壞檔。
+        //
+        // 暫存檔放同目錄：跨檔案系統的 rename 不是原子的，也可能直接 EXDEV。
+        // 這跟 tus 與舊的分塊上傳現在是同一個做法。
+        let temp_path = full_path.with_extension(format!(
+            "{}.part-{}",
+            full_path.extension().unwrap_or_default().to_string_lossy(),
+            Uuid::new_v4()
+        ));
+
+        let mut file = fs::File::create(&temp_path)
             .await
             .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
         let mut total_bytes: i64 = 0;
 
-        while let Some(chunk) = field.chunk().await.map_err(|e| {
-            tracing::error!("Chunk read error: {:?}", e);
-            AppError::Status(StatusCode::BAD_REQUEST)
-        })? {
+        // 任何一步失敗都要把半成品收掉，然後才把錯誤丟出去。
+        macro_rules! bail {
+            ($status:expr) => {{
+                drop(file);
+                let _ = fs::remove_file(&temp_path).await;
+                return Err(AppError::Status($status));
+            }};
+        }
+
+        loop {
+            let next = field.chunk().await;
+            let chunk = match next {
+                Ok(Some(c)) => c,
+                Ok(None) => break,
+                Err(e) => {
+                    tracing::error!("Chunk read error: {:?}", e);
+                    bail!(StatusCode::BAD_REQUEST);
+                }
+            };
+
             total_bytes += i64::try_from(chunk.len()).unwrap_or(i64::MAX);
 
             // 檢查檔案大小限制
             if let Some(max_size) = max_file_size {
                 if total_bytes > max_size {
-                    drop(file);
-                    let _ = fs::remove_file(&full_path).await;
-                    return Err(AppError::Status(StatusCode::PAYLOAD_TOO_LARGE));
+                    bail!(StatusCode::PAYLOAD_TOO_LARGE);
                 }
             }
 
-            file.write_all(&chunk)
-                .await
-                .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+            if file.write_all(&chunk).await.is_err() {
+                bail!(StatusCode::INTERNAL_SERVER_ERROR);
+            }
         }
 
         // ⚠️ 一定要 flush，不能靠 drop。
@@ -334,9 +362,19 @@ pub async fn upload_via_link(
         // 用 flush 而不是 sync_all：前者把緩衝推給 OS，之後任何讀取都看得到
         // 正確內容，也拿得到錯誤；後者還要 fsync 到實體磁碟（防斷電），
         // 對 10GB 級的上傳代價太大，那是另一個層次的取捨。
-        file.flush()
-            .await
-            .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+        if file.flush().await.is_err() {
+            drop(file);
+            let _ = fs::remove_file(&temp_path).await;
+            return Err(AppError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+        }
+
+        // 資料完整地躺在暫存檔裡了，這時才動最終路徑。
+        drop(file);
+        if let Err(e) = fs::rename(&temp_path, &full_path).await {
+            tracing::error!("上傳連結落地失敗（{full_path:?}）：{e}");
+            let _ = fs::remove_file(&temp_path).await;
+            return Err(AppError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+        }
 
         files_uploaded += 1;
     }

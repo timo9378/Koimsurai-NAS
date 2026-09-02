@@ -389,3 +389,30 @@ async fn repeated_wrong_passwords_get_rate_limited() {
     }
     assert!(saw_limit, "連續打錯應該要被擋下來，15 次都沒有");
 }
+
+/// 上傳失敗時不可以在使用者的資料夾裡留下殘骸。
+///
+/// ⚠️ 這條端點**不需要登入**，而它原本是直接寫最終路徑的：只有「超過大小
+/// 上限」那一條路徑會把半成品收掉，其餘任何失敗（磁碟滿、I/O 錯誤、客戶端
+/// 傳到一半斷線）都會把一個殘缺的檔案留在那裡。現在改成「暫存檔 + 原子
+/// rename」，所以失敗之後目標路徑與暫存檔都不該存在。
+#[tokio::test]
+async fn a_rejected_upload_leaves_nothing_behind() {
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "partial").await;
+    let id = create_link(&app, &client, json!({ "target_path": "/", "max_file_size": 10 })).await;
+
+    let res = upload(&app, &id, "", "too-big.bin", vec![0u8; 500]).await;
+    assert_eq!(res.status(), StatusCode::PAYLOAD_TOO_LARGE, "超過上限要被擋");
+
+    let leftovers: Vec<String> = std::fs::read_dir(app.storage_dir.path())
+        .expect("讀根目錄")
+        .filter_map(Result::ok)
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.contains("too-big") || n.contains(".part-"))
+        .collect();
+    assert!(
+        leftovers.is_empty(),
+        "被拒絕的上傳不該留下任何檔案，找到 {leftovers:?}"
+    );
+}
