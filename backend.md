@@ -31,7 +31,8 @@
 - **使用者認證**: 完整的註冊、登入、登出機制。
 - **權限控制**: 基於使用者的資料夾讀寫權限管理。
 - **分享連結**: 建立帶有密碼保護與過期時間的公開分享連結。
-- **稽核日誌**: 記錄所有關鍵操作 (刪除、權限變更等)，供管理員查詢。
+- **稽核日誌**: 記錄破壞性操作（刪除、批次移動／複製、清空垃圾桶、還原、
+  版本還原），供管理員查詢。清單見下面的 API 章節。
 
 ### ⚙️ 系統與整合
 
@@ -100,6 +101,21 @@ NAS，路徑還能用 `..` 逃出儲存根。現在走 HTTP Basic（見下面的
 | POST | `/api/auth/register` | 註冊新使用者 | `{ "username": "...", "password": "..." }` |
 | POST | `/api/auth/login`    | 使用者登入   | `{ "username": "...", "password": "..." }` |
 | POST | `/api/auth/logout`   | 使用者登出   | -                                          |
+| POST | `/api/auth/refresh`  | 換新的 access token | -                                   |
+
+**兩步驟驗證（TOTP）**
+
+| 方法 | 路徑                        | 描述                                   |
+| ---- | --------------------------- | -------------------------------------- |
+| GET  | `/api/auth/2fa/status`      | 是否已啟用、剩幾組 backup code          |
+| POST | `/api/auth/2fa/setup`       | 產生密鑰與 otpauth URI（尚未啟用）      |
+| POST | `/api/auth/2fa/verify-setup`| 驗證 6 位 code 並正式啟用，回 backup codes |
+| POST | `/api/auth/2fa/login`       | 登入的第二步（帶 temp_token）           |
+| POST | `/api/auth/2fa/disable`     | 停用（需要密碼 + code）                 |
+
+⚠️ **啟用 2FA 之後 WebDAV 會立刻停止運作**（Basic 認證沒有輸入第二因素的地方）。
+「立刻」是修過的：憑證快取原本掛在 2FA 檢查**前面**，所以最近用過 WebDAV 的
+帳號開啟 2FA 之後仍然通行到快取過期（5 分鐘）為止。
 
 ### 📂 檔案操作 (File Operations)
 
@@ -111,9 +127,17 @@ NAS，路徑還能用 `..` 逃出儲存根。現在走 HTTP Basic（見下面的
 | GET    | `/api/download/*path`        | 下載檔案              | -                                          |
 | PUT    | `/api/files/*path`           | 重新命名              | `{ "new_path": "new_name.ext" }`           |
 | DELETE | `/api/files/*path`           | 刪除檔案 (移至垃圾桶) | 回 `{ "trash_name": "..." }`               |
-| POST   | `/api/files/batch/delete`    | 批次刪除              | `{ "paths": ["file1", "file2"] }`          |
-| POST   | `/api/files/batch/move`      | 批次移動              | `{ "paths": [...], "destination": "dir" }` |
-| POST   | `/api/files/batch/copy`      | 批次複製              | `{ "paths": [...], "destination": "dir" }` |
+| POST   | `/api/files/batch/delete`    | 批次刪除              | 回 `{ trashed: [{path, trash_name}], failed: [...] }` |
+| POST   | `/api/files/batch/move`      | 批次移動              | 回 `{ moved: [...], failed: [...] }`       |
+| POST   | `/api/files/batch/copy`      | 批次複製（排進佇列，回 202） | `{ "paths": [...], "destination": "dir" }` |
+
+⚠️ **批次操作會說出哪些失敗了。** 這三條原本都是「失敗只進 log、一律回 200」
+—— 全部刪不掉時前端拿到的也是成功，於是畫面顯示「已移至垃圾桶」而檔案還在原地。
+
+⚠️ **移動與複製撞名不會覆蓋。** 目的地已有同名檔案時會存成 `名字 (1).ext`
+（`utils::naming::available_path`，與垃圾桶還原共用）。`fs::rename` 與
+`fs::copy` 在目的地存在時都是直接取代 —— 拖一個 report.pdf 進已經有
+report.pdf 的資料夾，原本那份會**沒有任何提示地消失**。
 | GET    | `/api/thumbnail/:size/*path` | 取得縮圖              | size: `small`, `medium`, `large`           |
 | GET    | `/api/favorites`             | 列出我的最愛          | -                                          |
 
@@ -132,6 +156,11 @@ NAS，路徑還能用 `..` 逃出儲存根。現在走 HTTP Basic（見下面的
 檔案指紋（存在 localStorage）接得回去，不需要先問伺服器傳到哪。
 底下 `/api/upload/*` 那幾條是舊的手刻分塊實作，保留作為 fallback。
 
+⚠️ **落地是「暫存檔 + 原子 rename」**，而且覆寫既有檔案之前會先存一份版本。
+原本是 `File::create(dest)` 就地寫 —— 那是 truncate，從那一刻起 dest 就已經
+壞了，寫到一半失敗（磁碟滿、I/O 錯誤）會留下殘缺或 0 byte 的檔案。
+暫存檔刻意放在 dest 同一個目錄：跨檔案系統的 rename 不是原子的。
+
 ⚠️ tus 的兩個坑寫在 `backend/src/handlers/tus.rs` 裡：
 「沒有 body」與「body 是空的」在協定上是**兩件不同的事**（用 Content-Type 判斷，
 不能一律送 `RequestBody::empty()`）；而「傳完了沒」要看 HEAD，PATCH 只回
@@ -141,7 +170,9 @@ NAS，路徑還能用 `..` 逃出儲存根。現在走 HTTP Basic（見下面的
 
 | 方法   | 路徑                               | 描述                               | Body / Query                             |
 | ------ | ---------------------------------- | ---------------------------------- | ---------------------------------------- |
-| POST   | `/api/tags/add/*path`              | 新增標籤到指定檔案/資料夾          | `{ "name": "Work", "color": "#FF0000" }` |
+| GET    | `/api/tags`                        | 列出所有標籤                        | -                                        |
+| GET    | `/api/tags/{tag_name}/files`       | 列出帶有某個標籤的檔案              | -                                        |
+| POST   | `/api/tags/add/*path`              | 新增標籤到指定檔案/資料夾          | `{ "tag_name": "Work", "color": "#FF0000" }` |
 | DELETE | `/api/tags/remove/:tag_name/*path` | 從指定檔案/資料夾移除標籤          | -                                        |
 | POST   | `/api/star/file/*path`             | 切換指定檔案收藏狀態 (Star/Unstar) | -                                        |
 
@@ -168,11 +199,23 @@ utoipa 標註三處互相矛盾」時期留下的第三種寫法，當時它永�
 | GET  | `/api/media/hls/serve`     | 以 HLS 方式提供分段串流  | `?path=video.mp4`                  |
 | GET  | `/api/media/hls/qualities` | 列出可用 HLS 解析度/品質 | -                                  |
 
+⚠️ **公開連結的密碼有次數上限。** 分享連結與上傳連結**不需要登入**就打得到，
+而密碼比對走 argon2（19 MiB / 次）。沒有節流的話有兩個後果：密碼可以無限次
+暴力嘗試，而且每次嘗試都換走一次記憶體與 CPU —— `spawn_blocking` 的池預設
+512 條執行緒，灌併發可以逼出接近 10 GB。
+
+現在：**10 次 / 5 分鐘**（key 是連結 id 而不是來源 IP —— 這服務在反向代理
+後面），超過回 **429**。額度檢查刻意放在 argon2 **之前**：擋在後面的話被擋掉
+的請求仍然付了那個代價。另外 argon2 本身有併發閘門（上限＝CPU 數，夾在 2..8）。
+
 ### 🔗 分享 (Sharing)
 
 | 方法 | 路徑         | 描述         | Body / Query                                                 |
 | ---- | ------------ | ------------ | ------------------------------------------------------------ |
-| POST | `/api/share` | 建立分享連結 | `{ "file_path": "...", "password": "...", "expires": 3600 }` |
+| POST | `/api/share` | 建立分享連結 | `{ "file_path": "...", "password": "...", "expires_in_seconds": 3600 }` |
+| GET  | `/api/share/{id}/info`     | 連結資訊（**不驗密碼**，只說有沒有設） | (公開存取) |
+| GET  | `/api/share/{id}/verify`   | 只檢查密碼、不產生內容 | `?pwd=...`（公開存取） |
+| GET  | `/api/share/{id}/download` | 下載（資料夾會即時打包 zip） | `?pwd=...`（公開存取） |
 | GET  | `/s/{id}`    | 分享頁（**SPA 路由**，不是 API；實際取資料走上面兩條） | (公開存取) |
 
 ### 🗑️ 垃圾桶 (Trash)
@@ -204,6 +247,20 @@ utoipa 標註三處互相矛盾」時期留下的第三種寫法，當時它永�
 | POST | `/api/system/rescan`             | 觸發資料重新掃描與索引 (管理員用) | -                                                   |
 | GET  | `/api/tasks`                     | 背景任務列表                      | -                                                   |
 | GET  | `/api/audit/logs`                | 稽核日誌                          | -                                                   |
+
+**目前會被記錄的動作**（`state.audit.log(...)` 的呼叫點）：
+
+    create_folder  rename_file  restore_version
+    delete_file    batch_delete  batch_move  batch_copy
+    restore_from_trash  permanent_delete  empty_trash
+
+⚠️ 後面那六個是**補上的**。原本只有前三個加 `delete_file` —— 也就是批次刪除、
+批次移動、永久刪除、清空垃圾桶、從垃圾桶還原**一件都沒有紀錄**，而那正是
+「誰把我的檔案弄不見的」最需要查的幾件事。`batch_move` 與 `batch_copy` 當時
+連 `user_id` 都沒有從請求裡取出來。
+
+前端的顯示對應表在 `src/components/desktop/audit-actions.ts`，有一條測試釘住
+「後端會產生的每個動作都要有顯示名稱」。
 | POST | `/api/permissions`               | 設定權限                          | `{ "user_id": 1, "path": "...", "can_read": true }` |
 | GET  | `/api/ws`                        | WebSocket                         | 即時通知連線                                        |
 

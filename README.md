@@ -12,6 +12,8 @@ Docker 管理，前端是一個仿 macOS 的網頁桌面。兩邊在同一個 re
 ### 檔案
 
 - 瀏覽、上傳、下載、重新命名、移動（拖放）、**複製／剪下／貼上**、刪除。
+  ⚠️ 移動與複製撞名時會存成 `名字 (1).ext`，不會覆蓋。`fs::rename` 與
+  `fs::copy` 在目的地存在時都是直接取代 —— 那曾經讓拖放變成靜默的資料遺失。
 - 上傳走 **tus 1.0**（`tus-js-client` ↔ `tus-protocol`）：分塊、可續傳，
   重新整理頁面之後仍然接得回去（指紋存在 localStorage）。
 - **垃圾桶**：刪除是移到 `.trash`，可以還原或永久刪除。
@@ -20,8 +22,13 @@ Docker 管理，前端是一個仿 macOS 的網頁桌面。兩邊在同一個 re
 - **版本**：檔案被覆寫時自動存一份到 `.versions/`，可以列出與還原。
   還原是非破壞性的（會先把目前的內容存成新版本）。
 - **標籤**、**我的最愛**、以 tantivy 建的全文搜尋。
+  ⚠️ 桌面 Finder 的搜尋框查的是 DB（`/api/files?search=`），手機的查的是
+  tantivy 索引（`/api/search`）—— 剛上傳的檔案桌面搜得到、手機要等索引跟上。
 - **分享連結**與**上傳連結**：公開網址，可設密碼與到期時間。
   資料夾的分享會即時打包成 zip。
+  ⚠️ 密碼有次數上限（10 次 / 5 分鐘，超過回 429）。那兩條端點不需要登入，
+  而每次密碼比對都是一次 argon2（19 MiB）—— 沒有節流的話既可以暴力破解，
+  也可以拿來把記憶體吃光。
 - **WebDAV**（`/webdav`）：Basic 認證。⚠️ 開了 2FA 的帳號用不了 WebDAV
   （Basic 沒有第二因素的位置），目前沒有 app-specific password。
 
@@ -41,8 +48,15 @@ Docker 管理，前端是一個仿 macOS 的網頁桌面。兩邊在同一個 re
 
 ### 桌面
 
-多視窗、Dock、頂端選單列、Spotlight 搜尋、深淺色主題。
+多視窗（拖曳、縮放、邊緣 snap、最小化／最大化／還原、顯示桌面）、Dock
+（執行中指示點、hover 出視窗預覽、右鍵開啟／強制結束）、頂端選單列
+（每個 app 一組選單，做不到的項目變灰）、Spotlight（⌘K）、通知中心
+（稽核紀錄 + 背景工作進度）、控制中心、深淺色主題。
 行動裝置（`max-width: 767px`）走另一套版面。
+
+⚠️ **Escape 只在沒有別的東西在等它的時候才關視窗** —— 有選單／對話框開著、
+或焦點在輸入框裡時不關。原本是無條件關閉，所以「用 Escape 取消」的每一個動作
+（關右鍵選單、取消重新命名、關對話框）都會順便把視窗關掉。
 
 ## 技術堆疊
 
@@ -88,9 +102,9 @@ pnpm dev
 | `pnpm test` / `pnpm test:coverage` | vitest（jsdom）；覆蓋率門檻是**棘輪**，見 `vitest.config.ts` |
 | `pnpm lint` / `pnpm format` | oxlint（type-aware）／oxfmt。⚠️ CSS 由 biome 管，用 `pnpm lint:css`；**不要**直接跑 `oxfmt`，會繞過排除設定 |
 | `pnpm knip` | 死碼與未使用的相依 |
-| `pnpm e2e` / `pnpm e2e:ui` | Playwright（含 axe 的可及性檢查） |
+| `pnpm e2e` / `pnpm e2e:ui` | Playwright（30 支 spec、57 條；含 axe 的可及性檢查） |
 | `pnpm export:types` | 從 Rust 重新產生 API 型別 |
-| `cargo nextest run` | 後端測試（23 個測試檔） |
+| `cargo nextest run` | 後端測試（24 個測試檔、278 條） |
 | `cargo clippy --all-targets -- -D warnings` | 後端 lint |
 
 `pnpm mutate`（Stryker）與 `cargo mutants` **不要在這台機器上跑** —— 它們同時
@@ -161,3 +175,15 @@ VITE_RELEASE=$(git -C Koimsurai-NAS rev-parse --short HEAD) \
 - **覆蓋率門檻是棘輪不是目標**：加一段還沒測到的新功能不該當場擋下，
   但「刪掉一批測試」要被抓到。補了測試就把數字往上調。
 - 有疑慮的行為要寫**反向驗證**：把修好的地方改回去，確認測試會紅。
+
+  ⚠️ 反向驗證本身也會失敗，而且失敗時看起來跟成功一模一樣。實際踩過的坑：
+  改回去之後 build 因為未使用的 import 失敗了（測到的是上一份 bundle）；
+  字串替換沒命中（`cargo fmt` 早就把那行折行了）；`scripts/e2e-server.sh`
+  **不會重編後端**（改了路由直接跑 E2E，測到的是舊 binary）；
+  以及「改了東西但沒改到會被觀察的東西」（只換了 snapState 的名字，幾何沒變）。
+  **沒有真的看到紅燈的反向驗證等於沒做。**
+
+- 斷言要**分辨得出來**。寫完先問「如果這個功能壞掉，這條會紅嗎」。
+  實例：驗 snap 用「寬度介於畫面的 40%～75%」—— 而預設視窗本來就是 57%，
+  停用 snap 照樣綠；驗「復原送的是垃圾桶檔名」但沒有製造撞名 ——
+  沒撞名時兩者相等，送哪個都過。
