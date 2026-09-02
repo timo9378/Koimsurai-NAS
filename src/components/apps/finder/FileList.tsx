@@ -198,7 +198,6 @@ export const FileList = ({
   onSelectionChange,
 }: FileListProps & { onSelectionChange?: (selected: Set<string>) => void }) => {
   const renameInputRef = useRef<HTMLInputElement>(null);
-  const [contextMenuKey, setContextMenuKey] = React.useState(0);
   // #2 拖拉移動:目前被拖到的目標資料夾(用來高亮)
   const [dropTargetFolder, setDropTargetFolder] = React.useState<string | null>(null);
 
@@ -360,7 +359,7 @@ export const FileList = ({
   }, [handleMouseMove, handleMouseUp]);
 
   return (
-    <ContextMenu key={contextMenuKey}>
+    <ContextMenu>
       <ContextMenuTrigger className="flex-1 flex flex-col min-h-0 h-full w-full">
         {/* 框選用的畫布，不是控制項（拖曳出矩形來選檔案）。鍵盤沒有等價動作。 */}
         {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
@@ -380,7 +379,6 @@ export const FileList = ({
                   buttons: 1,
                 }),
               );
-              setContextMenuKey((prev) => prev + 1);
             }
           }}
           onDragOver={onDragOver}

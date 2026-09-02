@@ -248,6 +248,8 @@ const NotificationCenter = () => {
       <div className="flex items-center justify-between mb-4">
         <span className="font-semibold">Notifications</span>
         <button
+          type="button"
+          aria-label="清除所有通知"
           onClick={handleClearAll}
           disabled={notifications.length === 0 || clearAllMutation.isPending}
           className={cn(

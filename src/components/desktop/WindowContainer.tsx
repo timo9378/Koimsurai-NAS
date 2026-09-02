@@ -526,11 +526,33 @@ export const WindowContainer = () => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        const { activeWindowId, closeWindow } = useWindowStore.getState();
-        if (activeWindowId) {
-          closeWindow(activeWindowId);
-        }
+      if (e.key !== "Escape") return;
+
+      // ⚠️ Escape 原本是**無條件**關掉作用中的視窗，沒有任何守衛。後果是它會
+      // 搶走每一個「用 Escape 取消」的動作：
+      //   - 關右鍵選單 → 選單關了，視窗也沒了
+      //   - 取消重新命名 → 改名取消了，視窗也沒了
+      //   - 關對話框（分享、版本歷史…）→ 底下的視窗跟著關
+      //   - 在搜尋框按 Esc（瀏覽器會清空 type="search"）→ 視窗也關
+      // 只有在「沒有別的東西正在吃這個 Escape」時才關。
+      if (e.defaultPrevented) return;
+
+      const target = e.target as HTMLElement | null;
+      if (
+        target?.closest('input, textarea, [contenteditable="true"], [role="menu"], [role="dialog"]')
+      ) {
+        return;
+      }
+
+      // Radix 的選單／對話框是 portal 到 body 的，事件的 target 可能只是 body
+      // —— 所以還要看畫面上有沒有開著的。
+      if (document.querySelector('[role="menu"], [role="dialog"], [role="alertdialog"]')) {
+        return;
+      }
+
+      const { activeWindowId, closeWindow } = useWindowStore.getState();
+      if (activeWindowId) {
+        closeWindow(activeWindowId);
       }
     };
 

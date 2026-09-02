@@ -411,7 +411,11 @@ export const Terminal = ({ windowId }: TerminalProps) => {
           </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="p-1 rounded hover:bg-white/10 transition-colors">
+              <button
+                type="button"
+                aria-label="分頁選單"
+                className="p-1 rounded hover:bg-white/10 transition-colors"
+              >
                 <ChevronDown className="w-4 h-4 text-gray-400" />
               </button>
             </DropdownMenuTrigger>

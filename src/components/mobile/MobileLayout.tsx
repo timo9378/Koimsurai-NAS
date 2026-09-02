@@ -619,7 +619,7 @@ export const MobileLayout = () => {
       <header className="shrink-0 bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 safe-area-inset-top">
         <div className="h-12 flex items-center px-4 gap-3">
           {activeTab === "files" && currentPath !== "/" && !isTrashMode ? (
-            <button onClick={goBack} className="p-1 -ml-1">
+            <button type="button" aria-label="回上一層" onClick={goBack} className="p-1 -ml-1">
               <ArrowLeft className="w-5 h-5" />
             </button>
           ) : activeTab === "files" && isTrashMode ? (
