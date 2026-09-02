@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+
 import { expect, type Page } from "@playwright/test";
 import type * as TusJsClient from "tus-js-client";
 
@@ -87,4 +89,33 @@ export async function selectInFinder(page: Page, name: string): Promise<void> {
   const search = page.getByRole("searchbox", { name: "搜尋這個資料夾" });
   await search.fill(name);
   await page.getByText(name, { exact: true }).first().click({ timeout: 15_000 });
+}
+
+/**
+ * 算出一個當下有效的 TOTP code。
+ *
+ * ⚠️ 自己實作而不是加一個依賴：這只是 RFC 6238 的 HMAC-SHA1 + 動態截斷，
+ * 用 Node 內建的 crypto 就夠了，而測試用的依賴同樣要維護。
+ * 後端用的是預設參數（SHA1、30 秒、6 位數）。
+ */
+export function totpCode(base32Secret: string, at: Date = new Date()): string {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits = "";
+  for (const ch of base32Secret.replace(/=+$/, "").toUpperCase()) {
+    const idx = alphabet.indexOf(ch);
+    if (idx === -1) continue;
+    bits += idx.toString(2).padStart(5, "0");
+  }
+  const bytes = Buffer.from((bits.match(/.{8}/g) ?? []).map((b) => Number.parseInt(b, 2)));
+
+  const counter = Math.floor(at.getTime() / 1000 / 30);
+  const buf = Buffer.alloc(8);
+  buf.writeUInt32BE(Math.floor(counter / 2 ** 32), 0);
+  buf.writeUInt32BE(counter >>> 0, 4);
+
+  const hmac = createHmac("sha1", bytes).update(buf).digest();
+  // `readUInt32BE` 會自己做邊界檢查，也省掉一串 non-null assertion。
+  const offset = hmac.readUInt8(hmac.length - 1) & 0x0f;
+  const binary = hmac.readUInt32BE(offset) & 0x7f_ff_ff_ff;
+  return (binary % 1_000_000).toString().padStart(6, "0");
 }

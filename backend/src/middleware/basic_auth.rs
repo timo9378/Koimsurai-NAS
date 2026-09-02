@@ -165,12 +165,15 @@ pub async fn basic_auth(State(state): State<AppState>, request: Request, next: N
 
     let key: CacheKey = (username.clone(), Sha256::digest(password.as_bytes()).into());
 
-    if let Some(user_id) = state.basic_auth_cache.get(&key) {
-        let mut request = request;
-        request.extensions_mut().insert(user_id);
-        return next.run(request).await;
-    }
-
+    // ⚠️ 這個 SELECT **不能**被快取跳過。
+    //
+    // 快取原本是掛在最前面「命中就直接放行」。那會讓 2FA 的限制被繞過：
+    // 一個最近用過 WebDAV 的帳號（快取裡有它）去開啟 2FA，WebDAV 仍然通行
+    // 到快取過期為止 —— 而那個限制存在的**唯一理由**就是 Basic 沒有第二因素
+    // 的位置。同樣的窗口也適用於改密碼與刪帳號。
+    //
+    // 快取要省的是 **argon2**（實測一次 310ms），不是這個 SELECT（微秒等級）。
+    // 所以順序改成：先查狀態、再決定要不要跳過 argon2。
     let row = sqlx::query_as::<_, (i64, String, i64)>(
         "SELECT id, password_hash, COALESCE(totp_enabled, 0) FROM users WHERE username = ?",
     )
@@ -186,6 +189,13 @@ pub async fn basic_auth(State(state): State<AppState>, request: Request, next: N
     if totp_enabled != 0 {
         tracing::warn!("使用者 {username} 啟用了 2FA，不允許用 Basic 認證存取 WebDAV");
         return challenge();
+    }
+
+    // 這裡才是快取的用途：跳過 argon2，而不是跳過上面的檢查。
+    if state.basic_auth_cache.get(&key) == Some(user_id) {
+        let mut request = request;
+        request.extensions_mut().insert(user_id);
+        return next.run(request).await;
     }
 
     let ok = verify_password_async(password, password_hash)

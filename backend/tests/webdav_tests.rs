@@ -332,3 +332,49 @@ async fn an_anonymous_request_gets_a_challenge_too() {
         );
     }
 }
+
+/// 已經用過 `WebDAV` 的帳號開啟 2FA 之後，必須**立刻**被擋下來。
+///
+/// ⚠️ 這是憑證快取與 2FA 檢查合起來才有的洞，兩邊各自都是對的：
+/// 快取原本掛在最前面「命中就直接放行」，而 2FA 的檢查在它後面 ——
+/// 於是最近用過 `WebDAV` 的帳號（快取裡有它）開啟 2FA，`WebDAV` 仍然通行到
+/// 快取過期（TTL 5 分鐘）為止。而那個限制存在的唯一理由就是 Basic 沒有
+/// 第二因素的位置。
+///
+/// 上面那條測試刻意用「還沒認證過的帳號」來避開快取 —— 也就是這條路徑
+/// 當時是**明知而未測**的。
+#[tokio::test]
+async fn enabling_2fa_revokes_webdav_immediately_even_when_cached() {
+    let app = spawn_app().await;
+    app.write_file("secret.txt", b"protected");
+    let _ = register_and_login(&app, "cached_user").await;
+
+    // 1. 先正常用一次 —— 這一步會把憑證放進快取。
+    let first = Client::new()
+        .get(dav(&app, "/secret.txt"))
+        .header("Authorization", basic("cached_user", "password123"))
+        .send()
+        .await
+        .expect("get");
+    assert_eq!(first.status(), StatusCode::OK, "開 2FA 前應該可用");
+
+    // 2. 開啟 2FA。
+    sqlx::query("UPDATE users SET totp_enabled = 1 WHERE username = ?")
+        .bind("cached_user")
+        .execute(&app.pool)
+        .await
+        .expect("開啟 2FA");
+
+    // 3. 同樣的帳密（所以一定命中快取）現在必須被拒絕。
+    let after = Client::new()
+        .get(dav(&app, "/secret.txt"))
+        .header("Authorization", basic("cached_user", "password123"))
+        .send()
+        .await
+        .expect("get");
+    assert_eq!(
+        after.status(),
+        StatusCode::UNAUTHORIZED,
+        "開了 2FA 之後快取不可以繼續放行"
+    );
+}

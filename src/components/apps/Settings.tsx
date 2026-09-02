@@ -525,7 +525,9 @@ const SecuritySection = () => {
                 若無法掃描，可手動輸入 secret：
               </p>
               <div className="flex items-center gap-2 p-2 rounded-md bg-gray-100 dark:bg-zinc-800 font-mono text-xs break-all">
-                <span className="flex-1">{setupData.secret}</span>
+                <span className="flex-1" data-testid="totp-secret">
+                  {setupData.secret}
+                </span>
                 <button
                   onClick={() => void copyToClipboard(setupData.secret, "secret")}
                   className="p-1 rounded hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors shrink-0"
@@ -548,6 +550,8 @@ const SecuritySection = () => {
             <input
               type="text"
               inputMode="numeric"
+              // ⚠️ 沒有 label 的話讀螢幕的人聽到的只有 placeholder「123456」。
+              aria-label="驗證器顯示的 6 位數字"
               autoFocus
               maxLength={6}
               value={code}
