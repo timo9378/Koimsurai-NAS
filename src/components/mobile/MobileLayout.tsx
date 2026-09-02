@@ -672,12 +672,16 @@ export const MobileLayout = () => {
               {activeTab === "files" && (
                 <div className="flex items-center gap-1">
                   <button
+                    type="button"
+                    aria-label="搜尋檔案"
                     onClick={() => setIsSearchOpen(true)}
                     className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-800"
                   >
                     <Search className="w-5 h-5" />
                   </button>
                   <button
+                    type="button"
+                    aria-label="重新整理"
                     onClick={() => void refetch()}
                     className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-800"
                   >
@@ -834,6 +838,10 @@ export const MobileLayout = () => {
                       </p>
                     </div>
                     <button
+                      type="button"
+                      // ⚠️ 純圖示按鈕要有名字，不然讀螢幕的人在每一列都聽到
+                      // 一個沒有說明的「按鈕」。
+                      aria-label={`「${file.name}」的更多動作`}
                       onClick={(e) => {
                         e.stopPropagation();
                         setSheet(openAction(file));
@@ -882,6 +890,10 @@ export const MobileLayout = () => {
                       <p className="text-xs text-gray-500 mt-0.5">{file.path}</p>
                     </div>
                     <button
+                      type="button"
+                      // ⚠️ 純圖示按鈕要有名字，不然讀螢幕的人在每一列都聽到
+                      // 一個沒有說明的「按鈕」。
+                      aria-label={`「${file.name}」的更多動作`}
                       onClick={(e) => {
                         e.stopPropagation();
                         setSheet(openAction(file));

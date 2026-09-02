@@ -281,7 +281,11 @@ export const Toolbar = ({
     <div className="h-14 flex items-center justify-between px-4 border-b border-white/10 bg-white/40 dark:bg-black/40 backdrop-blur-md shrink-0">
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-1">
+          {/* ⚠️ 純圖示按鈕一定要有名字：沒有的話讀螢幕的人聽到的只是「按鈕」，
+              而這兩顆長得一樣、意思相反。 */}
           <button
+            type="button"
+            aria-label="上一頁"
             onClick={onBack}
             disabled={historyIndex === 0}
             className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-30 transition-colors"
@@ -289,6 +293,8 @@ export const Toolbar = ({
             <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
           </button>
           <button
+            type="button"
+            aria-label="下一頁"
             onClick={onForward}
             disabled={historyIndex === historyLength - 1}
             className="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-30 transition-colors"
