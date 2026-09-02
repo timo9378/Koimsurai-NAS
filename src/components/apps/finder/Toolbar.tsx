@@ -368,6 +368,9 @@ export const Toolbar = ({
           <input
             type="search"
             name={`finder-search-${searchFieldId}`}
+            // ⚠️ placeholder 不是標籤：它在輸入後就消失，而讀螢幕的人在
+            // 聚焦時聽到的可能只是「搜尋」兩個字或什麼都沒有。
+            aria-label="搜尋這個資料夾"
             placeholder="Search"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}

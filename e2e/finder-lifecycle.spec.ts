@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { loadTusClient, registerAndLogin } from "./helpers";
+import { loadTusClient, registerAndLogin, selectInFinder } from "./helpers";
 
 /**
  * Finder 的核心生命週期：建立資料夾 → 重新命名 → 刪除 → 復原。
@@ -45,7 +45,7 @@ test("建立資料夾 → 重新命名 → 刪除 → 復原", async ({ page }) 
   await expect(page.getByText(folder, { exact: true }).first()).toBeVisible();
 
   // ── 刪除 ────────────────────────────────────────────────────────────────
-  await page.getByText(folder, { exact: true }).first().click();
+  await selectInFinder(page, folder);
   await page.keyboard.press("Delete");
 
   await expect.poll(() => listed(folder), { timeout: 20_000 }).toBe(false);
@@ -112,7 +112,7 @@ test("同名檔案刪兩次，復原拿回來的是最後刪掉的那份", async
   const deleteViaFinder = async () => {
     await page.reload();
     await page.getByRole("button", { name: "Finder", exact: true }).click();
-    await page.getByText(name, { exact: true }).first().click({ timeout: 15_000 });
+    await selectInFinder(page, name);
     await page.keyboard.press("Delete");
     await expect.poll(listed, { timeout: 20_000 }).toBe(false);
   };

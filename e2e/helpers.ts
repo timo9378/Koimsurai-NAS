@@ -74,3 +74,17 @@ export async function loadTusClient(page: Page): Promise<void> {
   await page.addScriptTag({ path: "node_modules/tus-js-client/dist/tus.min.js" });
   await page.waitForFunction(() => typeof window.tus.Upload === "function");
 }
+
+/**
+ * 在 Finder 裡選到某個檔案。
+ *
+ * ⚠️ 一定要先用搜尋框篩過再點。E2E 的儲存根是**所有測試共用**的，跑到後面
+ * 那裡已經堆了幾十個檔案，而檔案清單是虛擬捲動的 —— 目標可能根本沒有被
+ * 渲染出來，`click()` 就只是等到逾時。這個症狀看起來像「點不到」，
+ * 實際上是「不在 DOM 裡」。
+ */
+export async function selectInFinder(page: Page, name: string): Promise<void> {
+  const search = page.getByRole("searchbox", { name: "搜尋這個資料夾" });
+  await search.fill(name);
+  await page.getByText(name, { exact: true }).first().click({ timeout: 15_000 });
+}
