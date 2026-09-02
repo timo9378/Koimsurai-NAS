@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useState, useRef } from "react";
 import { TopBar } from "./TopBar";
 import { WindowContainer } from "./WindowContainer";
 import { UploadStatus } from "./UploadStatus";
 import { GlobalContextMenu } from "./GlobalContextMenu";
 import { DesktopIcons } from "./DesktopIcons";
 import { useFileUpload } from "@/features/files/hooks/useFileUpload"; // Updated import
-import { useWindowStore } from "@/store/window-store";
 import { MOVE_MIME } from "@/lib/dnd";
 
 interface DesktopLayoutProps {
@@ -36,63 +35,22 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
     isSelecting: false,
   });
   const [isDraggingFile, setIsDraggingFile] = useState(false);
-  const [maximizePreview, setMaximizePreview] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const { handleUploadFiles } = useFileUpload(); // Use the hook
-  const { snapWindow, maximizeWindow } = useWindowStore();
 
-  // Handle window drag for snap preview
-  useEffect(() => {
-    const handleDragMove = (e: Event) => {
-      const customEvent = e as CustomEvent<{ x: number; y: number }>;
-      const y = customEvent.detail.y;
-
-      // Show maximize preview if dragged to top
-      if (y < 50) {
-        setMaximizePreview(true);
-      } else {
-        setMaximizePreview(false);
-      }
-    };
-
-    const handleDragEnd = (e: Event) => {
-      const customEvent = e as CustomEvent<{ x: number; y: number; windowId: string }>;
-      const { x, y, windowId } = customEvent.detail;
-
-      setMaximizePreview(false);
-
-      const screenWidth = window.innerWidth;
-      const screenHeight = window.innerHeight;
-
-      // Maximize if dropped at top (fixed: use snapWindow with 'maximize' state)
-      if (y < 50) {
-        maximizeWindow(windowId);
-      }
-      // Snap left
-      else if (x < 50) {
-        snapWindow(windowId, "left", {
-          position: { x: 0, y: 0 },
-          size: { width: screenWidth / 2, height: screenHeight },
-        });
-      }
-      // Snap right
-      else if (x > screenWidth - 50) {
-        snapWindow(windowId, "right", {
-          position: { x: screenWidth / 2, y: 0 },
-          size: { width: screenWidth / 2, height: screenHeight },
-        });
-      }
-    };
-
-    window.addEventListener("window-drag-move", handleDragMove);
-    window.addEventListener("window-drag-end", handleDragEnd);
-
-    return () => {
-      window.removeEventListener("window-drag-move", handleDragMove);
-      window.removeEventListener("window-drag-end", handleDragEnd);
-    };
-  }, [snapWindow, maximizeWindow]);
+  // ⚠️ 這裡原本還有一份 snap／maximize 的實作，已經移除。
+  //
+  // `WindowContainer` 也監聽同一個 `window-drag-end`，而兩份的幾何**不一樣**：
+  // 這裡是 `{x:0, y:0, w/2, h}`（無邊距），那裡是 `{x:12, y:48, w/2-24, h-96}`
+  // （跟拖曳時顯示的預覽框一致）。兩份都會跑，最終狀態取決於監聽器的註冊順序
+  // —— 實測是 WindowContainer 那份贏，所以這一份是死的，但只要掛載順序改變
+  // 行為就會跟著變。
+  //
+  // 預覽框也是重複的：這裡畫一個滿版的邊框（只有最大化），WindowContainer 畫
+  // 一個帶邊距的（最大化／左／右）。拖到頂端時兩個會同時出現，大小還不一樣。
+  //
+  // 留一份：`WindowContainer`（三種狀態都有，而且落點跟它自己的預覽一致）。
 
   const handleWallpaperChange = (url: string) => {
     setWallpaper(url);
@@ -208,11 +166,6 @@ export const DesktopLayout = ({ children }: DesktopLayoutProps) => {
       <div
         className={`absolute inset-0 bg-black/20 pointer-events-none transition-colors duration-300 ${isDraggingFile ? "bg-blue-500/20" : ""}`}
       />
-
-      {/* Maximize Preview */}
-      {maximizePreview && (
-        <div className="absolute inset-0 border-4 border-blue-500/50 bg-blue-500/10 pointer-events-none z-[9998] animate-in fade-in duration-200" />
-      )}
 
       {/* Selection Box */}
       {selection.isSelecting && (

@@ -223,6 +223,9 @@ const Window = ({ window }: { window: WindowState }) => {
 
   return (
     <motion.div
+      // 視窗外框的標記 —— E2E 要量位置與大小，而從標題列往上找「第一個有 style
+      // 的祖先」會抓到內層元素（實測量到的 y 差了 169px）。
+      data-window-frame={window.id}
       drag={!window.isMaximized && !window.snapState}
       dragControls={dragControls}
       dragMomentum={false}
@@ -292,34 +295,42 @@ const Window = ({ window }: { window: WindowState }) => {
       {!window.isMaximized && !window.snapState && (
         <>
           <div
+            data-resize="w"
             className="absolute top-0 left-0 w-2 h-full cursor-w-resize z-20"
             onPointerDown={(e) => handleResize(e, "w")}
           />
           <div
+            data-resize="e"
             className="absolute top-0 right-0 w-2 h-full cursor-e-resize z-20"
             onPointerDown={(e) => handleResize(e, "e")}
           />
           <div
+            data-resize="n"
             className="absolute top-0 left-0 w-full h-2 cursor-n-resize z-20"
             onPointerDown={(e) => handleResize(e, "n")}
           />
           <div
+            data-resize="s"
             className="absolute bottom-0 left-0 w-full h-2 cursor-s-resize z-20"
             onPointerDown={(e) => handleResize(e, "s")}
           />
           <div
+            data-resize="nw"
             className="absolute top-0 left-0 w-4 h-4 cursor-nw-resize z-30"
             onPointerDown={(e) => handleResize(e, "nw")}
           />
           <div
+            data-resize="ne"
             className="absolute top-0 right-0 w-4 h-4 cursor-ne-resize z-30"
             onPointerDown={(e) => handleResize(e, "ne")}
           />
           <div
+            data-resize="sw"
             className="absolute bottom-0 left-0 w-4 h-4 cursor-sw-resize z-30"
             onPointerDown={(e) => handleResize(e, "sw")}
           />
           <div
+            data-resize="se"
             className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize z-30"
             onPointerDown={(e) => handleResize(e, "se")}
           />
@@ -438,7 +449,12 @@ const Window = ({ window }: { window: WindowState }) => {
         }}
       >
         <div className="flex items-center gap-2 group">
+          {/* ⚠️ 這三顆是整個桌面最基本的控制項，而它們原本**沒有任何可及名稱** ——
+              讀螢幕的人聽到的是三個一樣的「按鈕」，分不出關閉／最小化／最大化。
+              名稱帶上視窗標題，開了多個視窗時才知道操作的是哪一個。 */}
           <button
+            type="button"
+            aria-label={`關閉「${window.title}」`}
             onClick={(e) => {
               e.stopPropagation();
               closeWindow(window.id);
@@ -448,6 +464,8 @@ const Window = ({ window }: { window: WindowState }) => {
             <X className="w-2 h-2" />
           </button>
           <button
+            type="button"
+            aria-label={`最小化「${window.title}」`}
             onClick={(e) => {
               e.stopPropagation();
               minimizeWindow(window.id);
@@ -457,6 +475,10 @@ const Window = ({ window }: { window: WindowState }) => {
             <Minus className="w-2 h-2" />
           </button>
           <button
+            type="button"
+            aria-label={
+              window.isMaximized ? `還原「${window.title}」` : `最大化「${window.title}」`
+            }
             onClick={(e) => {
               e.stopPropagation();
               if (window.isMaximized) {
