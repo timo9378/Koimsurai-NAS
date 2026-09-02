@@ -475,6 +475,9 @@ export const FileList = ({
                         <input
                           ref={renameInputRef}
                           type="text"
+                          // ⚠️ 沒有 label 的話讀螢幕的人只會聽到「編輯文字」，
+                          // 不知道自己在改什麼。
+                          aria-label={`重新命名「${file.name}」`}
                           value={renameValue}
                           onChange={(e) => onRenameChange(e.target.value)}
                           onBlur={onRenameSubmit}
@@ -655,6 +658,7 @@ export const FileList = ({
                               <input
                                 ref={renameInputRef}
                                 type="text"
+                                aria-label={`重新命名「${file.name}」`}
                                 value={renameValue}
                                 onChange={(e) => onRenameChange(e.target.value)}
                                 onBlur={onRenameSubmit}
