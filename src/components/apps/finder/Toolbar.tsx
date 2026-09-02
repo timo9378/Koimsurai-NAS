@@ -346,6 +346,8 @@ export const Toolbar = ({
         )}
         <div className="flex bg-black/5 dark:bg-white/10 rounded-md p-0.5">
           <button
+            type="button"
+            aria-label="格狀檢視"
             onClick={() => onViewModeChange("grid")}
             className={cn(
               "p-1 rounded transition-all duration-200",
@@ -357,6 +359,8 @@ export const Toolbar = ({
             <LayoutGrid className="w-4 h-4 text-gray-600 dark:text-gray-300" />
           </button>
           <button
+            type="button"
+            aria-label="清單檢視"
             onClick={() => onViewModeChange("list")}
             className={cn(
               "p-1 rounded transition-all duration-200",
