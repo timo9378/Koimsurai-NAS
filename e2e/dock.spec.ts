@@ -68,27 +68,29 @@ test("hover Dock 圖示會出現視窗預覽，點它可以切過去", async ({ 
     .toBe(true);
 });
 
-test("右鍵多實例 app 的圖示會直接開新視窗", async ({ page }) => {
+test("右鍵 Dock 圖示會出選單，可以開新視窗，也可以強制結束整個 app", async ({ page }) => {
   await registerAndLogin(page, "dock3");
 
   const finderIcon = page.getByRole("button", { name: "Finder", exact: true });
+  const windows = page.locator("[data-window-frame]");
 
-  // ⚠️ 這裡釘的是**現況**：右鍵直接開新視窗（`Dock.tsx` 的註解寫明
-  // 「Right click: always open new window for multi-instance apps」）。
-  //
-  // 而 `GlobalContextMenu` 裡有一整段 `dock-icon` 的選單（開啟／強制結束），
-  // 元素上也有 `data-context-type="dock-icon"` 在餵它 —— 但它**打不開**：
-  // DockItem 的 onContextMenu 無條件 `preventDefault()`，而
-  // GlobalContextMenu 的第一行是 `if (e.defaultPrevented) return`。
-  //
-  // 兩邊看起來都是刻意的，互斥。要哪一個是產品決定，所以這裡不改行為，
-  // 只把現在真正會發生的事釘住。
+  // ⚠️ 這個選單以前**打不開**：`DockItem` 的 onContextMenu 無條件
+  // `preventDefault()`，而 `GlobalContextMenu` 的第一行是
+  // `if (e.defaultPrevented) return` —— 於是那整段 `dock-icon` 分支
+  // （連同元素上為它準備的 `data-context-type`）是死碼，右鍵只會直接開視窗。
   await finderIcon.click({ button: "right" });
-  await expect(page.locator("[data-window-frame]")).toHaveCount(1, { timeout: 15_000 });
+  await expect(page.getByText("開啟", { exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("強制結束", { exact: true })).toBeVisible();
+
+  await page.getByText("開啟", { exact: true }).click();
+  await expect(windows).toHaveCount(1, { timeout: 15_000 });
 
   await finderIcon.click({ button: "right" });
-  await expect(page.locator("[data-window-frame]")).toHaveCount(2, { timeout: 15_000 });
+  await page.getByText("開啟", { exact: true }).click();
+  await expect(windows).toHaveCount(2, { timeout: 15_000 });
 
-  // 右鍵不會跳出全域右鍵選單（它被 preventDefault 擋掉了）。
-  await expect(page.getByText("強制結束", { exact: true })).toHaveCount(0);
+  // 強制結束：一次收掉這個 app 的所有視窗。
+  await finderIcon.click({ button: "right" });
+  await page.getByText("強制結束", { exact: true }).click();
+  await expect(windows).toHaveCount(0, { timeout: 10_000 });
 });

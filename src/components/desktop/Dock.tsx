@@ -34,7 +34,12 @@ interface DockItemProps {
   isOpen: boolean;
   windows: WindowState[];
   onClick: () => void;
-  onRightClick: () => void;
+  /**
+   * 右鍵的自訂處置。**不給就交給全域右鍵選單**（`GlobalContextMenu` 的
+   * `dock-icon` 分支：開啟／強制結束）。只有 Settings 需要自己接 ——
+   * 它右鍵開的是 Dock 位置面板。
+   */
+  onRightClick?: () => void;
   onCloseWindow: (id: string) => void;
   onFocusWindow: (id: string) => void;
 }
@@ -214,6 +219,12 @@ const DockItem = ({
               className="aspect-square rounded-xl bg-white/10 border border-white/20 backdrop-blur-md flex items-center justify-center cursor-pointer hover:bg-white/20 transition-colors relative z-10"
               onClick={onClick}
               onContextMenu={(e) => {
+                // ⚠️ 沒有自訂處置時**不要** preventDefault。
+                // `GlobalContextMenu` 的第一行是 `if (e.defaultPrevented) return`，
+                // 而這裡原本無條件擋掉 —— 於是那個檔案裡整段 `dock-icon` 的
+                // 選單（開啟／強制結束）從來打不開，右鍵變成「直接開新視窗」。
+                // 這個元素上的 `data-context-type="dock-icon"` 就是為它存在的。
+                if (!onRightClick) return;
                 e.preventDefault();
                 onRightClick();
               }}
@@ -444,8 +455,6 @@ export const Dock = () => {
         >
           {apps.map((app) => {
             const appWindows = windows.filter((w) => w.appType === app.type);
-            const multiInstanceApps = ["finder", "terminal", "preview", "photos"];
-            const canMultiInstance = multiInstanceApps.includes(app.type);
 
             return (
               <DockItem
@@ -465,12 +474,6 @@ export const Dock = () => {
                     );
                     focusWindow(frontWindow.id);
                   } else {
-                    openWindow(app.type);
-                  }
-                }}
-                onRightClick={() => {
-                  // Right click: always open new window for multi-instance apps
-                  if (canMultiInstance) {
                     openWindow(app.type);
                   }
                 }}
@@ -547,7 +550,6 @@ export const Dock = () => {
                     openWindow(app.type);
                   }
                 }}
-                onRightClick={() => openWindow(app.type)}
                 onCloseWindow={closeWindow}
                 onFocusWindow={focusWindow}
               />
