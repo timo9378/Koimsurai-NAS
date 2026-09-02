@@ -65,6 +65,12 @@ pub struct AppState {
     /// 展開一層目錄就會發好幾個請求 —— 沒有快取的話功能不能用，
     /// 而且是個「一個請求換 310ms CPU」的 `DoS` 放大器。
     pub basic_auth_cache: crate::middleware::basic_auth::BasicAuthCache,
+    /// 公開連結（分享／上傳）的密碼嘗試次數限制。
+    ///
+    /// ⚠️ 那兩條端點**不需要登入**，而密碼比對走 argon2。沒有這個的話：
+    /// 密碼可以無限次暴力嘗試，而且每次嘗試都換走一次 19 MiB + CPU。
+    /// 詳見 `utils/throttle.rs`。
+    pub link_attempts: Arc<crate::utils::throttle::AttemptLimiter>,
     /// 全站維護作業（rescan、一致性檢查）的單一併發鎖。
     ///
     /// ⚠️ 這兩個端點會走訪**整棵儲存樹**。本專案的紀錄是 320k 個檔案掃一次

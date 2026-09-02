@@ -247,3 +247,78 @@ async fn directory_share_is_zipped() {
     // zip 的 magic number。不解壓縮，只確認回的是 zip 而不是（例如）目錄的第一個檔。
     assert_eq!(&body[..2], b"PK", "目錄分享應該回 zip");
 }
+
+/// 公開連結的密碼不能被無限次嘗試。
+///
+/// ⚠️ 這條端點**不需要登入**，而密碼比對走 argon2（19 MiB / 次）。沒有次數
+/// 上限的話有兩個後果：密碼可以暴力破解，而且每次嘗試都換走一次記憶體與 CPU
+/// —— `spawn_blocking` 的池預設 512 條執行緒，灌併發可以逼出接近 10 GB。
+#[tokio::test]
+async fn repeated_wrong_passwords_get_rate_limited() {
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "bruteforce").await;
+    std::fs::write(app.storage_dir.path().join("secret.txt"), b"x").expect("建立檔案");
+
+    let id = create_share(
+        &app,
+        &client,
+        json!({ "file_path": "secret.txt", "password": "correct horse" }),
+    )
+    .await;
+
+    let anonymous = Client::new();
+    let attempt = |pwd: &str| {
+        let url = format!("{}/api/share/{id}/download?pwd={pwd}", app.address);
+        let c = anonymous.clone();
+        async move { c.get(url).send().await.expect("嘗試").status() }
+    };
+
+    let mut saw_limit = false;
+    for i in 0..15 {
+        let status = attempt("wrong").await;
+        if status == StatusCode::TOO_MANY_REQUESTS {
+            saw_limit = true;
+            assert!(i >= 5, "不該一開始就擋（第 {i} 次就 429 了）");
+            break;
+        }
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "第 {i} 次應該是 401");
+    }
+    assert!(saw_limit, "連續打錯應該要被擋下來，15 次都沒有");
+}
+
+/// 密碼對了就把額度還回去 —— 打錯幾次才輸對的人不該被後續請求誤鎖。
+#[tokio::test]
+async fn a_correct_password_clears_the_failure_budget() {
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "recovers").await;
+    std::fs::write(app.storage_dir.path().join("s.txt"), b"content").expect("建立檔案");
+
+    let id = create_share(&app, &client, json!({ "file_path": "s.txt", "password": "pw" })).await;
+
+    let anonymous = Client::new();
+    for _ in 0..3 {
+        let res = anonymous
+            .get(format!("{}/api/share/{id}/download?pwd=nope", app.address))
+            .send()
+            .await
+            .expect("錯的密碼");
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    let ok = anonymous
+        .get(format!("{}/api/share/{id}/download?pwd=pw", app.address))
+        .send()
+        .await
+        .expect("對的密碼");
+    assert!(ok.status().is_success(), "對的密碼要放行");
+
+    // 額度歸零之後，再打錯幾次仍然是 401 而不是 429。
+    for _ in 0..3 {
+        let res = anonymous
+            .get(format!("{}/api/share/{id}/download?pwd=nope", app.address))
+            .send()
+            .await
+            .expect("再錯一次");
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED, "額度應該已經回滿");
+    }
+}

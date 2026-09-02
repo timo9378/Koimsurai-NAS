@@ -6,5 +6,6 @@ pub mod jwt;
 pub mod metadata;
 pub mod naming;
 pub mod queue;
+pub mod throttle;
 pub mod totp;
 pub mod versioning;

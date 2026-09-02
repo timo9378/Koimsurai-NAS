@@ -118,16 +118,21 @@ function SharePage() {
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!shareInfo) return;
 
     setIsDownloading(true);
     setError(null);
 
     try {
-      const url = password
-        ? `/api/share/${shareId}/download?pwd=${encodeURIComponent(password)}`
-        : `/api/share/${shareId}/download`;
+      const problem = await verifyPassword();
+      if (problem) {
+        setError(problem);
+        return;
+      }
+
+      const query = password ? `?pwd=${encodeURIComponent(password)}` : "";
+      const url = `/api/share/${shareId}/download${query}`;
 
       // Use native browser download — reliable for all file sizes
       // The backend validates password/expiry and returns proper Content-Disposition
@@ -150,11 +155,44 @@ function SharePage() {
     }
   };
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password.trim()) {
-      setStatus("ready");
+  /**
+   * 問後端這個密碼對不對。對的話回 null，不對就回一句要顯示的話。
+   *
+   * ⚠️ 存在的理由：下載走的是原生 `<a download>`（大檔案唯一可靠的做法），
+   * 而瀏覽器**不會把 401/429 交回這個頁面**。沒有這一步的話，密碼打錯時畫面上
+   * 完全沒有反應 —— 使用者只能猜是密碼錯了、連結過期了、還是站掛了。
+   * `/verify` 不產生任何內容，所以不會為了探測而把整個資料夾多壓一次 zip。
+   */
+  const verifyPassword = async (): Promise<string | null> => {
+    const query = password ? `?pwd=${encodeURIComponent(password)}` : "";
+    const res = await fetch(`/api/share/${shareId}/verify${query}`);
+    if (res.ok) return null;
+
+    switch (res.status) {
+      case 429:
+        return "嘗試太多次了，請過幾分鐘再試";
+      case 410:
+        return "這個連結已經過期";
+      case 404:
+        return "找不到這個連結";
+      default:
+        return "密碼不正確";
     }
+  };
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!password.trim()) return;
+
+    // ⚠️ 在這裡就驗，不要等到按下載才說。原本這個 handler 只是把畫面切到
+    // 「ready」，所以輸入密碼這個動作本身**從來不會給任何回饋**。
+    setError(null);
+    const problem = await verifyPassword();
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    setStatus("ready");
   };
 
   return (
@@ -324,7 +362,7 @@ function SharePage() {
                   </div>
 
                   {/* Password Form */}
-                  <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                  <form onSubmit={(e) => void handlePasswordSubmit(e)} className="space-y-4">
                     <div className="space-y-2">
                       <label
                         htmlFor={passwordFieldId}
@@ -363,6 +401,15 @@ function SharePage() {
                     >
                       確認
                     </Button>
+
+                    {/* ⚠️ 密碼畫面原本**沒有任何顯示錯誤的地方** —— 就算後端
+                        回了 401，這一頁也沒有東西可以把它講出來。 */}
+                    {error && (
+                      <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/20 border border-red-500/30">
+                        <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                        <span className="text-red-300 text-sm">{error}</span>
+                      </div>
+                    )}
                   </form>
                 </motion.div>
               )}
@@ -438,7 +485,7 @@ function SharePage() {
 
                   {/* Download Button */}
                   <Button
-                    onClick={handleDownload}
+                    onClick={() => void handleDownload()}
                     disabled={isDownloading}
                     className="w-full h-12 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium shadow-lg"
                   >

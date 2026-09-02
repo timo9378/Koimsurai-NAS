@@ -195,19 +195,23 @@ pub async fn upload_via_link(
 
     // 檢查密碼
     if let Some(ref hash) = password_hash {
-        match &query.pwd {
-            Some(pwd) => {
-                if !verify_password_async(pwd.clone(), hash.clone())
-                    .await
-                    .map_err(AppError::from)?
-                {
-                    return Err(AppError::Status(StatusCode::UNAUTHORIZED));
-                }
-            }
-            None => {
-                return Err(AppError::Status(StatusCode::UNAUTHORIZED));
-            }
+        // ⚠️ 額度檢查要在 argon2 **之前** —— 擋在後面的話被擋掉的請求仍然付了
+        // 19 MiB + CPU 的代價。跟分享連結同一個限制器，見 `utils/throttle.rs`。
+        if !state.link_attempts.allows(&id) {
+            return Err(AppError::Status(StatusCode::TOO_MANY_REQUESTS));
         }
+
+        let Some(pwd) = query.pwd.clone() else {
+            return Err(AppError::Status(StatusCode::UNAUTHORIZED));
+        };
+        if !verify_password_async(pwd, hash.clone())
+            .await
+            .map_err(AppError::from)?
+        {
+            state.link_attempts.record_failure(&id);
+            return Err(AppError::Status(StatusCode::UNAUTHORIZED));
+        }
+        state.link_attempts.reset(&id);
     }
 
     // 早退：一開始就滿了的話連 multipart 都不用讀。真正的把關在迴圈裡，

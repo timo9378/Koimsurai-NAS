@@ -39,4 +39,14 @@ if [ ! -x "$BIN" ]; then
   exit 1
 fi
 
+# ⚠️ 這個腳本**不會重編**。改了後端卻忘了 build 的話，E2E 測的是上一版的 server
+# —— 而症狀是「新端點回 404」，看起來像程式寫錯，很容易往錯的方向追（我就這樣
+# 追了一輪：以為路由註冊錯了，其實是 binary 舊的）。
+# 這裡不自動 build（那會讓 webServer 的啟動逾時難以預測），只出聲。
+NEWER=$(find "$ROOT/backend/src" -name '*.rs' -newer "$BIN" -print -quit 2>/dev/null || true)
+if [ -n "$NEWER" ]; then
+  echo "⚠️  backend/src 比 $BIN 新（例如 $NEWER）——" >&2
+  echo "    這支腳本不會重編，先跑 cargo build --bin Koimsurai_NAS，否則測到的是舊 server。" >&2
+fi
+
 exec "$BIN"

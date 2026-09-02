@@ -134,6 +134,7 @@ impl Modify for CommonErrorResponses {
         trash::empty_trash,
         share::create_share_link,
         share::access_share_link,
+        share::verify_share_password,
         system::get_system_status,
         system::verify_consistency,
         system::trigger_rescan,
@@ -340,6 +341,9 @@ pub async fn create_router(state: AppState) -> Router {
         .nest("/api/docker", docker_routes)
         .route("/api/share/{id}/download", get(share::access_share_link)) // Public share link - download
         .route("/api/share/{id}/info", get(share::get_share_info)) // Public share link - info
+        // 只檢查密碼、不產生內容 —— 分享頁用原生 <a download> 下載，
+        // 瀏覽器不會把 401/429 交回頁面（見 handler 的說明）。
+        .route("/api/share/{id}/verify", get(share::verify_share_password))
         .merge(
             Router::new()
                 .route("/api/upload-link/{id}/upload", post(upload_link::upload_via_link))

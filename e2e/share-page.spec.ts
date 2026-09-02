@@ -63,3 +63,54 @@ test("分享連結在沒有登入的瀏覽器裡打得開，也下載得到", as
 
   await anonymous.close();
 });
+
+/**
+ * 有密碼的分享連結：打錯要**說出來**。
+ *
+ * ⚠️ 這頁用原生的 `<a download>` 觸發下載（大檔案唯一可靠的做法），而瀏覽器
+ * 不會把 401 交回頁面 —— 密碼打錯時畫面上原本完全沒有任何反應，使用者只能猜
+ * 是密碼錯了、連結過期了、還是站掛了。現在會先打一個不產生內容的驗證端點。
+ */
+test("分享頁的密碼打錯會顯示訊息，而不是靜靜沒反應", async ({ page, browser }) => {
+  await registerAndLogin(page, "pwshare");
+  await loadTusClient(page);
+
+  const name = `pw-${Date.now().toString(36)}.txt`;
+  const uploaded = await page.evaluate(async (n: string) => {
+    const file = new File(["secret"], n, { type: "text/plain" });
+    return await new Promise<boolean>((resolve) => {
+      const upload = new window.tus.Upload(file, {
+        endpoint: "/api/tus",
+        metadata: { filename: n, path: "" },
+        onSuccess: () => resolve(true),
+        onError: () => resolve(false),
+      });
+      upload.start();
+    });
+  }, name);
+  expect(uploaded).toBe(true);
+
+  const shareId = await page.evaluate(async (n: string) => {
+    const res = await fetch("/api/share", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file_path: n, password: "correct horse" }),
+    });
+    if (!res.ok) return null;
+    return ((await res.json()) as { id: string }).id;
+  }, name);
+  if (shareId === null) throw new Error("建立分享連結失敗");
+
+  const anonymous = await browser.newContext();
+  const guest = await anonymous.newPage();
+  await guest.goto(`/s/${shareId}`);
+
+  const input = guest.locator('input[type="password"]');
+  await expect(input).toBeVisible({ timeout: 15_000 });
+  await input.fill("wrong one");
+  await guest.getByRole("button", { name: "確認" }).click();
+
+  await expect(guest.getByText(/密碼不正確/)).toBeVisible({ timeout: 15_000 });
+
+  await anonymous.close();
+});

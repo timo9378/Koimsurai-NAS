@@ -191,6 +191,12 @@ pub async fn create_app(pool: SqlitePool, storage_path: PathBuf) -> axum::Router
         queue,
         tus,
         basic_auth_cache: crate::middleware::basic_auth::BasicAuthCache::default(),
+        link_attempts: Arc::new(crate::utils::throttle::AttemptLimiter::new(
+            // 10 次 / 5 分鐘：正常使用者不會在五分鐘內打錯十次，而這讓暴力
+            // 嘗試從「只受 CPU 限制」變成「每五分鐘十次」。
+            10,
+            std::time::Duration::from_secs(300),
+        )),
         maintenance_lock: Arc::new(tokio::sync::Mutex::new(())),
         webdav,
         tx,

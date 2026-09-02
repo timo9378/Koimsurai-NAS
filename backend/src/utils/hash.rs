@@ -3,6 +3,8 @@ use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
+use std::sync::OnceLock;
+use tokio::sync::Semaphore;
 
 // 使用 Argon2 加密密碼
 // Hash password using Argon2
@@ -33,12 +35,30 @@ pub fn verify_password(password: &str, password_hash: &str) -> Result<bool> {
 // ⚠️ 批次操作要**整批包一次** spawn_blocking，不要在迴圈裡逐次包 —— 那樣每個
 // 元素都付一次跨執行緒排程的成本，反而比同步跑還慢。
 
+/// 同時能跑幾個 argon2。
+///
+/// ⚠️ 這不是效能調校，是**記憶體上限**。`Argon2::default()` 是記憶體硬化的
+/// 參數（19 MiB / 次），而 `spawn_blocking` 的池預設 512 條執行緒 ——
+/// 沒有這道閘門的話，往公開的分享連結灌併發請求可以逼出接近 10 GB 的配置，
+/// 而那些端點**不需要登入**。這台機器就是 NAS 本身，上面還跑著別的服務。
+///
+/// 排隊比 OOM 好：超過上限的請求會等，不會失敗。
+static VERIFY_SLOTS: OnceLock<Semaphore> = OnceLock::new();
+
+fn slots() -> &'static Semaphore {
+    VERIFY_SLOTS.get_or_init(|| {
+        let cores = std::thread::available_parallelism().map_or(2, std::num::NonZeroUsize::get);
+        Semaphore::new(cores.clamp(2, 8))
+    })
+}
+
 fn spawn_err(e: &tokio::task::JoinError) -> anyhow::Error {
     anyhow::anyhow!("password hashing task failed: {e}")
 }
 
 /// 雜湊單一密碼。
 pub async fn hash_password_async(password: String) -> Result<String> {
+    let _permit = slots().acquire().await?;
     tokio::task::spawn_blocking(move || hash_password(&password))
         .await
         .map_err(|e| spawn_err(&e))?
@@ -46,6 +66,7 @@ pub async fn hash_password_async(password: String) -> Result<String> {
 
 /// 驗證單一密碼。
 pub async fn verify_password_async(password: String, password_hash: String) -> Result<bool> {
+    let _permit = slots().acquire().await?;
     tokio::task::spawn_blocking(move || verify_password(&password, &password_hash))
         .await
         .map_err(|e| spawn_err(&e))?
@@ -53,6 +74,7 @@ pub async fn verify_password_async(password: String, password_hash: String) -> R
 
 /// 一次雜湊多筆（2FA 的 backup codes）。整批共用一個 blocking task。
 pub async fn hash_all_async(passwords: Vec<String>) -> Result<Vec<String>> {
+    let _permit = slots().acquire().await?;
     tokio::task::spawn_blocking(move || {
         passwords
             .iter()

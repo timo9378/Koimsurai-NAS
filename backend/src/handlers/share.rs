@@ -101,9 +101,72 @@ pub async fn create_share_link(
     }))
 }
 
+/// 只檢查密碼，不產生任何內容。
+///
+/// ⚠️ 這個端點存在的理由是**前端沒辦法知道密碼對不對**。分享頁用原生的
+/// `<a download>` 觸發下載（大檔案唯一可靠的做法），而瀏覽器不會把 401 交回
+/// 頁面 —— 使用者打錯密碼時畫面上完全沒有反應，現在多了 429 更需要講清楚。
+///
+/// 不用「先 fetch 一次再下載」是因為資料夾分享會**即時打包成 zip**：
+/// 探測一次等於多壓一次整個資料夾。
 #[utoipa::path(
     get,
-    path = "/s/{id}",
+    path = "/api/share/{id}/verify",
+    params(("id" = String, Path, description = "分享連結 id"), ("pwd" = Option<String>, Query, description = "密碼")),
+    responses(
+        (status = 200, description = "密碼正確，或這個連結沒有設密碼"),
+        (status = 401, description = "缺少或錯誤的密碼"),
+        (status = 404, description = "連結不存在"),
+        (status = 410, description = "連結已過期"),
+        (status = 429, description = "嘗試太多次，稍後再試")
+    ),
+    tag = "share"
+)]
+pub async fn verify_share_password(
+    State(state): State<AppState>,
+    AxumPath(id): AxumPath<String>,
+    Query(query): Query<ShareQuery>,
+) -> Result<StatusCode, AppError> {
+    let row: Option<(String, Option<String>, Option<chrono::DateTime<chrono::Utc>>)> =
+        sqlx::query_as("SELECT file_path, password_hash, expires_at FROM share_links WHERE id = ?")
+            .bind(&id)
+            .fetch_optional(&state.pool)
+            .await
+            .map_err(AppError::from)?;
+
+    let (_, password_hash, expires_at) = row.ok_or(AppError::Status(StatusCode::NOT_FOUND))?;
+
+    if let Some(exp) = expires_at {
+        if exp < chrono::Utc::now() {
+            return Err(AppError::Status(StatusCode::GONE));
+        }
+    }
+
+    let Some(hash) = password_hash else {
+        return Ok(StatusCode::OK);
+    };
+
+    // 額度檢查在 argon2 之前 —— 跟 access_share_link 同一個限制器、同一個理由。
+    if !state.link_attempts.allows(&id) {
+        return Err(AppError::Status(StatusCode::TOO_MANY_REQUESTS));
+    }
+
+    let Some(pwd) = query.pwd else {
+        return Err(AppError::Status(StatusCode::UNAUTHORIZED));
+    };
+
+    if verify_password_async(pwd, hash).await.map_err(AppError::from)? {
+        state.link_attempts.reset(&id);
+        Ok(StatusCode::OK)
+    } else {
+        state.link_attempts.record_failure(&id);
+        Err(AppError::Status(StatusCode::UNAUTHORIZED))
+    }
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/share/{id}/download",
     params(
         ("id" = String, Path, description = "Share ID"),
         ShareQuery
@@ -141,13 +204,25 @@ pub async fn access_share_link(
 
     // Check password
     if let Some(hash) = password_hash {
-        let pwd = query.pwd.ok_or(AppError::Status(StatusCode::UNAUTHORIZED))?;
-        let valid = verify_password_async(pwd.clone(), hash.clone())
+        // ⚠️ 額度檢查要在 argon2 **之前**。這條端點不需要登入，而每一次驗證
+        // 都是 19 MiB + CPU —— 擋在後面的話，被擋掉的請求仍然付了那個代價，
+        // 等於沒擋。見 `utils/throttle.rs`。
+        if !state.link_attempts.allows(&id) {
+            return Err(AppError::Status(StatusCode::TOO_MANY_REQUESTS));
+        }
+
+        let Some(pwd) = query.pwd else {
+            return Err(AppError::Status(StatusCode::UNAUTHORIZED));
+        };
+        let valid = verify_password_async(pwd, hash.clone())
             .await
             .map_err(AppError::from)?;
         if !valid {
+            state.link_attempts.record_failure(&id);
             return Err(AppError::Status(StatusCode::UNAUTHORIZED));
         }
+        // 對了就把額度還回去 —— 不然一個打錯幾次才輸對的人會被後續請求誤鎖。
+        state.link_attempts.reset(&id);
     }
 
     // ⚠️ 這裡讀的是 DB 欄位，但那不代表可信 —— 舊資料可能是在建立端加上驗證

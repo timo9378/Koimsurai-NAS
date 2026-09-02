@@ -359,3 +359,33 @@ async fn max_files_limit_counts_files_within_one_request() {
         .count();
     assert!(landed <= 2, "最多只能落地 2 個，實際 {landed} 個");
 }
+
+/// 上傳連結的密碼也要有次數上限 —— 跟分享連結共用同一個限制器。
+///
+/// ⚠️ 兩邊的接線長得一模一樣，而「看起來一樣但只有一邊測過」正是這個 repo
+/// 一再出問題的形狀，所以兩邊都測。
+#[tokio::test]
+async fn repeated_wrong_passwords_get_rate_limited() {
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "ul_bruteforce").await;
+    let id = create_link(
+        &app,
+        &client,
+        json!({ "target_path": "/", "password": "correct horse" }),
+    )
+    .await;
+
+    let mut saw_limit = false;
+    for i in 0..15 {
+        let status = upload(&app, &id, "?pwd=wrong", "x.txt", b"x".to_vec())
+            .await
+            .status();
+        if status == StatusCode::TOO_MANY_REQUESTS {
+            saw_limit = true;
+            assert!(i >= 5, "不該一開始就擋（第 {i} 次就 429 了）");
+            break;
+        }
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "第 {i} 次應該是 401");
+    }
+    assert!(saw_limit, "連續打錯應該要被擋下來，15 次都沒有");
+}
