@@ -377,25 +377,58 @@ async fn finalize(state: &AppState, uid: &UploadId, meta: &Response) -> Result<(
         .await
         .map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
 
-    // ⚠️ 覆寫既有檔案之前先存一份版本。舊的分塊上傳（`handlers/upload.rs`）
-    // 一直都這麼做，而 tus 這條沒有 —— 同一個動作（上傳一個已經存在的檔名）
-    // 在兩條路徑上行為不同，而**新的主要路徑是會把舊內容直接毀掉的那條**。
-    // `File::create` 是 truncate，寫失敗的話舊內容也回不來了。
+    // ⚠️ 先寫到**同一個目錄底下**的暫存檔，寫完才原子性 rename 過去。
+    //
+    // 原本是直接 `File::create(&dest)` 就地寫。那有兩個問題：
+    //   1. `File::create` 是 truncate —— 從那一刻起 dest 就是壞的，而寫入
+    //      途中失敗（磁碟滿、I/O 錯誤）就會把一個殘缺或 0 byte 的檔案留在
+    //      使用者眼前，沒有任何提示。
+    //   2. 舊的分塊上傳（`handlers/upload.rs`）一直都是寫 `.temp_uploads/`
+    //      再 rename —— 兩條路徑對同一件事的保證不一樣，而 tus 是主要那條。
+    //
+    // 暫存檔要跟 dest 同一個目錄：跨檔案系統的 rename 不是原子的，也可能
+    // 直接失敗（EXDEV）。
+    let temp = dest.with_extension(format!(
+        "{}.tus-{}.partial",
+        dest.extension().unwrap_or_default().to_string_lossy(),
+        uid.as_str()
+    ));
+
+    let write_result = async {
+        let mut file = tokio::fs::File::create(&temp).await.map_err(AppError::from)?;
+        let mut stream = download.body;
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+            file.write_all(&chunk).await.map_err(AppError::from)?;
+        }
+        // ⚠️ 一定要 flush —— tokio 的 File 在 drop 時不保證資料已經寫出去，
+        // 而且 drop 途中的寫入錯誤會被吞掉。本專案已經因為這件事踩過三次。
+        file.flush().await.map_err(AppError::from)?;
+        Ok::<(), AppError>(())
+    }
+    .await;
+
+    if let Err(e) = write_result {
+        // 失敗就把半成品收掉，dest 完全沒有被動過。
+        let _ = tokio::fs::remove_file(&temp).await;
+        return Err(e);
+    }
+
+    // 資料完整地躺在暫存檔裡了，這時才動 dest。
+    //
+    // 覆寫既有檔案之前先存一份版本 —— `create_version` 是用 rename 把舊檔
+    // **搬進** `.versions/`，所以這一步之後 dest 已經不存在，底下的 rename
+    // 只是把新內容放到那個位置。
     if tokio::fs::try_exists(&dest).await.unwrap_or(false) {
         if let Err(e) = crate::utils::versioning::create_version(&dest, state.storage_path.as_path()).await {
             tracing::error!("覆寫前存版本失敗（{dest:?}）：{e:?}");
         }
     }
 
-    let mut file = tokio::fs::File::create(&dest).await.map_err(AppError::from)?;
-    let mut stream = download.body;
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|_| AppError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
-        file.write_all(&chunk).await.map_err(AppError::from)?;
+    if let Err(e) = tokio::fs::rename(&temp, &dest).await {
+        let _ = tokio::fs::remove_file(&temp).await;
+        return Err(AppError::from(e));
     }
-    // ⚠️ 一定要 flush —— tokio 的 File 在 drop 時不保證資料已經寫出去，
-    // 而且 drop 途中的寫入錯誤會被吞掉。本專案已經因為這件事踩過三次。
-    file.flush().await.map_err(AppError::from)?;
 
     // 搬完就把 tus 的暫存清掉，否則同一份資料會佔兩份磁碟。
     if let Err(e) = state.tus.delete(Headers::default(), uid).await {

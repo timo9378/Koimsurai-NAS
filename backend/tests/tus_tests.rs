@@ -347,3 +347,41 @@ async fn overwriting_via_tus_keeps_a_version_of_the_old_content() {
         "覆寫前的內容要留在 .versions 裡，實際找到 {saved:?}"
     );
 }
+
+/// 落地是「先寫暫存檔、再原子性 rename」，而且不留下半成品。
+///
+/// ⚠️ 原本是 `File::create(&dest)` 就地寫 —— 從那一刻起 dest 就是壞的，
+/// 寫入途中失敗（磁碟滿、I/O 錯誤）會把殘缺或 0 byte 的檔案留在使用者眼前。
+/// 舊的分塊上傳一直都是寫暫存再 rename，兩條路徑對同一件事的保證不一樣，
+/// 而 tus 是主要那條。
+#[tokio::test]
+async fn landing_leaves_no_partial_files_behind() {
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "tus_atomic").await;
+
+    let name = "atomic.bin";
+    let body = vec![7u8; 64 * 1024];
+    let id = create(
+        &app,
+        &client,
+        body.len(),
+        &format!("filename {},path {}", b64(name), b64("")),
+    )
+    .await;
+    assert!(patch(&app, &client, &id, 0, &body).await.status().is_success());
+
+    let root = app.storage_dir.path();
+    assert_eq!(
+        std::fs::read(root.join(name)).expect("落地的檔案").len(),
+        body.len(),
+        "內容要完整"
+    );
+
+    let leftovers: Vec<String> = std::fs::read_dir(root)
+        .expect("讀根目錄")
+        .filter_map(Result::ok)
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.contains(".partial") || n.contains(".tus-"))
+        .collect();
+    assert!(leftovers.is_empty(), "不該留下暫存檔，找到 {leftovers:?}");
+}
