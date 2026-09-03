@@ -388,9 +388,14 @@ async fn finalize(state: &AppState, uid: &UploadId, meta: &Response) -> Result<(
     //
     // 暫存檔要跟 dest 同一個目錄：跨檔案系統的 rename 不是原子的，也可能
     // 直接失敗（EXDEV）。
-    let temp = dest.with_extension(format!(
-        "{}.tus-{}.partial",
-        dest.extension().unwrap_or_default().to_string_lossy(),
+    // ⚠️ 檔名要以 `.` 開頭。索引器的 watcher 會跳過以點開頭的名字，而暫存檔
+    // 如果是 `foo.bin.tus-xxx.partial` 這種可見名字，大檔案上傳時它會被索引
+    // 進 files 表 —— 使用者在 Finder 裡就會看到一個奇怪的 `.partial` 項目。
+    // （實測 160MB 的上傳就露出來了；6MB 因為複製在 debounce 的 500ms 內完成
+    // 所以看不到 —— 也就是「小檔案測不出來」的那種 bug。）
+    let temp = dest.with_file_name(format!(
+        ".{}.tus-{}.partial",
+        dest.file_name().unwrap_or_default().to_string_lossy(),
         uid.as_str()
     ));
 

@@ -304,9 +304,11 @@ pub async fn upload_via_link(
         //
         // 暫存檔放同目錄：跨檔案系統的 rename 不是原子的，也可能直接 EXDEV。
         // 這跟 tus 與舊的分塊上傳現在是同一個做法。
-        let temp_path = full_path.with_extension(format!(
-            "{}.part-{}",
-            full_path.extension().unwrap_or_default().to_string_lossy(),
+        // 檔名以 `.` 開頭 —— 索引器的 watcher 會跳過它，不然大檔案上傳期間
+        // 使用者會在列表裡看到一個 `.part-…` 的項目（見 tus.rs 的同一段說明）。
+        let temp_path = full_path.with_file_name(format!(
+            ".{}.part-{}",
+            full_path.file_name().unwrap_or_default().to_string_lossy(),
             Uuid::new_v4()
         ));
 
