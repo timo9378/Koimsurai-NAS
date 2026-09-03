@@ -155,7 +155,12 @@ pub async fn get_upload_link_info(
 /// 透過上傳連結上傳檔案
 #[utoipa::path(
     post,
-    path = "/u/{id}",
+    // ⚠️ `/u/{id}` 是**前端頁面**的路由，不是這個端點。寫錯的後果是
+    // schemathesis 一直在 fuzz 一條不存在的路徑（打到 SPA fallback 回 200
+    // HTML），而真正的上傳端點 —— **不需要登入、收 multipart、會寫檔** ——
+    // 從來沒有被 fuzz 過。今天在它身上找到的兩個洞（數量限制可繞過、
+    // 失敗留下殘缺檔案）都是人工看出來的。
+    path = "/api/upload-link/{id}/upload",
     params(
         ("id" = String, Path, description = "Upload Link ID"),
         UploadQuery

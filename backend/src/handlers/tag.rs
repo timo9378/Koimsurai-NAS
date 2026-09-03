@@ -34,7 +34,10 @@ pub struct TaggedFile {
 
 #[utoipa::path(
     post,
-    path = "/api/files/{path}/tags",
+    // ⚠️ 這裡必須跟 `routes/mod.rs` 一字不差。原本寫的是
+    // `/api/files/{path}/tags` —— 那條路徑不存在，schemathesis 照 spec 產請求，
+    // 於是這個端點**從來沒有被 fuzz 過**（打到的是 SPA fallback）。
+    path = "/api/tags/add/{path}",
     params(
         ("path" = String, Path, description = "File path")
     ),
@@ -81,7 +84,7 @@ pub async fn add_tag(
 
 #[utoipa::path(
     delete,
-    path = "/api/files/{path}/tags/{tag_name}",
+    path = "/api/tags/remove/{tag_name}/{path}",
     params(
         ("path" = String, Path, description = "File path"),
         ("tag_name" = String, Path, description = "Tag name")
@@ -108,7 +111,7 @@ pub async fn remove_tag(
 
 #[utoipa::path(
     post,
-    path = "/api/files/{path}/star",
+    path = "/api/star/file/{path}",
     params(
         ("path" = String, Path, description = "File path")
     ),
