@@ -231,3 +231,80 @@ async fn batch_move_updates_the_listing() {
         "資料夾搬走了，但底下的東西還掛在舊路徑：{deep:?}"
     );
 }
+
+/// 搬移之後，掛在路徑上的東西要跟著走 —— 不只是 `files` 那一列。
+///
+/// ⚠️ 標籤、星號、權限、分享連結、AI 標記全都是拿字串路徑當外鍵。
+/// `rename_file` 一直有更新這六張表，`batch_move` 原本一張都沒有 ——
+/// 而修 `batch_move` 的第一版我自己也只補了 `files` 與 `file_tags`，
+/// 星號跟分享連結照樣會斷。現在兩條路徑共用 `reindex_moved_path`。
+#[tokio::test]
+async fn batch_move_carries_stars_and_share_links() {
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "movelinks").await;
+
+    let root = app.storage_dir.path();
+    std::fs::create_dir(root.join("dst")).expect("mkdir dst");
+    std::fs::write(root.join("keep.txt"), b"still reachable").expect("來源");
+
+    sqlx::query(
+        "INSERT INTO files (path, name, size, mime_type, parent_path, is_dir, modified)
+         VALUES ('keep.txt', 'keep.txt', 15, 'text/plain', '', 0, datetime('now'))",
+    )
+    .execute(&app.pool)
+    .await
+    .expect("seed files");
+
+    let share_id = {
+        let res = client
+            .post(format!("{}/api/share", app.address))
+            .header("Origin", app.origin_header())
+            .json(&json!({ "file_path": "keep.txt" }))
+            .send()
+            .await
+            .expect("建立分享連結");
+        assert_eq!(res.status().as_u16(), 200);
+        let v: Value = res.json().await.expect("json");
+        v["id"].as_str().expect("id").to_string()
+    };
+
+    let star = client
+        .post(format!("{}/api/star/file/keep.txt", app.address))
+        .header("Origin", app.origin_header())
+        .send()
+        .await
+        .expect("加星號");
+    assert_eq!(star.status().as_u16(), 200, "加星號要成功，不然這條測不到東西");
+
+    let res = client
+        .post(format!("{}/api/files/batch/move", app.address))
+        .header("Origin", app.origin_header())
+        .json(&json!({ "paths": ["keep.txt"], "destination": "dst" }))
+        .send()
+        .await
+        .expect("移動");
+    assert_eq!(res.status().as_u16(), 200);
+
+    // 分享出去的連結不可以因為擁有者搬了個檔案就 404。
+    let dl = client
+        .get(format!("{}/api/share/{share_id}/download", app.address))
+        .send()
+        .await
+        .expect("下載");
+    assert_eq!(
+        dl.status().as_u16(),
+        200,
+        "搬移之後分享連結斷了 —— share_links 沒有跟著改路徑"
+    );
+    assert_eq!(dl.text().await.expect("body"), "still reachable");
+
+    let starred: Vec<String> = sqlx::query_scalar("SELECT file_path FROM file_stars")
+        .fetch_all(&app.pool)
+        .await
+        .expect("讀星號");
+    assert_eq!(
+        starred,
+        vec!["dst/keep.txt".to_string()],
+        "星號沒有跟著搬，使用者的收藏就這樣指向一個不存在的路徑"
+    );
+}

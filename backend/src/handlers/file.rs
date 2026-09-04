@@ -183,89 +183,14 @@ pub async fn rename_file(
         .trim_start_matches('/')
         .to_string();
 
-    // 開始事務
-    let mut tx = state.pool.begin().await.map_err(AppError::from)?;
-
-    // 查出所有受影響的 files 路徑（包含目標本身與子路徑）
-    let like_pattern = format!("{normalized_old}/%");
-    let affected_paths: Vec<String> =
-        sqlx::query_scalar("SELECT path FROM files WHERE path = ? OR path LIKE ?")
-            .bind(&normalized_old)
-            .bind(&like_pattern)
-            .fetch_all(&mut *tx)
-            .await
-            .map_err(AppError::from)?;
-
-    for old_db_path in affected_paths {
-        let new_db_path = old_db_path.replacen(&normalized_old, &normalized_new, 1);
-        let new_parent = std::path::Path::new(&new_db_path)
-            .parent()
-            .map(|p| p.to_string_lossy().to_string().replace('\\', "/"))
-            .unwrap_or_default();
-        let new_name = std::path::Path::new(&new_db_path)
-            .file_name()
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_default();
-
-        // 更新 files
-        sqlx::query("UPDATE files SET path = ?, parent_path = ?, name = ? WHERE path = ?")
-            .bind(&new_db_path)
-            .bind(&new_parent)
-            .bind(&new_name)
-            .bind(&old_db_path)
-            .execute(&mut *tx)
-            .await
-            .map_err(AppError::from)?;
-
-        // 更新 file_tags
-        sqlx::query("UPDATE file_tags SET file_path = ? WHERE file_path = ?")
-            .bind(&new_db_path)
-            .bind(&old_db_path)
-            .execute(&mut *tx)
-            .await
-            .map_err(AppError::from)?;
-
-        // 更新 file_stars
-        sqlx::query("UPDATE file_stars SET file_path = ? WHERE file_path = ?")
-            .bind(&new_db_path)
-            .bind(&old_db_path)
-            .execute(&mut *tx)
-            .await
-            .map_err(AppError::from)?;
-
-        // 更新 permissions
-        sqlx::query("UPDATE permissions SET path = ? WHERE path = ?")
-            .bind(&new_db_path)
-            .bind(&old_db_path)
-            .execute(&mut *tx)
-            .await
-            .map_err(AppError::from)?;
-
-        // 更新 share_links
-        sqlx::query("UPDATE share_links SET file_path = ? WHERE file_path = ?")
-            .bind(&new_db_path)
-            .bind(&old_db_path)
-            .execute(&mut *tx)
-            .await
-            .map_err(AppError::from)?;
-
-        // 更新 AI 相關表格
-        sqlx::query("UPDATE image_ai_tags SET file_path = ? WHERE file_path = ?")
-            .bind(&new_db_path)
-            .bind(&old_db_path)
-            .execute(&mut *tx)
-            .await
-            .map_err(AppError::from)?;
-        sqlx::query("UPDATE ai_analysis_status SET file_path = ? WHERE file_path = ?")
-            .bind(&new_db_path)
-            .bind(&old_db_path)
-            .execute(&mut *tx)
-            .await
-            .map_err(AppError::from)?;
-    }
-
-    // 提交事務：所有更新成功才會寫入
-    tx.commit().await.map_err(AppError::from)?;
+    // ⚠️ 這裡跟 `batch_move` 走的是**同一份**實作。
+    //
+    // 原本這段是就地展開的：查出受影響的路徑、逐筆更新 files 加六張關聯表。
+    // 而 `batch_move` 那條路徑一張表都沒更新。兩邊各寫各的就是這樣漂開的
+    // —— 現在只有 `reindex_moved_path` 一個地方知道「還有誰跟著路徑走」。
+    reindex_moved_path(&state.pool, &normalized_old, &normalized_new)
+        .await
+        .map_err(AppError::from)?;
 
     // Audit Log
     let () = state
@@ -1097,31 +1022,57 @@ pub struct BatchMoveResponse {
     pub failed: Vec<String>,
 }
 
-/// 把 `files`／`file_tags` 裡屬於 `old_relative` 的紀錄搬到 `new_relative`。
+/// 把索引與所有掛在路徑上的關聯資料從 `old_relative` 搬到 `new_relative`。
 ///
-/// 資料夾也要處理：底下的每一筆都掛著自己的完整 `path`，只改最上面那一列的話，
-/// 子項目就會留在舊路徑底下 —— 列表上看起來是「資料夾搬走了，但裡面的東西還在
-/// 原地」。所以這裡是前綴改寫，不是單列更新。
+/// 「掛在路徑上」的東西不只 `files`：標籤、星號、權限、分享連結、AI 標記全都是
+/// 用字串路徑當外鍵。漏掉任何一張，使用者搬個資料夾就會發現星號不見了、
+/// 分享出去的連結 404、權限悄悄變回預設。
 ///
-/// 前綴切割用 byte offset 是安全的：`old_relative` 是完整的路徑片段，
-/// 後面接的一定是 `/`，不會切在多位元組字元中間。
+/// 資料夾要連子項目一起改：每一筆都掛著自己的完整 `path`，只動最上層那一列
+/// 的話，子項目會留在舊路徑底下。watcher 也補不了 —— 它對舊路徑呼叫的
+/// `remove_file` 只刪目錄自己那一列。
+///
+/// 前綴切割用 byte offset 是安全的：`old_relative` 是完整的路徑片段，後面接的
+/// 一定是 `/`，不會切在多位元組字元中間。
 async fn reindex_moved_path(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     old_relative: &str,
     new_relative: &str,
 ) -> Result<(), sqlx::Error> {
-    let old_relative = old_relative.trim_end_matches('/');
-    let descendants = format!("{old_relative}/%");
+    let old_relative = old_relative
+        .replace('\\', "/")
+        .trim_start_matches('/')
+        .trim_end_matches('/')
+        .to_string();
+    let new_relative = new_relative
+        .replace('\\', "/")
+        .trim_start_matches('/')
+        .trim_end_matches('/')
+        .to_string();
 
-    let rows: Vec<(String,)> = sqlx::query_as("SELECT path FROM files WHERE path = ? OR path LIKE ?")
-        .bind(old_relative)
+    // 路徑當外鍵的每一張表。加新表的時候這裡也要加 —— 這串就是「還有誰跟著路徑走」
+    // 的唯一一份清單，`rename_file` 與 `batch_move` 都走這裡，不會再各修各的。
+    const LINKED: [(&str, &str); 6] = [
+        ("file_tags", "file_path"),
+        ("file_stars", "file_path"),
+        ("permissions", "path"),
+        ("share_links", "file_path"),
+        ("image_ai_tags", "file_path"),
+        ("ai_analysis_status", "file_path"),
+    ];
+
+    let descendants = format!("{old_relative}/%");
+    let mut tx = pool.begin().await?;
+
+    let affected: Vec<String> = sqlx::query_scalar("SELECT path FROM files WHERE path = ? OR path LIKE ?")
+        .bind(&old_relative)
         .bind(&descendants)
-        .fetch_all(pool)
+        .fetch_all(&mut *tx)
         .await?;
 
-    for (old_path,) in rows {
+    for old_path in affected {
         let new_path = if old_path == old_relative {
-            new_relative.to_string()
+            new_relative.clone()
         } else {
             format!("{new_relative}{}", &old_path[old_relative.len()..])
         };
@@ -1134,23 +1085,32 @@ async fn reindex_moved_path(
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_default();
 
+        // 目的地在磁碟上是空的（呼叫端保證），所以那裡若還有索引列一定是幽靈。
+        // 不先清掉的話下面的 UPDATE 會撞 `files.path` 的唯一鍵，整個事務回滾。
+        sqlx::query("DELETE FROM files WHERE path = ?")
+            .bind(&new_path)
+            .execute(&mut *tx)
+            .await?;
+
         sqlx::query("UPDATE files SET path = ?, parent_path = ?, name = ? WHERE path = ?")
             .bind(&new_path)
             .bind(&parent)
             .bind(&name)
             .bind(&old_path)
-            .execute(pool)
+            .execute(&mut *tx)
             .await?;
 
-        // 標籤是掛在路徑上的 —— 不跟著搬，使用者的標籤就在搬移後憑空消失。
-        sqlx::query("UPDATE file_tags SET file_path = ? WHERE file_path = ?")
-            .bind(&new_path)
-            .bind(&old_path)
-            .execute(pool)
-            .await?;
+        // 表名與欄名都來自上面的常數陣列，不是輸入 —— 沒有注入面。
+        for (table, column) in LINKED {
+            sqlx::query(&format!("UPDATE {table} SET {column} = ? WHERE {column} = ?"))
+                .bind(&new_path)
+                .bind(&old_path)
+                .execute(&mut *tx)
+                .await?;
+        }
     }
 
-    Ok(())
+    tx.commit().await
 }
 
 #[utoipa::path(
