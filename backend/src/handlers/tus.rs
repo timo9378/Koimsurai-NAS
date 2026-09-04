@@ -440,12 +440,35 @@ async fn finalize(state: &AppState, uid: &UploadId, meta: &Response) -> Result<(
         tracing::warn!("tus 暫存清不掉（id={}）：{e:?}", uid.as_str());
     }
 
-    // 讓索引器把它撿進 files 表（跟 WebDAV 寫入走同一條路）
+    // ⚠️ `files` 表要在這裡**同步**寫進去。
+    //
+    // 原本這裡只排了一個 `JobType::IndexFile`，旁邊還寫著「讓索引器把它撿進
+    // files 表」—— 那句話是錯的：那個 job 打的是 `SearchService::index_file`
+    // （tantivy 全文索引），跟 `Indexer::index_file`（`INSERT INTO files`）
+    // 只是同名而已。也就是說 tus 落地之後，`GET /api/files` 要看得到這個
+    // 檔案，唯一的途徑是 inotify watcher —— 500ms debounce，而且 flush 那段
+    // 是在 `select!` 分支裡 await 的，flush 期間沒人在收 channel，量一大就會
+    // 被 kernel 的 inotify queue 溢位吃掉，那時候檔案就**永遠**不會出現。
+    //
+    // 分塊上傳（`handlers/upload.rs`）一直都是自己 INSERT 的。tus 才是前端
+    // 真正在走的那條路，卻反而是最終一致的 —— 使用者上傳完看不到自己的檔案。
+    //
+    // 借 `Indexer` 來寫是刻意的：hidden-file 跳過、mime 判定、parent_path
+    // 正規化的規則跟 watcher 完全一樣，不要在這裡抄第二份。
+    let indexer = crate::services::indexer::Indexer::new(
+        state.pool.clone(),
+        state.storage_path.as_path().to_path_buf(),
+    );
+    if let Err(e) = indexer.index_file(&dest).await {
+        tracing::error!("tus 落地後寫 files 表失敗（{relative}）：{e:?}");
+    }
+
+    // 這個 job 負責的是全文搜尋的內容索引（tantivy），不是 files 表。
     let job = crate::utils::queue::JobType::IndexFile {
         path: relative.clone(),
     };
     if let Err(e) = state.queue.enqueue(job).await {
-        tracing::warn!("tus 落地後的索引工作排不進去：{e}");
+        tracing::warn!("tus 落地後的全文索引工作排不進去：{e}");
     }
 
     tracing::info!("tus 上傳落地：{relative}");

@@ -1097,6 +1097,62 @@ pub struct BatchMoveResponse {
     pub failed: Vec<String>,
 }
 
+/// 把 `files`／`file_tags` 裡屬於 `old_relative` 的紀錄搬到 `new_relative`。
+///
+/// 資料夾也要處理：底下的每一筆都掛著自己的完整 `path`，只改最上面那一列的話，
+/// 子項目就會留在舊路徑底下 —— 列表上看起來是「資料夾搬走了，但裡面的東西還在
+/// 原地」。所以這裡是前綴改寫，不是單列更新。
+///
+/// 前綴切割用 byte offset 是安全的：`old_relative` 是完整的路徑片段，
+/// 後面接的一定是 `/`，不會切在多位元組字元中間。
+async fn reindex_moved_path(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    old_relative: &str,
+    new_relative: &str,
+) -> Result<(), sqlx::Error> {
+    let old_relative = old_relative.trim_end_matches('/');
+    let descendants = format!("{old_relative}/%");
+
+    let rows: Vec<(String,)> = sqlx::query_as("SELECT path FROM files WHERE path = ? OR path LIKE ?")
+        .bind(old_relative)
+        .bind(&descendants)
+        .fetch_all(pool)
+        .await?;
+
+    for (old_path,) in rows {
+        let new_path = if old_path == old_relative {
+            new_relative.to_string()
+        } else {
+            format!("{new_relative}{}", &old_path[old_relative.len()..])
+        };
+        let parent = std::path::Path::new(&new_path)
+            .parent()
+            .map(|p| p.to_string_lossy().to_string().replace('\\', "/"))
+            .unwrap_or_default();
+        let name = std::path::Path::new(&new_path)
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        sqlx::query("UPDATE files SET path = ?, parent_path = ?, name = ? WHERE path = ?")
+            .bind(&new_path)
+            .bind(&parent)
+            .bind(&name)
+            .bind(&old_path)
+            .execute(pool)
+            .await?;
+
+        // 標籤是掛在路徑上的 —— 不跟著搬，使用者的標籤就在搬移後憑空消失。
+        sqlx::query("UPDATE file_tags SET file_path = ? WHERE file_path = ?")
+            .bind(&new_path)
+            .bind(&old_path)
+            .execute(pool)
+            .await?;
+    }
+
+    Ok(())
+}
+
 #[utoipa::path(
     post,
     path = "/api/files/batch/move",
@@ -1147,6 +1203,31 @@ pub async fn batch_move(
             tracing::error!("Failed to move file: {}", e);
             failed.push(path);
         } else {
+            // ⚠️ 搬完一定要跟著改 `files` 表。
+            //
+            // 原本這裡只動了磁碟。`GET /api/files` 讀的是資料表，所以搬完之後
+            // **舊位置跟新位置會同時出現同一個檔案** —— 舊的那筆是幽靈，點下去
+            // 404。改單一檔名的 `rename_file` 一直都有更新（見上面那段 UPDATE
+            // files），只有批次搬移漏了。
+            //
+            // 靠 watcher 補是不行的：watcher 對舊路徑呼叫 `remove_file`，那只
+            // 刪掉目錄自己那一列，底下的子項目不會跟著走。
+            let new_relative = if destination.is_empty() {
+                target_path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string()
+            } else {
+                format!(
+                    "{}/{}",
+                    destination.trim_end_matches('/'),
+                    target_path.file_name().unwrap_or_default().to_string_lossy()
+                )
+            };
+            if let Err(e) = reindex_moved_path(&state.pool, &path, &new_relative).await {
+                tracing::error!("搬移之後改不動 files 表（{path} → {new_relative}）：{e:?}");
+            }
             moved.push(path);
         }
     }

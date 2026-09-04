@@ -117,3 +117,117 @@ async fn destructive_operations_are_audited() {
         "清空垃圾桶要有紀錄，實際有 {actions:?}"
     );
 }
+
+/// 批次搬移之後，列表要看得到新位置、看不到舊位置。
+///
+/// ⚠️ `batch_move` 原本只動磁碟，完全沒碰 `files` 表。而 `GET /api/files`
+/// 讀的就是那張表 —— 所以搬完之後**舊位置跟新位置會同時列出同一個檔案**，
+/// 舊的那筆點下去 404。改單一檔名的 `rename_file` 一直都有更新，只有批次
+/// 這條漏了。
+///
+/// 資料夾一起測：底下的每一筆都掛著自己的完整 `path`，只改最上層那一列的話，
+/// 子項目會留在舊路徑底下。watcher 也補不了 —— 它對舊路徑呼叫的 `remove_file`
+/// 只刪目錄自己那一列。
+#[tokio::test]
+async fn batch_move_updates_the_listing() {
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "movelist").await;
+
+    let root = app.storage_dir.path();
+    std::fs::create_dir(root.join("dst")).expect("mkdir dst");
+    std::fs::create_dir_all(root.join("box/inner")).expect("mkdir box");
+    std::fs::write(root.join("solo.txt"), b"a").expect("solo");
+    std::fs::write(root.join("box/inner/deep.txt"), b"b").expect("deep");
+
+    // 繞過 watcher 直接把索引列建起來 —— 這條測的是「搬移有沒有維護索引」，
+    // 不是「索引建不建得起來」。
+    for (path, name, parent, is_dir) in [
+        ("solo.txt", "solo.txt", "", false),
+        ("box", "box", "", true),
+        ("box/inner", "inner", "box", true),
+        ("box/inner/deep.txt", "deep.txt", "box/inner", false),
+    ] {
+        sqlx::query(
+            "INSERT INTO files (path, name, size, mime_type, parent_path, is_dir, modified)
+             VALUES (?, ?, 1, 'text/plain', ?, ?, datetime('now'))",
+        )
+        .bind(path)
+        .bind(name)
+        .bind(parent)
+        .bind(is_dir)
+        .execute(&app.pool)
+        .await
+        .expect("seed files");
+    }
+
+    let res = client
+        .post(format!("{}/api/files/batch/move", app.address))
+        .header("Origin", app.origin_header())
+        .json(&json!({ "paths": ["solo.txt", "box"], "destination": "dst" }))
+        .send()
+        .await
+        .expect("移動");
+    assert_eq!(res.status().as_u16(), 200);
+
+    let names = |body: Value| -> Vec<String> {
+        body.as_array()
+            .expect("陣列")
+            .iter()
+            .filter_map(|f| f["name"].as_str().map(str::to_string))
+            .collect()
+    };
+
+    let at_root = names(
+        client
+            .get(format!("{}/api/files", app.address))
+            .send()
+            .await
+            .expect("root")
+            .json::<Value>()
+            .await
+            .expect("json"),
+    );
+    assert!(
+        !at_root.contains(&"solo.txt".to_string()),
+        "搬走的檔案還留在根目錄的列表裡：{at_root:?}"
+    );
+    assert!(
+        !at_root.contains(&"box".to_string()),
+        "搬走的資料夾還留在根目錄的列表裡：{at_root:?}"
+    );
+
+    let at_dst = names(
+        client
+            .get(format!("{}/api/files/dst", app.address))
+            .send()
+            .await
+            .expect("dst")
+            .json::<Value>()
+            .await
+            .expect("json"),
+    );
+    assert!(
+        at_dst.contains(&"solo.txt".to_string()),
+        "新位置列不出檔案：{at_dst:?}"
+    );
+    assert!(
+        at_dst.contains(&"box".to_string()),
+        "新位置列不出資料夾：{at_dst:?}"
+    );
+
+    // 子項目要跟著搬 —— 這一段就是「前綴改寫有沒有做」的斷言。
+    let deep = names(
+        client
+            .get(format!("{}/api/files/dst/box/inner", app.address))
+            .send()
+            .await
+            .expect("inner")
+            .json::<Value>()
+            .await
+            .expect("json"),
+    );
+    assert!(
+        deep.contains(&"deep.txt".to_string()),
+        "資料夾搬走了，但底下的東西還掛在舊路徑：{deep:?}"
+    );
+}

@@ -188,3 +188,16 @@ VITE_RELEASE=$(git -C Koimsurai-NAS rev-parse --short HEAD) \
   實例：驗 snap 用「寬度介於畫面的 40%～75%」—— 而預設視窗本來就是 57%，
   停用 snap 照樣綠；驗「復原送的是垃圾桶檔名」但沒有製造撞名 ——
   沒撞名時兩者相等，送哪個都過。
+
+- **綠燈也可能只是跑贏了 race**。單次 CI 分辨不出「這條是對的」跟「這條剛好
+  比 bug 快」。`E2E Flake Sweep`（`.github/workflows/e2e-flake.yml`，每週日）
+  用 `--repeat-each` 把整套跑三遍、**不開 retries**，就是專門篩這個的。
+
+  第一次跑就抓到 8 條不穩的測試，而其中 9 次失敗指向的是**產品的 bug** ——
+  tus 上傳落地後沒有人寫 `files` 表，列表全靠 inotify watcher 補。平常單次
+  跑的時候 watcher 來得及，所以從來沒紅過。flake 掃描找到的不一定是測試寫壞。
+
+- **同名的函式不代表做同一件事**。`SearchService::index_file` 寫的是 tantivy
+  全文索引，`Indexer::index_file` 寫的是 `files` 資料表。tus 落地那裡排了前者，
+  旁邊的註解卻寫「讓索引器把它撿進 files 表」—— 註解看起來完全合理，編譯器
+  也沒話說，但那個保證從來不存在。**跨模組看到熟悉的名字，要點進去確認。**

@@ -159,6 +159,51 @@ async fn full_upload_lands_in_storage() {
 }
 
 #[tokio::test]
+async fn finished_upload_is_listable_immediately() {
+    // ⚠️ 這條測的是「上傳完就看得到」，不是「上傳完檔案在磁碟上」。
+    //
+    // `GET /api/files` 讀的是 `files` 資料表，不是目錄。tus 落地原本沒有人
+    // 寫那張表 —— 旁邊排的 `JobType::IndexFile` 打的是 tantivy 全文索引
+    // （`SearchService::index_file`），跟 `Indexer::index_file` 只是同名。
+    // 唯一會補上那一列的是 inotify watcher，500ms debounce 起跳，量一大就
+    // 可能整個掉，於是「上傳成功但列表裡沒有」。
+    //
+    // 所以這裡**不 poll、不 sleep**：最後一個 PATCH 回來的當下就要列得到。
+    // 有 sleep 的話 watcher 會把這條測試變成綠的，就白測了。
+    let app = spawn_app().await;
+    let client = register_and_login(&app, "tus_listed").await;
+    let name = format!("listed-{}.txt", Uuid::new_v4());
+    let body = b"visible right away";
+
+    let id = create(&app, &client, body.len(), &format!("filename {}", b64(&name))).await;
+    let r = patch(&app, &client, &id, 0, body).await;
+    assert_eq!(r.status(), StatusCode::NO_CONTENT);
+
+    let listing = client
+        .get(format!("{}/api/files", app.address))
+        .send()
+        .await
+        .expect("list files")
+        .json::<serde_json::Value>()
+        .await
+        .expect("json");
+
+    let entry = listing
+        .as_array()
+        .expect("列表要是陣列")
+        .iter()
+        .find(|f| f["name"].as_str() == Some(name.as_str()))
+        .unwrap_or_else(|| panic!("上傳完成的檔案沒有出現在 GET /api/files：{name}"));
+
+    assert_eq!(
+        entry["size"].as_i64(),
+        Some(i64::try_from(body.len()).expect("len")),
+        "列表上的大小要是真的大小，不是 0 或缺值"
+    );
+    assert_eq!(entry["is_dir"].as_bool(), Some(false), "檔案不該被當成目錄");
+}
+
+#[tokio::test]
 async fn metadata_path_puts_the_file_in_a_subfolder() {
     let app = spawn_app().await;
     let client = register_and_login(&app, "tus_subdir").await;
