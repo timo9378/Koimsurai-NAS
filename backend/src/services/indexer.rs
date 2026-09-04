@@ -388,10 +388,29 @@ impl Indexer {
         let mut pending_paths: HashSet<PathBuf> = HashSet::new();
         let mut flush_interval = tokio::time::interval(std::time::Duration::from_millis(500));
 
+        // ⚠️ flush 只准派工，不准在這裡 await。
+        //
+        // 原本 flush 是直接寫在 select! 分支裡 await 的 —— 那段期間沒有人在收
+        // `rx`，通道（容量 100）一滿，notify 的 callback thread 就卡在
+        // `blocking_send` 上，接著 kernel 的 inotify queue 溢位，事件就**永久
+        // 消失**了。而這個專案沒有週期性的對帳掃描（只有啟動時掃一次），所以
+        // 掉掉的事件要等到下次重啟才會補回來 —— 表現成「檔案就是不出現」。
+        //
+        // 用一個 permit 的 semaphore 把 flush 串起來：上一輪還沒做完就跳過這次
+        // tick，路徑留在 pending_paths 裡等下一次。並行度是 1，但收事件不會停。
+        let flush_gate = Arc::new(tokio::sync::Semaphore::new(1));
+
         loop {
             tokio::select! {
                 // 收到新的檔案變更事件
-                Some(res) = rx.recv() => {
+                res = rx.recv() => {
+                    let Some(res) = res else {
+                        // 送端全掉了就是 watcher 已經死了。原本這裡是
+                        // `Some(res) = rx.recv()`，通道關閉時那個分支會被
+                        // select! 停用，迴圈接著靠 tick 空轉到行程結束，
+                        // 不會有任何一行 log 說索引已經不動了。
+                        anyhow::bail!("檔案 watcher 的事件通道關閉了，索引不會再更新");
+                    };
                     match res {
                         Ok(event) => {
                             for path in event.paths {
@@ -407,17 +426,26 @@ impl Indexer {
                 }
                 // 定期 flush pending_paths
                 _ = flush_interval.tick() => {
-                    if !pending_paths.is_empty() {
-                        for path in pending_paths.drain() {
+                    if pending_paths.is_empty() {
+                        continue;
+                    }
+                    let Ok(permit) = Arc::clone(&flush_gate).try_acquire_owned() else {
+                        continue;
+                    };
+                    let batch: Vec<PathBuf> = pending_paths.drain().collect();
+                    let this = Arc::clone(&self);
+                    tokio::spawn(async move {
+                        let _permit = permit;
+                        for path in batch {
                             if path.exists() {
-                                if let Err(e) = self.index_file(&path).await {
+                                if let Err(e) = this.index_file(&path).await {
                                     error!("Failed to index file {:?}: {}", path, e);
                                 }
-                            } else if let Err(e) = self.remove_file(&path).await {
+                            } else if let Err(e) = this.remove_file(&path).await {
                                 error!("Failed to remove file index {:?}: {}", path, e);
                             }
                         }
-                    }
+                    });
                 }
             }
         }

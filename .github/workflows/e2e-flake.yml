@@ -71,8 +71,12 @@ jobs:
 
       # ⚠️ 這裡刻意**不**用 --retries。重試會把 flake 藏起來，而藏起來正是
       #    這個 workflow 要解決的問題。
+      # ⚠️ `inputs.*` 要走 env，不能直接內插進 run —— 那是 shell 注入
+      #    （zizmor template-injection，CI 會擋）。
       - name: repeat-each sweep
-        run: pnpm exec playwright test --repeat-each=${{ inputs.repeat || '3' }} --workers=2 --retries=0
+        env:
+          REPEAT: ${{ inputs.repeat || '3' }}
+        run: pnpm exec playwright test --repeat-each="$REPEAT" --workers=2 --retries=0
 
       - if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
