@@ -103,6 +103,13 @@ impl Modify for CommonErrorResponses {
 #[derive(OpenApi)]
 #[openapi(
     paths(
+        // ⚠️ 這份清單是**手動維護**的第三個漂移點。前兩個是「標註的路徑跟
+        // `.route()` 對不上」（見 tests/openapi_drift_tests.rs）；這一個更隱蔽：
+        // handler 有 `#[utoipa::path]`、路徑也對，但**忘了列進這裡**，於是它
+        // 根本不在 spec 裡 —— schemathesis 永遠不會碰它，而且完全沒有症狀。
+        // 一次補進 25 個，其中 `upload_link::upload_via_link` 是不需要登入、
+        // 收 multipart、會寫檔的那個端點。
+        // `tests/openapi_drift_tests.rs` 現在也守著這一項。
         auth::register,
         auth::login,
         auth::logout,
@@ -154,7 +161,32 @@ impl Modify for CommonErrorResponses {
         version::restore_version,
         search::search_files,
         media::stream_media,
-        media::get_timeline
+        media::get_timeline,
+        share::get_share_info,
+        upload_link::create_upload_link,
+        upload_link::get_upload_link_info,
+        upload_link::upload_via_link,
+        trash::permanent_delete,
+        search::search_ai_tags,
+        media::hls_status,
+        media::hls_qualities,
+        media::hls_serve,
+        terminal::terminal_handler,
+        docker::docker_status,
+        docker::docker_connect,
+        docker::list_containers,
+        docker::inspect_container,
+        docker::start_container,
+        docker::stop_container,
+        docker::restart_container,
+        docker::remove_container,
+        docker::container_logs,
+        docker::container_stats,
+        docker::container_exec,
+        docker::list_images,
+        docker::pull_image,
+        docker::remove_image,
+        docker::list_networks,
     ),
     components(
         schemas(RegisterRequest, LoginRequest, EmptyResponse, FileInfo, User, CreateShareLinkRequest, ShareLinkResponse, SystemStatus, DiskInfo, ConsistencyCheckResult, RescanResult, InitUploadRequest, InitUploadResponse, UploadSession, Tag, AddTagRequest, AuditLog, FileVersion, SearchResult, TimelineGroup, LoginResponse, TwoFactorLoginRequest, TwoFactorSetupResponse, TwoFactorVerifySetupRequest, TwoFactorVerifySetupResponse, TwoFactorDisableRequest, TwoFactorStatusResponse, crate::handlers::file::BatchOperationRequest, crate::handlers::file::FavoriteFileInfo, crate::handlers::file::CreateFolderRequest, crate::handlers::tag::UserTag, crate::handlers::tag::TaggedFile)
