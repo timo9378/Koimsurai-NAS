@@ -106,6 +106,7 @@ pnpm dev
 | `pnpm export:types` | 從 Rust 重新產生 API 型別 |
 | `cargo nextest run` | 後端測試（24 個測試檔、278 條） |
 | `cargo clippy --all-targets -- -D warnings` | 後端 lint |
+| `scripts/wait-ci.sh [sha]` | 等某個 commit 的 CI 跑完，**紅燈就 exit 非零** |
 
 `pnpm mutate`（Stryker）與 `cargo mutants` **不要在這台機器上跑** —— 它們同時
 起很多 worker，而這台機器就是 NAS 本身，上面跑著正式服務。CI 上有排程 job。

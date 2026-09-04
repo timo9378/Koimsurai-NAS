@@ -159,6 +159,33 @@ test("點擊會把視窗提到最上層", async ({ page }) => {
   const [z1 = 0, z2 = 0] = await zIndexes();
   expect(z2, "後開的在上面").toBeGreaterThan(z1);
 
+  // ⚠️ 先把第二個視窗拖開，第一個的標題列才點得到。
+  //
+  // CI 的 call log 說得很清楚：
+  //   `<div data-resize="n" …> from <div data-window-frame=…> subtree
+  //    intercepts pointer events`
+  //
+  // 新視窗每開一個往右下偏移 20px（`100 + windows.length * 20`）。視窗 1 的
+  // 標題列高 40px（y=100..140），而視窗 2 的**上緣縮放把手**是一條滿寬 8px 的
+  // 帶子，落在 y=120..128 —— 正好蓋在標題列中央，而 Playwright 點的就是中央。
+  //
+  // 本機會過是因為第二個視窗還在做進場動畫（scale 0.9 → 1），把手還沒到最終
+  // 位置就被點到了；CI 比較慢，動畫收斂之後攔截就是必然。
+  // 也就是說本機的綠燈是靠一個 race 贏來的 —— 那是最糟的一種綠燈。
+  // 拖開之後兩個視窗不再重疊，這條就跟動畫時序無關了。
+  const second = page.locator("[data-window-frame]").nth(1);
+  const secondTitle = page.locator('[data-context-type="window-title"]').nth(1);
+  const box = await second.boundingBox();
+  if (!box) throw new Error("拿不到第二個視窗的位置");
+  await secondTitle.hover();
+  await page.mouse.down();
+  await page.mouse.move(box.x + 320, box.y + 220, { steps: 12 });
+  await page.mouse.up();
+
+  await expect
+    .poll(async () => (await second.boundingBox())?.x ?? -1, { timeout: 10_000 })
+    .not.toBe(box.x);
+
   // 點第一個視窗的標題列 → 它要變成最上層。
   await page.locator('[data-context-type="window-title"]').first().click();
   await expect
