@@ -121,6 +121,7 @@ pnpm dev
 | `E2E` | Playwright + `@axe-core/playwright` |
 | `API Fuzz` | schemathesis 照 OpenAPI 產請求打後端 |
 | `Mutation (frontend)` / `Mutants` | Stryker / cargo-mutants |
+| `Flake Hunt` | 每週把 E2E 跑三遍且**不重試** —— 一般的 E2E job 有 `retries: 1`，失敗一次再成功會被算成通過，而那正是最該修的一類 |
 
 ## 專案結構
 
