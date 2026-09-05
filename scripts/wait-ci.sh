@@ -27,24 +27,53 @@ runs_json() {
     --jq "[.[] | select(.headSha | startswith(\"$short\"))]"
 }
 
+# ⚠️ 等的是「EXPECTED 這幾個都跑完了」，不是「完成的 run 數量夠多」。
+# 原本是數 `status == "completed"` 的總數再跟 EXPECTED 的個數比 ——
+# 只要同一個 SHA 上有別的 workflow（例如手動觸發的 E2E Flake Sweep）先跑完，
+# 就會在 CI／E2E 還在跑的時候提早跳出迴圈。那不會誤報綠燈（底下逐一檢查
+# 會把它們判成 missing），但會把「還在跑」講成「失敗」，一樣是錯的訊息。
+expected_pending() {
+  local name
+  for name in "${EXPECTED[@]}"; do
+    if [ "$(echo "$json" | jq -r --arg n "$name" \
+      '[.[] | select(.name == $n and .status == "completed")] | length')" -eq 0 ]; then
+      printf '%s ' "$name"
+    fi
+  done
+}
+
 while :; do
   json="$(runs_json)"
-  done_count=$(echo "$json" | jq '[.[] | select(.status == "completed")] | length')
-  want=${#EXPECTED[@]}
+  pending="$(expected_pending)"
 
-  if [ "$done_count" -ge "$want" ]; then
+  if [ -z "$pending" ]; then
     break
   fi
 
   if [ "$(date +%s)" -ge "$deadline" ]; then
-    echo "⏱  等了 ${TIMEOUT}s，$short 的 CI 還沒跑完（完成 $done_count / 需要 $want）：" >&2
+    echo "⏱  等了 ${TIMEOUT}s，$short 的 CI 還沒跑完（還在等：$pending）：" >&2
     echo "$json" | jq -r '.[] | "   \(.name) \(.status) \(.conclusion // "-")"' >&2
     exit 2
   fi
   sleep 20
 done
 
-echo "$json" | jq -r '.[] | "\(.name)\t\(.conclusion)"' | sort
+# ⚠️ 摘要要標出哪幾行**不列入判斷**。
+# 原本是把同一個 SHA 上的每個 run 都印成「名字＋結論」，結論還在跑的就是空的
+# —— 底下緊接著一行「✅ 全綠」，讀起來像是上面每一行都綠了。這個 repo 已經
+# 因為「綠燈在說謊」踩過太多次，摘要自己不能是下一次。
+expected_pattern="$(printf '%s\n' "${EXPECTED[@]}" | paste -sd '|' -)"
+echo "$json" | jq -r --arg want "$expected_pattern" '
+  .[]
+  | . as $r
+  | ($r.name | test("^(" + $want + ")$")) as $judged
+  # gh 對還在跑的 run 送的 conclusion 是**空字串**不是 null，`//` 接不到，
+  # 印出來就是一個空欄位 —— 那正是原本讓人誤讀的地方。
+  | (if (($r.conclusion // "") == "") then $r.status else $r.conclusion end) as $state
+  | if $judged
+    then "\($r.name)\t\($state)"
+    else "\($r.name)\t\($state)\t(不列入判斷)"
+    end' | sort
 
 # 每一個期待的 workflow 都要存在且成功
 fail=0

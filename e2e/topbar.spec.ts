@@ -54,16 +54,41 @@ test("通知中心打得開，而且看得到稽核紀錄", async ({ page }) => 
   await registerAndLogin(page, "tb3");
 
   // 先做一件會留下紀錄的事。
-  await page.evaluate(async () => {
+  const folder = `audit-${Date.now().toString(36)}`;
+  await page.evaluate(async (name: string) => {
     await fetch("/api/files/folder", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: "", folder_name: `audit-${Date.now().toString(36)}` }),
+      body: JSON.stringify({ path: "", folder_name: name }),
     });
-  });
+  }, folder);
+
+  // ⚠️ 先確認後端真的寫進去了，再 reload 讓前端重抓。
+  //
+  // 建資料夾是直接打 API 的，前端完全不知道 —— `["audit-logs"]` 這個 query
+  // 手上還是開頁時抓的那一份，不會重抓。沒有這一段，通知中心會顯示
+  // 「No new notifications」，而那句話裡含著 "notifications"，會被下面那個
+  // `getByText("Notifications")` 一起匹配到，最後報成 strict mode violation
+  // —— 錯誤訊息完全看不出真正的原因是「稽核紀錄沒出現」。
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          const res = await fetch("/api/audit/logs");
+          if (!res.ok) return 0;
+          return ((await res.json()) as unknown[]).length;
+        }),
+      { timeout: 15_000 },
+    )
+    .toBeGreaterThan(0);
+
+  await page.reload();
+  await desktopReady(page);
 
   await page.getByRole("button", { name: "通知" }).click();
-  await expect(page.getByText("Notifications")).toBeVisible({ timeout: 10_000 });
+  // `exact` 是必要的：面板空的時候會渲染「No new notifications」，
+  // 非精確比對會同時命中它。
+  await expect(page.getByText("Notifications", { exact: true })).toBeVisible({ timeout: 10_000 });
 
   // 建資料夾會寫一筆 create_folder —— 顯示名稱是 `desktop/audit-actions.ts` 給的。
   await expect(page.getByText("Create Folder").first()).toBeVisible({ timeout: 10_000 });
