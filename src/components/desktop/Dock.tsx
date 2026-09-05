@@ -259,6 +259,9 @@ export const Dock = () => {
   const mouseX = useMotionValue(Infinity);
   const { openWindow, closeWindow, focusWindow, windows, dockPosition } = useWindowStore();
   const [isDockHovered, setIsDockHovered] = useState(false);
+
+  // 縮小的視窗要有地方點回來 —— 見下面 Dock 裡那一段的說明。
+  const minimizedWindows = windows.filter((w) => w.isMinimized);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const dockRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
@@ -482,6 +485,38 @@ export const Dock = () => {
               />
             );
           })}
+
+          {/* ⚠️ 已縮小的視窗。沒有這一段的話，**縮小等於永久關掉**。
+              `preview` 是一個 AppType，但 Dock 上沒有它的圖示（它是文件視窗，
+              不是可以啟動的 app）—— 所以預覽視窗一縮小就沒有任何入口可以叫回來：
+              沒有圖示可以點、沒有視窗列表，而 `focusWindow` 需要有人呼叫它。
+              視窗還留在 store 裡佔著狀態，使用者看到的卻跟關掉一樣。
+              macOS 的做法就是把縮小的視窗放進 Dock，這裡照做。 */}
+          {minimizedWindows.length > 0 && (
+            <>
+              <div
+                className={cn(
+                  "bg-white/20",
+                  dockPosition === "bottom" ? "w-[1px] h-12" : "h-[1px] w-12",
+                )}
+              />
+              {minimizedWindows.map((w) => (
+                <button
+                  key={w.id}
+                  type="button"
+                  aria-label={`還原「${w.title}」`}
+                  title={w.title}
+                  onClick={() => focusWindow(w.id)}
+                  data-minimized-window={w.id}
+                  className="w-10 h-10 shrink-0 rounded-lg bg-white/10 border border-white/20 backdrop-blur-md flex items-center justify-center hover:bg-white/20 transition-colors cursor-pointer"
+                >
+                  <span className="text-[10px] leading-tight text-white/80 px-1 truncate max-w-[36px]">
+                    {w.title}
+                  </span>
+                </button>
+              ))}
+            </>
+          )}
 
           {/* Separator */}
           <div
