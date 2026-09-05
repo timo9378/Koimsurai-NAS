@@ -263,6 +263,22 @@ impl Indexer {
         self.smart_scan().await
     }
 
+    /// 把 `root` 底下整棵樹（含 `root` 自己）寫進 `files` 表。
+    ///
+    /// 為什麼需要它：`index_file` 一次只處理一個路徑。一整個目錄被放回原位
+    /// （垃圾桶還原）時，只索引最上層那一列的話，裡面的東西在列表上是不存在的
+    /// —— 磁碟上有、`GET /api/files` 看不到，要等 watcher 或下次重啟才補。
+    ///
+    /// 隱藏檔跳過的規則由 `index_file` 自己負責，這裡不重複判斷。
+    pub async fn index_tree(&self, root: &Path) -> anyhow::Result<()> {
+        for entry in WalkDir::new(root).into_iter().filter_map(std::result::Result::ok) {
+            if let Err(e) = self.index_file(entry.path()).await {
+                error!("Failed to index file {:?}: {}", entry.path(), e);
+            }
+        }
+        Ok(())
+    }
+
     pub async fn index_file(&self, path: &Path) -> anyhow::Result<()> {
         let relative_path = match path.strip_prefix(self.storage_path.as_path()) {
             Ok(p) => p.to_string_lossy().to_string(),

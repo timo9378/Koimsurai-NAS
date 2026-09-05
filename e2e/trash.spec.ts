@@ -30,12 +30,19 @@ async function uploadFile(page: Page, name: string) {
   expect(ok, `上傳 ${name}`).toBe(true);
 }
 
-const rootNames = (page: Page) =>
-  page.evaluate(async () => {
-    const res = await fetch("/api/files");
+/**
+ * 根目錄上**符合 `query`** 的檔名。
+ *
+ * ⚠️ 一定要帶 `search`。`/api/files` 預設 `limit=50`，而 E2E 的儲存根是全域
+ * 共用的 —— 整套跑下來會累積上百筆，自己的檔案照名稱排序掉在第一頁之外，
+ * 看起來就跟上傳失敗一模一樣（單獨跑時根目錄很空，所以永遠是綠的）。
+ */
+const rootNames = (page: Page, query: string) =>
+  page.evaluate(async (q: string) => {
+    const res = await fetch(`/api/files?search=${encodeURIComponent(q)}&limit=500`);
     const list = (await res.json()) as { name: string }[];
     return list.map((f) => f.name).sort();
-  });
+  }, query);
 
 const trashNames = (page: Page) =>
   page.evaluate(async () => {
@@ -49,7 +56,7 @@ const trashNames = (page: Page) =>
 async function deleteToTrash(page: Page, name: string) {
   await selectInFinder(page, name);
   await page.keyboard.press("Delete");
-  await expect.poll(() => rootNames(page), { timeout: 20_000 }).not.toContain(name);
+  await expect.poll(() => rootNames(page, name), { timeout: 20_000 }).not.toContain(name);
 }
 
 test("清空垃圾桶：要先確認，確認之後垃圾桶真的空了", async ({ page }) => {
@@ -59,9 +66,9 @@ test("清空垃圾桶：要先確認，確認之後垃圾桶真的空了", async
 
   await uploadFile(page, a);
   await uploadFile(page, b);
-  await expect
-    .poll(() => rootNames(page), { timeout: 20_000 })
-    .toEqual(expect.arrayContaining([a, b]));
+  // 兩個檔名各自搜尋 —— `search` 是 `name LIKE %…%`，一次只問一個才問得準。
+  await expect.poll(() => rootNames(page, a), { timeout: 20_000 }).toContain(a);
+  await expect.poll(() => rootNames(page, b), { timeout: 20_000 }).toContain(b);
 
   await page.reload();
   await page.getByRole("button", { name: "Finder", exact: true }).click();
@@ -99,7 +106,7 @@ test("清空垃圾桶會進稽核紀錄 —— 不可逆的操作要查得到是
   const name = `au-${Date.now().toString(36)}.txt`;
 
   await uploadFile(page, name);
-  await expect.poll(() => rootNames(page), { timeout: 20_000 }).toContain(name);
+  await expect.poll(() => rootNames(page, name), { timeout: 20_000 }).toContain(name);
 
   await page.reload();
   await page.getByRole("button", { name: "Finder", exact: true }).click();

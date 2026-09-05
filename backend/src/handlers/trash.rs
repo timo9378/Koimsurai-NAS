@@ -149,46 +149,34 @@ pub async fn restore_file(
         .await
         .map_err(AppError::from)?;
 
-    // Re-index the restored file in the files table
+    // ⚠️ 還原之後的索引要走整棵樹，而且要把掛在路徑上的東西一起帶回來。
+    //
+    // 原本這裡只 INSERT 最上層那一列。還原一個**目錄**時，裡面的檔案在
+    // `GET /api/files` 上是不存在的 —— 磁碟上有、列表看不到，要等 watcher
+    // 或下次重啟才補。
     let relative_path = final_restore_path
         .strip_prefix(state.storage_path.as_path())
         .map(|p| p.to_string_lossy().to_string().replace('\\', "/"))
         .unwrap_or_default();
 
-    if let Ok(meta) = tokio::fs::metadata(&final_restore_path).await {
-        if let Ok(modified_time) = meta.modified() {
-            let modified = chrono::DateTime::<chrono::Utc>::from(modified_time).naive_utc();
-            let name = final_restore_path
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_default();
-            let parent_path = std::path::Path::new(&relative_path)
-                .parent()
-                .map(|p| p.to_string_lossy().to_string().replace('\\', "/"))
-                .unwrap_or_default();
-            let mime_type = mime_guess::from_path(&final_restore_path)
-                .first_or_octet_stream()
-                .to_string();
+    let indexer = crate::services::indexer::Indexer::new(
+        state.pool.clone(),
+        state.storage_path.as_path().to_path_buf(),
+    );
+    if let Err(e) = indexer.index_tree(&final_restore_path).await {
+        tracing::error!("還原後寫 files 表失敗（{relative_path}）：{e:?}");
+    }
 
-            let _ = sqlx::query(
-                r"
-                INSERT INTO files (path, name, size, mime_type, parent_path, is_dir, modified)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(path) DO UPDATE SET
-                    size = excluded.size,
-                    modified = excluded.modified,
-                    mime_type = excluded.mime_type
-                ",
-            )
-            .bind(&relative_path)
-            .bind(&name)
-            .bind(i64::try_from(meta.len()).unwrap_or(i64::MAX))
-            .bind(&mime_type)
-            .bind(&parent_path)
-            .bind(meta.is_dir())
-            .bind(modified)
-            .execute(&state.pool)
-            .await;
+    // 撞名時 `available_path` 會把它放到 `名字 (1).ext`。那樣的話，刪除前
+    // 掛在原路徑上的星號、標籤、分享連結、權限就全都指向一個不存在的路徑
+    // —— 使用者的感受是「還原之後收藏跟分享都不見了」。
+    if let Some(orig) = original_path.as_deref() {
+        let orig = orig.replace('\\', "/");
+        let orig = orig.trim_start_matches('/');
+        if orig != relative_path {
+            if let Err(e) = crate::handlers::file::move_linked_rows(&state.pool, orig, &relative_path).await {
+                tracing::error!("還原改名後搬不動關聯資料（{orig} → {relative_path}）：{e:?}");
+            }
         }
     }
 

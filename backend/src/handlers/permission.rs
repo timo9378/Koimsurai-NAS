@@ -36,6 +36,17 @@ use axum::{
     http::StatusCode,
 };
 
+/// 設定路徑權限（只能設定自己的，見模組說明）
+#[utoipa::path(
+    post,
+    path = "/api/permissions",
+    request_body = CreatePermissionRequest,
+    responses(
+        (status = 200, description = "權限已寫入 / Permission saved"),
+        (status = 403, description = "只能設定自己的權限 / Can only set your own")
+    ),
+    tag = "permissions"
+)]
 pub async fn set_permission(
     State(state): State<AppState>,
     Extension(user_id): Extension<i64>,

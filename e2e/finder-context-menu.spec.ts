@@ -69,7 +69,7 @@ test("右鍵檔案出檔案的選單，右鍵空白處出空白處的，而且�
     .poll(
       () =>
         page.evaluate(async (n: string) => {
-          const res = await fetch("/api/files");
+          const res = await fetch(`/api/files?search=${encodeURIComponent(n)}&limit=500`);
           const list = (await res.json()) as { name: string }[];
           return list.some((f) => f.name === n);
         }, name),

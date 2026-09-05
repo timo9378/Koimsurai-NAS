@@ -22,7 +22,7 @@ test("建立資料夾 → 重新命名 → 刪除 → 復原", async ({ page }) 
 
   const listed = (name: string) =>
     page.evaluate(async (n: string) => {
-      const res = await fetch("/api/files");
+      const res = await fetch(`/api/files?search=${encodeURIComponent(n)}&limit=500`);
       const list = (await res.json()) as { name: string }[];
       return list.some((f) => f.name === n);
     }, name);
@@ -98,7 +98,7 @@ test("同名檔案刪兩次，復原拿回來的是最後刪掉的那份", async
 
   const listed = () =>
     page.evaluate(async (n: string) => {
-      const res = await fetch("/api/files");
+      const res = await fetch(`/api/files?search=${encodeURIComponent(n)}&limit=500`);
       const list = (await res.json()) as { name: string }[];
       return list.some((f) => f.name === n);
     }, name);

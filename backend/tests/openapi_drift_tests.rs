@@ -21,7 +21,7 @@
 //! 靜默漂移 —— 而 axum 的 `Router` 不對外暴露路由表，`utoipa-axum` 的
 //! `OpenApiRouter`（從構造上就同步）是另一個層級的改動。
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 /// `{name}` 與 `{*name}` 都正規化成 `{}`，尾斜線去掉。
@@ -213,6 +213,162 @@ fn every_annotated_handler_is_listed_in_the_openapi_doc() {
         missing.is_empty(),
         "這些 handler 有 #[utoipa::path] 標註但沒被列進 ApiDoc 的 paths(…)，\n\
          所以不在 spec 裡、schemathesis 永遠不會碰它們：\n  {}",
+        missing.join("\n  ")
+    );
+}
+
+/// `routes/mod.rs` 裡每條路由的**真實**路徑（含 nest 前綴）。
+///
+/// 為什麼要這麼麻煩：上面那兩條測試用的 `real_paths` 是**過近似**的 ——
+/// 它把每條路由都配上四種可能的前綴各塞一份。那對「標註的路徑存不存在」
+/// 夠用（寬鬆的一邊不會誤報），但反過來問「這條路由有沒有被標註」時，
+/// 過近似會讓幾乎什麼都通過。
+///
+/// 前綴的來源有兩層，兩層都要走：
+///   - `.nest("/api/auth", auth_routes)` —— 直接給前綴
+///   - `.merge(two_factor_protected)` 寫在 `auth_routes` 裡面 —— 被併進去的
+///     那個區塊繼承外層的前綴。少了這一層，`/2fa/status` 會被算成沒有前綴，
+///     然後誤報成「沒有標註」。
+fn routes_with_real_prefix() -> Vec<String> {
+    let src = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src")
+            .join("routes")
+            .join("mod.rs"),
+    )
+    .expect("讀得到 routes/mod.rs");
+
+    // 具名區塊的範圍：`let X = Router::new()` 到下一個頂層 `let ` 或最後的組裝。
+    let mut blocks: Vec<(String, usize, usize)> = Vec::new();
+    for (idx, _) in src.match_indices("\n    let ") {
+        let after = idx + "\n    let ".len();
+        let rest = &src[after..];
+        let Some(eq) = rest.find(" = Router::new()") else {
+            continue;
+        };
+        let name = rest[..eq].trim();
+        if name.contains(' ') || name.is_empty() {
+            continue;
+        }
+        let body_start = after + eq;
+        let next_let = src[body_start..].find("\n    let ").map(|p| body_start + p);
+        let assembly = src[body_start..]
+            .find("\n    Router::new()")
+            .map(|p| body_start + p);
+        let end = match (next_let, assembly) {
+            (Some(a), Some(b)) => a.min(b),
+            (Some(a), None) => a,
+            (None, Some(b)) => b,
+            (None, None) => src.len(),
+        };
+        blocks.push((name.to_string(), body_start, end));
+    }
+
+    // 第一層：`.nest("PFX", NAME)`
+    let mut prefix: HashMap<String, String> = HashMap::new();
+    for (idx, _) in src.match_indices(".nest(\"") {
+        let rest = &src[idx + ".nest(\"".len()..];
+        let Some(q) = rest.find('"') else { continue };
+        let pfx = &rest[..q];
+        let after = &rest[q + 1..];
+        let Some(comma) = after.find(',') else { continue };
+        let Some(close) = after.find(')') else { continue };
+        if comma > close {
+            continue;
+        }
+        let name = after[comma + 1..close].trim();
+        if !name.is_empty() && !name.contains(' ') {
+            prefix.insert(name.to_string(), pfx.to_string());
+        }
+    }
+
+    // 第二層：某個區塊裡的 `.merge(NAME)` —— NAME 繼承該區塊的前綴。
+    // 跑兩輪就夠了（這個檔案只有一層 merge），多跑無害。
+    for _ in 0..2 {
+        let mut inherited: Vec<(String, String)> = Vec::new();
+        for (owner, bstart, bend) in &blocks {
+            let outer = prefix.get(owner).cloned().unwrap_or_default();
+            for (idx, _) in src[*bstart..*bend].match_indices(".merge(") {
+                let rest = &src[*bstart + idx + ".merge(".len()..];
+                let Some(close) = rest.find(')') else { continue };
+                let name = rest[..close].trim();
+                if !name.is_empty() && !name.contains(' ') && !name.contains('"') {
+                    inherited.push((name.to_string(), outer.clone()));
+                }
+            }
+        }
+        for (name, pfx) in inherited {
+            prefix.entry(name).or_insert(pfx);
+        }
+    }
+
+    let mut out = Vec::new();
+    for (idx, _) in src.match_indices(".route(") {
+        let rest = &src[idx + ".route(".len()..];
+        let Some(start) = rest.find('"') else { continue };
+        let Some(end) = rest[start + 1..].find('"') else {
+            continue;
+        };
+        let path = &rest[start + 1..start + 1 + end];
+        // 路由路徑一定以 `/` 開頭；不是的話就是掃到了別的字串。
+        if !path.starts_with('/') {
+            continue;
+        }
+
+        let pfx = blocks
+            .iter()
+            .find(|(_, s, e)| idx > *s && idx < *e)
+            .and_then(|(name, _, _)| prefix.get(name))
+            .cloned()
+            .unwrap_or_default();
+
+        out.push(normalise(&format!("{pfx}{path}")));
+    }
+    out
+}
+
+/// 每條真實路由都要有 `#[utoipa::path]` 標註 —— 除非它在白名單上。
+///
+/// ⚠️ 這是第四種漂移，也是唯一一種**新增程式碼**就會犯的：加一條路由但
+/// 忘了寫標註。前三種都是「改了一邊沒改另一邊」，至少還有一邊存在；
+/// 這一種在 spec 裡完全沒有痕跡，`/scalar` 上看不出少了東西，
+/// schemathesis 也永遠不會產生打它的請求。
+///
+/// 白名單是刻意的，每一條都要說得出為什麼不該進 spec。放行一條新的之前
+/// 先問：它真的不是 REST API 嗎？
+#[test]
+fn every_real_route_has_an_openapi_annotation() {
+    let sources = rust_sources();
+    let annotated: HashSet<String> = annotated_paths(&sources).iter().map(|p| normalise(p)).collect();
+
+    // 不是 REST API、或本來就不該出現在 OpenAPI 文件裡的東西。
+    const ALLOWED: &[&str] = &[
+        // WebSocket：升級協議，OpenAPI 3.0 描述不了。
+        "/api/ws",
+        // 前端錯誤回報的轉發端點（Sentry SDK tunnel）——
+        // body 是 Sentry 的封包格式，不是這個 API 的資料模型。
+        "/api/_report",
+        // uptime 監控用的純文字探針，沒有資料模型。
+        "/health",
+        // SPA fallback 與靜態檔，回的是 HTML 不是 JSON。
+        "/{}",
+        "/",
+    ];
+    let allowed: HashSet<String> = ALLOWED.iter().map(|p| normalise(p)).collect();
+
+    let missing: Vec<String> = routes_with_real_prefix()
+        .into_iter()
+        .filter(|p| !annotated.contains(p) && !allowed.contains(p))
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+
+    assert!(
+        missing.is_empty(),
+        "這些路由沒有 `#[utoipa::path]` 標註，所以完全不在 spec 裡，\
+         schemathesis 永遠不會碰它們：\n  {}\n\
+         要嘛補標註（並加進 `paths(...)`），要嘛加進這條測試的 ALLOWED \
+         並寫清楚為什麼它不是 REST API。",
         missing.join("\n  ")
     );
 }

@@ -1022,6 +1022,18 @@ pub struct BatchMoveResponse {
     pub failed: Vec<String>,
 }
 
+/// 路徑當外鍵的每一張表。加新表的時候這裡也要加 —— 這串就是「還有誰跟著路徑走」
+/// 的唯一一份清單，`rename_file`、`batch_move` 與垃圾桶還原都走這裡，
+/// 不會再各修各的。
+const LINKED: [(&str, &str); 6] = [
+    ("file_tags", "file_path"),
+    ("file_stars", "file_path"),
+    ("permissions", "path"),
+    ("share_links", "file_path"),
+    ("image_ai_tags", "file_path"),
+    ("ai_analysis_status", "file_path"),
+];
+
 /// 把索引與所有掛在路徑上的關聯資料從 `old_relative` 搬到 `new_relative`。
 ///
 /// 「掛在路徑上」的東西不只 `files`：標籤、星號、權限、分享連結、AI 標記全都是
@@ -1034,7 +1046,7 @@ pub struct BatchMoveResponse {
 ///
 /// 前綴切割用 byte offset 是安全的：`old_relative` 是完整的路徑片段，後面接的
 /// 一定是 `/`，不會切在多位元組字元中間。
-async fn reindex_moved_path(
+pub(crate) async fn reindex_moved_path(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     old_relative: &str,
     new_relative: &str,
@@ -1049,17 +1061,6 @@ async fn reindex_moved_path(
         .trim_start_matches('/')
         .trim_end_matches('/')
         .to_string();
-
-    // 路徑當外鍵的每一張表。加新表的時候這裡也要加 —— 這串就是「還有誰跟著路徑走」
-    // 的唯一一份清單，`rename_file` 與 `batch_move` 都走這裡，不會再各修各的。
-    const LINKED: [(&str, &str); 6] = [
-        ("file_tags", "file_path"),
-        ("file_stars", "file_path"),
-        ("permissions", "path"),
-        ("share_links", "file_path"),
-        ("image_ai_tags", "file_path"),
-        ("ai_analysis_status", "file_path"),
-    ];
 
     let descendants = format!("{old_relative}/%");
     let mut tx = pool.begin().await?;
@@ -1099,17 +1100,63 @@ async fn reindex_moved_path(
             .bind(&old_path)
             .execute(&mut *tx)
             .await?;
-
-        // 表名與欄名都來自上面的常數陣列，不是輸入 —— 沒有注入面。
-        for (table, column) in LINKED {
-            sqlx::query(&format!("UPDATE {table} SET {column} = ? WHERE {column} = ?"))
-                .bind(&new_path)
-                .bind(&old_path)
-                .execute(&mut *tx)
-                .await?;
-        }
     }
 
+    tx.commit().await?;
+
+    // 關聯資料另外走一趟：它**不能**跟著上面那個迴圈跑。
+    // 上面是由 `files` 的列驅動的，而垃圾桶還原的情境裡 `files` 那一列在刪除
+    // 時就沒了 —— 迴圈一圈都不會跑，星號與分享連結就留在舊路徑上。
+    move_linked_rows(pool, &old_relative, &new_relative).await
+}
+
+/// 把以路徑當外鍵的關聯資料從 `old_relative`（含其子路徑）搬到 `new_relative`。
+///
+/// 跟 `files` 分開的理由見上面。這裡**不依賴 `files` 有沒有那一列**，
+/// 所以垃圾桶還原（刪除時已經把列刪掉了）也用得上。
+pub(crate) async fn move_linked_rows(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    old_relative: &str,
+    new_relative: &str,
+) -> Result<(), sqlx::Error> {
+    let old_relative = old_relative
+        .replace('\\', "/")
+        .trim_start_matches('/')
+        .trim_end_matches('/')
+        .to_string();
+    let new_relative = new_relative
+        .replace('\\', "/")
+        .trim_start_matches('/')
+        .trim_end_matches('/')
+        .to_string();
+    if old_relative == new_relative {
+        return Ok(());
+    }
+
+    // SQLite 的 `substr` 數的是**字元**不是 byte，所以偏移量要用 chars().count()。
+    // 檔名有中文時用 len() 會切錯位置。
+    let offset = i64::try_from(old_relative.chars().count() + 1).unwrap_or(i64::MAX);
+    let descendants = format!("{old_relative}/%");
+
+    let mut tx = pool.begin().await?;
+    for (table, column) in LINKED {
+        // `UPDATE OR REPLACE`：`file_stars` 有 UNIQUE(user_id, file_path)、
+        // `permissions` 有 UNIQUE(user_id, path)。目的地已經有一列的話，
+        // 現在站在那個路徑上的是**搬過來的這個檔案**，讓它取代舊的才對。
+        // 用 `OR IGNORE` 會留下一列指向已經不存在的路徑。
+        //
+        // 表名與欄名來自 `LINKED` 常數，不是輸入 —— 沒有注入面。
+        sqlx::query(&format!(
+            "UPDATE OR REPLACE {table} SET {column} = ? || substr({column}, ?) \
+             WHERE {column} = ? OR {column} LIKE ?"
+        ))
+        .bind(&new_relative)
+        .bind(offset)
+        .bind(&old_relative)
+        .bind(&descendants)
+        .execute(&mut *tx)
+        .await?;
+    }
     tx.commit().await
 }
 

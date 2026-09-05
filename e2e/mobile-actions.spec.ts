@@ -11,12 +11,13 @@ import { loadTusClient, registerAndLogin } from "./helpers";
  */
 test.use({ viewport: { width: 375, height: 667 } });
 
-const rootNames = (page: Page) =>
-  page.evaluate(async () => {
-    const res = await fetch("/api/files");
+/** 根目錄上符合 `query` 的檔名。`search` 是必要的 —— 見 e2e/helpers.ts 的 `listedNames`。 */
+const rootNames = (page: Page, query: string) =>
+  page.evaluate(async (q: string) => {
+    const res = await fetch(`/api/files?search=${encodeURIComponent(q)}&limit=500`);
     const list = (await res.json()) as { name: string }[];
     return list.map((f) => f.name).sort();
-  });
+  }, query);
 
 test("手機用「⋮」把檔案移到垃圾桶，再從垃圾桶還原", async ({ page }) => {
   await registerAndLogin(page, "mobileact");
@@ -36,7 +37,7 @@ test("手機用「⋮」把檔案移到垃圾桶，再從垃圾桶還原", async
     });
   }, name);
   expect(ok, "上傳").toBe(true);
-  await expect.poll(() => rootNames(page), { timeout: 20_000 }).toContain(name);
+  await expect.poll(() => rootNames(page, name), { timeout: 20_000 }).toContain(name);
 
   await page.reload();
 
@@ -57,7 +58,7 @@ test("手機用「⋮」把檔案移到垃圾桶，再從垃圾桶還原", async
   await more.click();
   await page.getByText("Move to Trash", { exact: true }).first().click();
 
-  await expect.poll(() => rootNames(page), { timeout: 20_000 }).not.toContain(name);
+  await expect.poll(() => rootNames(page, name), { timeout: 20_000 }).not.toContain(name);
 
   // ── 從垃圾桶還原 ────────────────────────────────────────────────────────
   // 垃圾桶裡的項目沒有可預覽的路徑，點一下就是開動作面板。
@@ -72,5 +73,5 @@ test("手機用「⋮」把檔案移到垃圾桶，再從垃圾桶還原", async
   await page.evaluate(async (n: string) => {
     await fetch(`/api/trash/${encodeURIComponent(n)}`, { method: "POST" });
   }, name);
-  await expect.poll(() => rootNames(page), { timeout: 20_000 }).toContain(name);
+  await expect.poll(() => rootNames(page, name), { timeout: 20_000 }).toContain(name);
 });

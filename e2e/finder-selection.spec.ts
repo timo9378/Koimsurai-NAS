@@ -33,9 +33,13 @@ async function seed(page: Page, prefix: string, count: number) {
     .poll(
       () =>
         page.evaluate(async (p: string) => {
-          const res = await fetch("/api/files");
-          const list = (await res.json()) as { name: string }[];
-          return list.filter((f) => f.name.startsWith(p)).length;
+          const res = await fetch(`/api/files?search=${encodeURIComponent(p)}&limit=500`);
+          const list = (await res.json()) as { name: string; path: string }[];
+          // ⚠️ 根目錄的 `?search=` 在後端是**遞迴全庫**的（見 list_files：
+          // parent_path 為空時只有 `name LIKE ?`，沒有目錄條件）。
+          // 這裡問的是「根目錄上還有幾個」，所以要把子目錄裡的濾掉 ——
+          // 根層項目的 `path` 就是檔名本身，不含斜線。
+          return list.filter((f) => f.name.startsWith(p) && !f.path.includes("/")).length;
         }, prefix),
       { timeout: 25_000 },
     )
@@ -44,9 +48,10 @@ async function seed(page: Page, prefix: string, count: number) {
 
 const rootCount = (page: Page, prefix: string) =>
   page.evaluate(async (p: string) => {
-    const res = await fetch("/api/files");
-    const list = (await res.json()) as { name: string }[];
-    return list.filter((f) => f.name.startsWith(p)).length;
+    const res = await fetch(`/api/files?search=${encodeURIComponent(p)}&limit=500`);
+    const list = (await res.json()) as { name: string; path: string }[];
+    // 同上：根目錄的 search 是遞迴的，要把子目錄裡的濾掉。
+    return list.filter((f) => f.name.startsWith(p) && !f.path.includes("/")).length;
   }, prefix);
 
 test("Cmd+A 全選之後按 Delete，整批都進垃圾桶", async ({ page }) => {

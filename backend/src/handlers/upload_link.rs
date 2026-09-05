@@ -46,7 +46,12 @@ pub struct UploadQuery {
     path = "/api/upload-link",
     request_body = CreateUploadLinkRequest,
     responses(
-        (status = 201, description = "Upload link created", body = UploadLinkResponse)
+        // ⚠️ 實際回的是 200 不是 201 —— handler 回 `Json<T>`，axum 的預設狀態碼
+        // 是 200。`create_share_link` 早就修過同一個錯，這條當時還不在
+        // `paths(...)` 裡（見 openapi_drift_tests 的第三種漂移），所以
+        // schemathesis 從來沒打到它。把 25 個 handler 補進 spec 之後第一次
+        // fuzz 就抓出來了。
+        (status = 200, description = "Upload link created", body = UploadLinkResponse)
     )
 )]
 pub async fn create_upload_link(

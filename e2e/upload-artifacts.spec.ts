@@ -26,10 +26,13 @@ test("大檔案上傳期間，列表裡不會出現暫存檔", async ({ page }) 
   // 一邊上傳一邊輪詢列表 —— 暫存檔只在上傳期間存在，事後查是查不到的。
   const poll = setInterval(() => {
     void page
-      .evaluate(async () => {
-        const res = await fetch("/api/files");
+      .evaluate(async (n: string) => {
+        // 用 `search` 限縮：`/api/files` 預設 limit=50，而儲存根是共用的。
+        // 這裡要找的暫存檔名一定含著上傳檔名（`.{name}.tus-….partial`），
+        // 所以照名字搜尋不會漏掉它。
+        const res = await fetch(`/api/files?search=${encodeURIComponent(n)}&limit=500`);
         return ((await res.json()) as { name: string }[]).map((f) => f.name);
-      })
+      }, name)
       .then((names) => {
         for (const n of names) seen.add(n);
       })
@@ -65,7 +68,7 @@ test("大檔案上傳期間，列表裡不會出現暫存檔", async ({ page }) 
 
   // 而且檔案本身要真的落地。
   const landed = await page.evaluate(async (n: string) => {
-    const res = await fetch("/api/files");
+    const res = await fetch(`/api/files?search=${encodeURIComponent(n)}&limit=500`);
     return ((await res.json()) as { name: string }[]).some((f) => f.name === n);
   }, name);
   expect(landed, "檔案本身要出現在列表裡").toBe(true);

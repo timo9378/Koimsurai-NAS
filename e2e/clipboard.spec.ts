@@ -41,7 +41,7 @@ test("複製後貼在同一個資料夾，會多一份而不是毀掉原檔", as
   // tus 落地之後還要等 indexer 寫進 DB，列表才看得到（列表是 DB 撐的）。
   const listed = (n: string) =>
     page.evaluate(async (name: string) => {
-      const res = await fetch("/api/files");
+      const res = await fetch(`/api/files?search=${encodeURIComponent(name)}&limit=500`);
       const list = (await res.json()) as { name: string }[];
       return list.some((f) => f.name === name);
     }, n);

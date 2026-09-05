@@ -119,3 +119,28 @@ export function totpCode(base32Secret: string, at: Date = new Date()): string {
   const binary = hmac.readUInt32BE(offset) & 0x7f_ff_ff_ff;
   return (binary % 1_000_000).toString().padStart(6, "0");
 }
+
+/**
+ * `GET /api/files` 上符合 `query` 的檔名。
+ *
+ * ⚠️ **不要直接 `fetch("/api/files")` 再從結果裡找自己的檔案。**
+ * 那個端點預設 `limit=50`（`ListFilesQuery`，後端夾在 1..500），而 E2E 的
+ * 儲存根是全域共用的 —— 整套跑下來會累積上百筆，自己的檔案照名稱排序掉在
+ * 第一頁之外，看起來就跟「上傳失敗」一模一樣。
+ *
+ * 這正是 flake 掃描裡 8 條紅燈的共同死因：單獨跑時根目錄很空，永遠是綠的。
+ *
+ * `?search=` 走的是 `name LIKE %…%`，跟累積了多少筆無關。
+ */
+export async function listedNames(page: Page, query: string): Promise<string[]> {
+  return await page.evaluate(async (q: string) => {
+    const res = await fetch(`/api/files?search=${encodeURIComponent(q)}&limit=500`);
+    const list = (await res.json()) as { name: string }[];
+    return list.map((f) => f.name);
+  }, query);
+}
+
+/** `listedNames` 的存在性版本。 */
+export async function isListed(page: Page, name: string): Promise<boolean> {
+  return (await listedNames(page, name)).includes(name);
+}

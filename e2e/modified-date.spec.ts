@@ -37,7 +37,7 @@ test("檔案列表顯示得出真正的修改時間，不是 Invalid Date", asyn
     .poll(
       () =>
         page.evaluate(async (n: string) => {
-          const res = await fetch("/api/files");
+          const res = await fetch(`/api/files?search=${encodeURIComponent(n)}&limit=500`);
           const list = (await res.json()) as { name: string }[];
           return list.some((f) => f.name === n);
         }, name),

@@ -167,6 +167,7 @@ impl Modify for CommonErrorResponses {
         upload_link::get_upload_link_info,
         upload_link::upload_via_link,
         trash::permanent_delete,
+        permission::set_permission,
         search::search_ai_tags,
         media::hls_status,
         media::hls_qualities,

@@ -104,7 +104,7 @@ pnpm dev
 | `pnpm knip` | 死碼與未使用的相依 |
 | `pnpm e2e` / `pnpm e2e:ui` | Playwright（33 支 spec、63 條；含 axe 的可及性檢查） |
 | `pnpm export:types` | 從 Rust 重新產生 API 型別 |
-| `cargo nextest run` | 後端測試（25 個測試檔、284 條）。⚠️ 用 nextest 不是 `cargo test` —— 有幾條會動 `JWT_SECRET` 這種 process 全域的東西，靠「一個測試一個行程」才安全 |
+| `cargo nextest run` | 後端測試（26 個測試檔、287 條）。⚠️ 用 nextest 不是 `cargo test` —— 有幾條會動 `JWT_SECRET` 這種 process 全域的東西，靠「一個測試一個行程」才安全 |
 | `cargo clippy --all-targets -- -D warnings` | 後端 lint |
 | `zizmor .github/workflows/` | workflow 的資安檢查。**動到 `.github/workflows/` 就要跑** —— CI 擋的第一個東西通常是它（例如把 `inputs.*` 直接內插進 `run:`） |
 | `scripts/wait-ci.sh [sha]` | 等某個 commit 的 CI 跑完，**紅燈就 exit 非零** |

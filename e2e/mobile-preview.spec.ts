@@ -46,7 +46,7 @@ test("手機點一下檔案會開全螢幕預覽，關掉會回到列表", async
     .poll(
       () =>
         page.evaluate(async (n: string) => {
-          const res = await fetch("/api/files");
+          const res = await fetch(`/api/files?search=${encodeURIComponent(n)}&limit=500`);
           const list = (await res.json()) as { name: string }[];
           return list.some((f) => f.name === n);
         }, name),

@@ -10,7 +10,7 @@ pub struct Permission {
     pub can_write: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CreatePermissionRequest {
     pub user_id: i64,
     pub path: String,
