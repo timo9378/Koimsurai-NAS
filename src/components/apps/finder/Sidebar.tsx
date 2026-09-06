@@ -23,7 +23,7 @@ const SidebarItem = ({ icon: Icon, label, active = false, onClick, badge }: Side
     className={cn(
       "w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer text-sm transition-all duration-200",
       active
-        ? "bg-blue-500 text-white shadow-sm font-medium"
+        ? "bg-blue-700 text-white shadow-sm font-medium"
         : "text-gray-600 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10",
     )}
   >
@@ -70,7 +70,7 @@ const TagItem = ({ tag, active, onClick }: TagItemProps) => {
       className={cn(
         "w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer text-sm transition-all duration-200",
         active
-          ? "bg-blue-500 text-white shadow-sm font-medium"
+          ? "bg-blue-700 text-white shadow-sm font-medium"
           : "text-gray-600 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10",
       )}
     >

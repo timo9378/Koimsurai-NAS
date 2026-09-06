@@ -93,6 +93,8 @@ const BreadcrumbItem = ({
         <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
           <DropdownMenuTrigger asChild>
             <button
+              type="button"
+              aria-label={`展開「${name}」底下的資料夾`}
               className="p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
               onClick={(e) => e.stopPropagation()}
             >
@@ -181,6 +183,8 @@ const Breadcrumbs = ({ path, onNavigate, onMoveToPath }: BreadcrumbsProps) => {
           <DropdownMenu open={isRootOpen} onOpenChange={setIsRootOpen}>
             <DropdownMenuTrigger asChild>
               <button
+                type="button"
+                aria-label="展開根目錄底下的資料夾"
                 className="p-0.5 rounded hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
                 onClick={(e) => e.stopPropagation()}
               >

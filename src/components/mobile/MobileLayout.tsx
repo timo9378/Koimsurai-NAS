@@ -215,7 +215,7 @@ const RenameDialog = ({
               onConfirm(value);
               onClose();
             }}
-            className="flex-1 py-2.5 rounded-xl bg-blue-500 text-white text-sm font-medium"
+            className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-medium"
           >
             Confirm
           </button>
@@ -940,7 +940,7 @@ export const MobileLayout = () => {
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="fixed right-4 bottom-20 w-14 h-14 rounded-full bg-blue-500 text-white shadow-lg flex items-center justify-center z-50 active:scale-95 transition-transform"
+            className="fixed right-4 bottom-20 w-14 h-14 rounded-full bg-blue-600 text-white shadow-lg flex items-center justify-center z-50 active:scale-95 transition-transform"
           >
             <Plus className="w-6 h-6" />
           </button>

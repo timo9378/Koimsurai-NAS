@@ -642,7 +642,7 @@ export const FileList = ({
                           className={cn(
                             "grid grid-cols-[minmax(200px,1fr)_80px_120px] gap-2 px-4 py-1.5 cursor-pointer transition-colors duration-150",
                             selectedFiles.has(file.name)
-                              ? "bg-blue-500 text-white"
+                              ? "bg-blue-700 text-white"
                               : "hover:bg-blue-500/10 even:bg-black/5 dark:even:bg-white/5",
                             dropTargetFolder === file.name &&
                               "ring-2 ring-blue-500 ring-inset bg-blue-500/30",

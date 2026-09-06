@@ -35,13 +35,21 @@ const Button = ({
   onClick,
   variant = "default",
   className,
+  label,
 }: {
   children: React.ReactNode;
   onClick: () => void;
+  /** 只有圖示的按鈕必須自己帶名字 —— 讀螢幕的人聽到的否則只有「按鈕」。 */
+  label?: string;
   variant?: "default" | "operator" | "function" | "equal";
   className?: string;
 }) => (
-  <button onClick={onClick} className={cn(BASE_CLASSES, VARIANT_CLASSES[variant], className)}>
+  <button
+    type="button"
+    onClick={onClick}
+    aria-label={label}
+    className={cn(BASE_CLASSES, VARIANT_CLASSES[variant], className)}
+  >
     {children}
   </button>
 );
@@ -265,35 +273,35 @@ export const Calculator = ({ windowId: _windowId }: CalculatorProps) => {
         <Button variant="function" onClick={toggleSign}>
           ±
         </Button>
-        <Button variant="function" onClick={inputPercent}>
-          <Percent className="w-5 h-5" />
+        <Button variant="function" onClick={inputPercent} label="百分比">
+          <Percent className="w-5 h-5" aria-hidden="true" />
         </Button>
-        <Button variant="operator" onClick={() => performOperation("÷")}>
-          <Divide className="w-6 h-6" />
+        <Button variant="operator" onClick={() => performOperation("÷")} label="除">
+          <Divide className="w-6 h-6" aria-hidden="true" />
         </Button>
 
         {/* Row 2 */}
         <Button onClick={() => inputDigit("7")}>7</Button>
         <Button onClick={() => inputDigit("8")}>8</Button>
         <Button onClick={() => inputDigit("9")}>9</Button>
-        <Button variant="operator" onClick={() => performOperation("×")}>
-          <X className="w-6 h-6" />
+        <Button variant="operator" onClick={() => performOperation("×")} label="乘">
+          <X className="w-6 h-6" aria-hidden="true" />
         </Button>
 
         {/* Row 3 */}
         <Button onClick={() => inputDigit("4")}>4</Button>
         <Button onClick={() => inputDigit("5")}>5</Button>
         <Button onClick={() => inputDigit("6")}>6</Button>
-        <Button variant="operator" onClick={() => performOperation("-")}>
-          <Minus className="w-6 h-6" />
+        <Button variant="operator" onClick={() => performOperation("-")} label="減">
+          <Minus className="w-6 h-6" aria-hidden="true" />
         </Button>
 
         {/* Row 4 */}
         <Button onClick={() => inputDigit("1")}>1</Button>
         <Button onClick={() => inputDigit("2")}>2</Button>
         <Button onClick={() => inputDigit("3")}>3</Button>
-        <Button variant="operator" onClick={() => performOperation("+")}>
-          <Plus className="w-6 h-6" />
+        <Button variant="operator" onClick={() => performOperation("+")} label="加">
+          <Plus className="w-6 h-6" aria-hidden="true" />
         </Button>
 
         {/* Row 5 */}
@@ -301,8 +309,8 @@ export const Calculator = ({ windowId: _windowId }: CalculatorProps) => {
           0
         </Button>
         <Button onClick={inputDot}>.</Button>
-        <Button variant="equal" onClick={calculate}>
-          <Equal className="w-6 h-6" />
+        <Button variant="equal" onClick={calculate} label="等於">
+          <Equal className="w-6 h-6" aria-hidden="true" />
         </Button>
       </div>
 

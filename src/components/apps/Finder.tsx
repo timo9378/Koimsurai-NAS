@@ -1210,7 +1210,14 @@ export const Finder = ({ windowId }: FinderProps) => {
       <div className="flex-1 flex flex-col min-w-0 bg-white/40 dark:bg-black/40 relative">
         {/* Tab Bar */}
         <div className="h-9 flex items-center bg-white/30 dark:bg-black/30 shrink-0">
-          <div className="flex-1 flex items-center gap-0.5 px-1 overflow-x-auto scrollbar-none">
+          {/* ⚠️ role="tab" 一定要有 role="tablist" 的父層，否則整組分頁對輔助技術
+              來說是無效的 ARIA（axe 判 aria-required-parent / critical）。
+              少了它，讀螢幕的人聽不到「第幾個、共幾個」，也進不了分頁的瀏覽模式。 */}
+          <div
+            role="tablist"
+            aria-label="Finder 分頁"
+            className="flex-1 flex items-center gap-0.5 px-1 overflow-x-auto scrollbar-none"
+          >
             {tabs.map((tab) => {
               const isActive = tab.id === activeTabId;
               const tabName = tab.isTrashMode
@@ -1267,6 +1274,7 @@ export const Finder = ({ windowId }: FinderProps) => {
             })}
           </div>
           <button
+            type="button"
             onClick={() => addTab("/")}
             className="shrink-0 p-1.5 mr-1 rounded hover:bg-white/40 dark:hover:bg-white/10 transition-colors"
             title="New Tab"

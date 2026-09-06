@@ -397,7 +397,7 @@ function SharePage() {
                     <Button
                       type="submit"
                       disabled={!password.trim()}
-                      className="w-full bg-blue-500 hover:bg-blue-600 text-white"
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                     >
                       確認
                     </Button>

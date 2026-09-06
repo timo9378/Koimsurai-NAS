@@ -370,7 +370,7 @@ const NetworkCard = ({ network, viewMode }: { network: NetworkInfo; viewMode: Vi
   if (viewMode === "list") {
     return (
       <div className="flex items-center gap-4 p-3 bg-white/40 dark:bg-black/40 backdrop-blur-md border border-white/10 rounded-lg hover:bg-white/50 dark:hover:bg-black/50 transition-colors">
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0 bg-blue-500">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0 bg-blue-600">
           <Network className="w-5 h-5" />
         </div>
         <div className="min-w-0 flex-1">
@@ -398,7 +398,7 @@ const NetworkCard = ({ network, viewMode }: { network: NetworkInfo; viewMode: Vi
   return (
     <div className="bg-white/40 dark:bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4 flex flex-col gap-3 hover:bg-white/50 dark:hover:bg-black/50 transition-colors min-w-0">
       <div className="flex items-center gap-3 min-w-0">
-        <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white shadow-lg shrink-0 bg-blue-500">
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center text-white shadow-lg shrink-0 bg-blue-600">
           <Network className="w-6 h-6" />
         </div>
         <div className="min-w-0 flex-1">
@@ -500,7 +500,7 @@ const PullImageDialog = ({
           <button
             onClick={handlePull}
             disabled={!imageName.trim() || pullImage.isPending}
-            className="w-full h-10 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white rounded-md text-sm font-medium transition-colors"
+            className="w-full h-10 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-md text-sm font-medium transition-colors"
           >
             {pullImage.isPending ? "Pulling..." : "Pull Image"}
           </button>
@@ -604,7 +604,7 @@ export const DockerManager = () => {
             className={cn(
               "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm font-medium cursor-pointer transition-colors",
               activeTab === "containers"
-                ? "bg-blue-500 text-white"
+                ? "bg-blue-700 text-white"
                 : "text-gray-600 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10",
             )}
           >
@@ -616,7 +616,7 @@ export const DockerManager = () => {
             className={cn(
               "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm font-medium cursor-pointer transition-colors",
               activeTab === "images"
-                ? "bg-blue-500 text-white"
+                ? "bg-blue-700 text-white"
                 : "text-gray-600 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10",
             )}
           >
@@ -628,7 +628,7 @@ export const DockerManager = () => {
             className={cn(
               "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm font-medium cursor-pointer transition-colors",
               activeTab === "networks"
-                ? "bg-blue-500 text-white"
+                ? "bg-blue-700 text-white"
                 : "text-gray-600 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10",
             )}
           >
@@ -691,7 +691,7 @@ export const DockerManager = () => {
             {activeTab === "images" && (
               <button
                 onClick={() => setShowPullDialog(true)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-sm font-medium transition-colors shadow-sm"
+                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors shadow-sm"
               >
                 <Download className="w-4 h-4" />
                 <span>Pull Image</span>

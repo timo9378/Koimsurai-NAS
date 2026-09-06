@@ -559,6 +559,8 @@ export const Dock = () => {
                     }
                     align="center"
                     sideOffset={10}
+                    aria-label="Dock 設定"
+                    data-dock-settings
                     className="z-[60]"
                   >
                     <DockSettings />

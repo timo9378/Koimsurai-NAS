@@ -75,7 +75,7 @@ const ControlCenter = () => {
       {/* System Status */}
       <div className="bg-black/20 dark:bg-white/10 rounded-xl p-4">
         <div className="flex items-center gap-3 mb-3">
-          <div className="p-2 bg-blue-500 rounded-full text-white">
+          <div className="p-2 bg-blue-600 rounded-full text-white">
             <Activity className="w-4 h-4" />
           </div>
           <span className="text-sm font-medium">System</span>

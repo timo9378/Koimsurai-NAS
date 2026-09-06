@@ -61,6 +61,13 @@ const GpuIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+/**
+ * 可捲動清單區塊的共同樣式。抽出來不只是為了少打字：`<section>` 的屬性擠不進
+ * 一行的話，oxfmt 會把它拆開，`oxlint-disable-next-line` 就蓋不到 `tabIndex`
+ * 那一行了（那個指令是逐行的）。
+ */
+const SCROLL_LIST = "flex-1 overflow-auto custom-scrollbar";
+
 export const Dashboard = () => {
   const { data: systemStatus } = useSystemStatus();
   const [history, setHistory] = useState<
@@ -137,12 +144,12 @@ export const Dashboard = () => {
             </div>
             <div className="space-y-1 text-sm">
               {(systemStatus?.cpu_usage ?? 0) > 90 && (
-                <div className="text-red-500 dark:text-red-300">
+                <div className="text-red-700 dark:text-red-300">
                   • System CPU usage is critical ({(systemStatus?.cpu_usage ?? 0).toFixed(1)}%)
                 </div>
               )}
               {memoryPercent > 90 && (
-                <div className="text-red-500 dark:text-red-300">
+                <div className="text-red-700 dark:text-red-300">
                   • System memory usage is critical ({memoryPercent.toFixed(1)}%)
                 </div>
               )}
@@ -156,13 +163,13 @@ export const Dashboard = () => {
           <div className="bg-gray-100 dark:bg-white/5 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
               <Cpu className="w-4 h-4 text-blue-500 dark:text-blue-400" />
-              <span className="text-xs text-gray-500 dark:text-zinc-400">CPU</span>
+              <span className="text-xs text-gray-600 dark:text-zinc-400">CPU</span>
             </div>
             <div className="text-2xl font-bold text-gray-900 dark:text-white">
               {(systemStatus?.cpu_usage ?? 0).toFixed(1)}%
             </div>
             {systemStatus?.cpu_temp && (
-              <div className="text-xs text-orange-500 dark:text-orange-400 mt-1">
+              <div className="text-xs text-orange-700 dark:text-orange-400 mt-1">
                 {systemStatus.cpu_temp.toFixed(0)}°C
               </div>
             )}
@@ -183,7 +190,7 @@ export const Dashboard = () => {
                 ) : (
                   <BatteryCharging className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                 )}
-                <span className="text-xs text-gray-500 dark:text-zinc-400">UPS</span>
+                <span className="text-xs text-gray-600 dark:text-zinc-400">UPS</span>
                 <span
                   className={cn(
                     "ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-medium",
@@ -198,7 +205,7 @@ export const Dashboard = () => {
               <div className="text-2xl font-bold text-gray-900 dark:text-white">
                 {systemStatus.ups.battery_charge?.toFixed(0) ?? "--"}%
               </div>
-              <div className="text-xs text-gray-500 dark:text-zinc-500 mt-1">
+              <div className="text-xs text-gray-600 dark:text-zinc-500 mt-1">
                 剩 {Math.round((systemStatus.ups.battery_runtime ?? 0) / 60)} 分 · 負載{" "}
                 {systemStatus.ups.ups_load?.toFixed(0) ?? "--"}% ·{" "}
                 {systemStatus.ups.input_voltage?.toFixed(0) ?? "--"}V
@@ -219,12 +226,12 @@ export const Dashboard = () => {
           <div className="bg-gray-100 dark:bg-white/5 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
               <Activity className="w-4 h-4 text-purple-500 dark:text-purple-400" />
-              <span className="text-xs text-gray-500 dark:text-zinc-400">Memory</span>
+              <span className="text-xs text-gray-600 dark:text-zinc-400">Memory</span>
             </div>
             <div className="text-2xl font-bold text-gray-900 dark:text-white">
               {memoryPercent.toFixed(1)}%
             </div>
-            <div className="text-xs text-gray-500 dark:text-zinc-500 mt-1">
+            <div className="text-xs text-gray-600 dark:text-zinc-500 mt-1">
               {formatBytes(systemStatus?.used_memory ?? 0)} /{" "}
               {formatBytes(systemStatus?.total_memory ?? 0)}
             </div>
@@ -240,12 +247,12 @@ export const Dashboard = () => {
           <div className="bg-gray-100 dark:bg-white/5 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
               <HardDrive className="w-4 h-4 text-cyan-500 dark:text-cyan-400" />
-              <span className="text-xs text-gray-500 dark:text-zinc-400">Swap</span>
+              <span className="text-xs text-gray-600 dark:text-zinc-400">Swap</span>
             </div>
             <div className="text-2xl font-bold text-gray-900 dark:text-white">
               {swapPercent.toFixed(1)}%
             </div>
-            <div className="text-xs text-gray-500 dark:text-zinc-500 mt-1">
+            <div className="text-xs text-gray-600 dark:text-zinc-500 mt-1">
               {formatBytes(systemStatus?.used_swap ?? 0)} /{" "}
               {formatBytes(systemStatus?.total_swap ?? 0)}
             </div>
@@ -262,12 +269,12 @@ export const Dashboard = () => {
             <div className="bg-gray-100 dark:bg-white/5 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <GpuIcon className="w-4 h-4 text-green-500 dark:text-green-400" />
-                <span className="text-xs text-gray-500 dark:text-zinc-400">GPU</span>
+                <span className="text-xs text-gray-600 dark:text-zinc-400">GPU</span>
               </div>
               <div className="text-2xl font-bold text-gray-900 dark:text-white">
                 {systemStatus.gpu.utilization}%
               </div>
-              <div className="text-xs text-orange-500 dark:text-orange-400 mt-1">
+              <div className="text-xs text-orange-700 dark:text-orange-400 mt-1">
                 {systemStatus.gpu.temperature}°C • {formatBytes(systemStatus.gpu.memory_used)}
               </div>
               <div className="h-1.5 bg-gray-200 dark:bg-white/10 rounded-full mt-2 overflow-hidden">
@@ -280,13 +287,13 @@ export const Dashboard = () => {
           ) : (
             <div className="bg-gray-100 dark:bg-white/5 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
-                <HardDrive className="w-4 h-4 text-orange-500 dark:text-orange-400" />
-                <span className="text-xs text-gray-500 dark:text-zinc-400">Storage</span>
+                <HardDrive className="w-4 h-4 text-orange-700 dark:text-orange-400" />
+                <span className="text-xs text-gray-600 dark:text-zinc-400">Storage</span>
               </div>
               <div className="text-2xl font-bold text-gray-900 dark:text-white">
                 {diskPercent.toFixed(1)}%
               </div>
-              <div className="text-xs text-gray-500 dark:text-zinc-500 mt-1">
+              <div className="text-xs text-gray-600 dark:text-zinc-500 mt-1">
                 {formatBytes(totalDiskUsed)} / {formatBytes(totalDiskSize)}
               </div>
               <div className="h-1.5 bg-gray-200 dark:bg-white/10 rounded-full mt-2 overflow-hidden">
@@ -310,18 +317,24 @@ export const Dashboard = () => {
                   Top Processes
                 </span>
               </div>
-              <span className="text-xs text-gray-500 dark:text-zinc-400">by CPU usage</span>
+              <span className="text-xs text-gray-600 dark:text-zinc-400">by CPU usage</span>
             </div>
 
             {/* Header */}
-            <div className="grid grid-cols-12 gap-2 text-[10px] text-gray-500 dark:text-zinc-500 mb-2 px-2">
+            <div className="grid grid-cols-12 gap-2 text-[10px] text-gray-600 dark:text-zinc-500 mb-2 px-2">
               <div className="col-span-5">Process</div>
               <div className="col-span-2 text-right">PID</div>
               <div className="col-span-2 text-right">CPU</div>
               <div className="col-span-3 text-right">Memory</div>
             </div>
 
-            <div className="flex-1 overflow-auto custom-scrollbar space-y-1">
+            {/* ⚠️ 這個 tabIndex 是刻意的，而且跟 oxlint 的建議相反。
+                oxlint 說「非互動元素不該有 tabIndex」，axe 說「可捲動區域
+                必須能用鍵盤到達」（scrollable-region-focusable / serious）。
+                這一格只能用滑鼠滾輪捲 —— 鍵盤使用者到不了捲軸下面的內容，
+                所以這裡採用 axe 的說法。 */}
+            {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+            <section tabIndex={0} aria-label="程序列表" className={cn(SCROLL_LIST, "space-y-1")}>
               {topProcesses.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-gray-400 dark:text-zinc-500 text-xs">
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -346,16 +359,16 @@ export const Dashboard = () => {
                     >
                       {proc.name}
                     </div>
-                    <div className="col-span-2 text-right text-gray-500 dark:text-zinc-400">
+                    <div className="col-span-2 text-right text-gray-600 dark:text-zinc-400">
                       {proc.pid}
                     </div>
                     <div
                       className={cn(
                         "col-span-2 text-right font-medium",
                         (proc.cpu_usage ?? 0) > 50
-                          ? "text-red-500 dark:text-red-400"
+                          ? "text-red-700 dark:text-red-400"
                           : (proc.cpu_usage ?? 0) > 20
-                            ? "text-orange-500 dark:text-orange-400"
+                            ? "text-orange-700 dark:text-orange-400"
                             : "text-gray-900 dark:text-white",
                       )}
                     >
@@ -367,24 +380,30 @@ export const Dashboard = () => {
                   </div>
                 ))
               )}
-            </div>
+            </section>
           </div>
 
           {/* Storage Summary */}
           <div className="bg-gray-100 dark:bg-white/5 rounded-xl p-4 flex flex-col min-h-0">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <HardDrive className="w-4 h-4 text-orange-500 dark:text-orange-400" />
+                <HardDrive className="w-4 h-4 text-orange-700 dark:text-orange-400" />
                 <span className="text-sm font-medium text-gray-900 dark:text-white">
                   Storage Devices
                 </span>
               </div>
-              <span className="text-xs text-gray-500 dark:text-zinc-400">
+              <span className="text-xs text-gray-600 dark:text-zinc-400">
                 {systemStatus?.disks.length ?? 0} disks
               </span>
             </div>
 
-            <div className="flex-1 overflow-auto custom-scrollbar space-y-3">
+            {/* ⚠️ 這個 tabIndex 是刻意的，而且跟 oxlint 的建議相反。
+                oxlint 說「非互動元素不該有 tabIndex」，axe 說「可捲動區域
+                必須能用鍵盤到達」（scrollable-region-focusable / serious）。
+                這一格只能用滑鼠滾輪捲 —— 鍵盤使用者到不了捲軸下面的內容，
+                所以這裡採用 axe 的說法。 */}
+            {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+            <section tabIndex={0} aria-label="磁碟列表" className={cn(SCROLL_LIST, "space-y-3")}>
               {systemStatus?.disks.map((disk) => {
                 const used = disk.total_space - disk.available_space;
                 const percent = usagePercent(used, disk.total_space);
@@ -396,7 +415,7 @@ export const Dashboard = () => {
                         <div className="text-sm text-gray-900 dark:text-white font-medium">
                           {display.name}
                         </div>
-                        <div className="text-[10px] text-gray-500 dark:text-zinc-500">
+                        <div className="text-[10px] text-gray-600 dark:text-zinc-500">
                           {display.subtitle} • {disk.mount_point}
                         </div>
                       </div>
@@ -404,7 +423,7 @@ export const Dashboard = () => {
                         <div className="text-sm text-gray-900 dark:text-white">
                           {formatBytes(disk.available_space)} free
                         </div>
-                        <div className="text-[10px] text-gray-500 dark:text-zinc-500">
+                        <div className="text-[10px] text-gray-600 dark:text-zinc-500">
                           of {formatBytes(disk.total_space)}
                         </div>
                       </div>
@@ -421,7 +440,7 @@ export const Dashboard = () => {
                   </div>
                 );
               })}
-            </div>
+            </section>
           </div>
         </div>
 
@@ -496,11 +515,11 @@ export const Dashboard = () => {
           <div className="flex items-center justify-center gap-6 mt-2 text-xs">
             <div className="flex items-center gap-2">
               <div className="w-3 h-1 bg-blue-500 rounded" />
-              <span className="text-gray-500 dark:text-zinc-400">CPU</span>
+              <span className="text-gray-600 dark:text-zinc-400">CPU</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-1 bg-purple-500 rounded" />
-              <span className="text-gray-500 dark:text-zinc-400">RAM</span>
+              <span className="text-gray-600 dark:text-zinc-400">RAM</span>
             </div>
           </div>
         </div>
@@ -516,14 +535,14 @@ export const Dashboard = () => {
             <Cpu className="w-6 h-6 text-blue-500 dark:text-blue-400" />
           </div>
           <div>
-            <div className="text-sm text-gray-500 dark:text-zinc-400">CPU Usage</div>
+            <div className="text-sm text-gray-600 dark:text-zinc-400">CPU Usage</div>
             <div className="text-3xl font-bold text-gray-900 dark:text-white">
               {systemStatus ? `${(systemStatus.cpu_usage ?? 0).toFixed(1)}%` : "--"}
             </div>
           </div>
         </div>
         {systemStatus?.cpu_temp && (
-          <div className="flex items-center gap-2 text-orange-500 dark:text-orange-400">
+          <div className="flex items-center gap-2 text-orange-700 dark:text-orange-400">
             <Thermometer className="w-5 h-5" />
             <span className="text-xl font-semibold">{systemStatus.cpu_temp.toFixed(0)}°C</span>
           </div>
@@ -584,14 +603,14 @@ export const Dashboard = () => {
             <Activity className="w-6 h-6 text-purple-500 dark:text-purple-400" />
           </div>
           <div>
-            <div className="text-sm text-gray-500 dark:text-zinc-400">Memory Usage</div>
+            <div className="text-sm text-gray-600 dark:text-zinc-400">Memory Usage</div>
             <div className="text-3xl font-bold text-gray-900 dark:text-white">
               {systemStatus ? `${memoryPercent.toFixed(1)}%` : "--"}
             </div>
           </div>
         </div>
         {systemStatus && (
-          <div className="text-right text-sm text-gray-500 dark:text-zinc-400">
+          <div className="text-right text-sm text-gray-600 dark:text-zinc-400">
             {formatBytes(systemStatus.used_memory)} / {formatBytes(systemStatus.total_memory)}
           </div>
         )}
@@ -664,13 +683,13 @@ export const Dashboard = () => {
               <GpuIcon className="w-6 h-6 text-green-500 dark:text-green-400" />
             </div>
             <div>
-              <div className="text-sm text-gray-500 dark:text-zinc-400">{gpu.name}</div>
+              <div className="text-sm text-gray-600 dark:text-zinc-400">{gpu.name}</div>
               <div className="text-3xl font-bold text-gray-900 dark:text-white">
                 {gpu.utilization}%
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-orange-500 dark:text-orange-400">
+          <div className="flex items-center gap-2 text-orange-700 dark:text-orange-400">
             <Thermometer className="w-5 h-5" />
             <span className="text-xl font-semibold">{gpu.temperature}°C</span>
           </div>
@@ -728,7 +747,7 @@ export const Dashboard = () => {
         {/* VRAM Usage */}
         <div className="bg-gray-100 dark:bg-white/5 rounded-xl p-4">
           <div className="flex justify-between mb-2">
-            <span className="text-sm text-gray-500 dark:text-zinc-400">VRAM</span>
+            <span className="text-sm text-gray-600 dark:text-zinc-400">VRAM</span>
             <span className="text-sm text-gray-900 dark:text-white">
               {formatBytes(gpu.memory_used)} / {formatBytes(gpu.memory_total)}
             </span>
@@ -748,7 +767,7 @@ export const Dashboard = () => {
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center gap-3 mb-4">
         <div className="p-2 bg-orange-100 dark:bg-orange-500/20 rounded-lg">
-          <HardDrive className="w-6 h-6 text-orange-500 dark:text-orange-400" />
+          <HardDrive className="w-6 h-6 text-orange-700 dark:text-orange-400" />
         </div>
         <div className="text-lg font-semibold text-gray-900 dark:text-white">Storage Devices</div>
       </div>
@@ -764,13 +783,13 @@ export const Dashboard = () => {
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <div className="font-medium text-gray-900 dark:text-white">{display.name}</div>
-                  <div className="text-xs text-gray-500 dark:text-zinc-500">{display.subtitle}</div>
+                  <div className="text-xs text-gray-600 dark:text-zinc-500">{display.subtitle}</div>
                 </div>
                 <div className="text-right">
                   <span className="text-xl font-bold text-gray-900 dark:text-white">
                     {formatBytes(disk.available_space)}
                   </span>
-                  <span className="text-gray-500 dark:text-zinc-400 text-sm">
+                  <span className="text-gray-600 dark:text-zinc-400 text-sm">
                     {" "}
                     / {formatBytes(disk.total_space)}
                   </span>
@@ -821,7 +840,7 @@ export const Dashboard = () => {
                 "flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-all",
                 activeTab === tab.id
                   ? "text-gray-900 dark:text-white bg-white/60 dark:bg-white/10 border-b-2 border-blue-500"
-                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5",
+                  : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5",
               )}
             >
               <Icon className="w-4 h-4" />

@@ -487,7 +487,7 @@ const SecuritySection = () => {
             <button
               onClick={() => void startSetup()}
               disabled={setupMutation.isPending}
-              className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
             >
               {setupMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
               啟用兩階段驗證
@@ -571,7 +571,7 @@ const SecuritySection = () => {
             <button
               onClick={() => void verifySetup()}
               disabled={verifySetupMutation.isPending || code.length !== 6}
-              className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white text-sm font-medium transition-colors flex items-center gap-2"
+              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium transition-colors flex items-center gap-2"
             >
               {verifySetupMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
               驗證並啟用
@@ -632,7 +632,7 @@ const SecuritySection = () => {
             </button>
             <button
               onClick={finishSetup}
-              className="px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors"
+              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
             >
               我已儲存好了
             </button>

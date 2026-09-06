@@ -361,7 +361,14 @@ export const Terminal = ({ windowId }: TerminalProps) => {
     <div className="flex flex-col h-full bg-[#1a1a2e] rounded-lg overflow-hidden">
       {/* Tab Bar */}
       <div className="h-9 flex items-center bg-[#13132a] border-b border-white/10 shrink-0 px-1">
-        <div className="flex-1 flex items-center gap-0.5 overflow-x-auto scrollbar-none">
+        {/* ⚠️ role="tab" 一定要有 role="tablist" 的父層（axe: aria-required-parent /
+            critical）。Finder 的分頁列有一模一樣的問題 —— 同一個寫法複製過去，
+            連同缺的那一半也一起複製了。 */}
+        <div
+          role="tablist"
+          aria-label="終端機分頁"
+          className="flex-1 flex items-center gap-0.5 overflow-x-auto scrollbar-none"
+        >
           {tabs.map((tab) => (
             // eslint-disable-next-line jsx-a11y/no-noninteractive-element-to-interactive-role
             <div
@@ -468,7 +475,7 @@ export const Terminal = ({ windowId }: TerminalProps) => {
                     onClick={() => {
                       if (activeTabId) initializeTerminal(activeTabId);
                     }}
-                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
                   >
                     Retry
                   </button>

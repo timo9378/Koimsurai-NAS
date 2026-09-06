@@ -27,6 +27,28 @@ const KNOWN_ISSUES = {
   desktop: 0,
 } as const;
 
+/**
+ * 等到 CSS transition 都跑完再掃。
+ *
+ * ⚠️ 少了這個，色彩對比的結果是**不穩定的**。這個 UI 到處都是
+ * `transition-all duration-150`，而 axe 量的是「當下那一格畫面」的顏色——
+ * 掃在補間中間的話，量到的是一個根本不存在於任何靜止狀態的顏色。
+ * 實際遇到的：Calculator 同一份程式碼一輪紅、下一輪綠。
+ *
+ * 只等 transition，不等 animation —— `animate-spin` 那種是無限迴圈，等不完。
+ */
+async function settleTransitions(page: Page) {
+  await page.waitForFunction(
+    () =>
+      document
+        .getAnimations()
+        .filter((a) => a instanceof CSSTransition)
+        .every((a) => a.playState !== "running"),
+    undefined,
+    { timeout: 10_000 },
+  );
+}
+
 async function scan(page: Page) {
   return new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
 }
@@ -34,10 +56,21 @@ async function scan(page: Page) {
 function summarise(violations: Awaited<ReturnType<typeof scan>>["violations"]) {
   return violations
     .filter((v) => BLOCKING.includes(v.impact ?? ""))
-    .map(
-      (v) =>
-        `  [${v.impact}] ${v.id}: ${v.help}\n    ${v.nodes.length} 個節點，第一個：${v.nodes[0]?.target.join(" ")}`,
-    )
+    .map((v) => {
+      // ⚠️ 一定要印 `failureSummary`。只印選擇器的話，看到
+      // 「.bg-blue-600 > .flex-1 對比不足」只能自己去算顏色 —— 而 Tailwind v4
+      // 的色階是 OKLCH，跟 v3 的十六進位值不一樣，憑印象算一定錯。
+      // axe 會直接告訴你它量到的前景色、背景色與比值。
+      const nodes = v.nodes
+        .slice(0, 5)
+        .map(
+          (n) =>
+            `      ${n.target.join(" ")}\n        ${n.failureSummary?.split("\n").join("\n        ")}`,
+        )
+        .join("\n");
+      const more = v.nodes.length > 5 ? `\n      …另外還有 ${v.nodes.length - 5} 個` : "";
+      return `  [${v.impact}] ${v.id}: ${v.help}（${v.nodes.length} 個節點）\n${nodes}${more}`;
+    })
     .join("\n");
 }
 
@@ -93,3 +126,100 @@ test("Dock 的每一顆圖示都可以用鍵盤到達，而且有名字", async 
     timeout: 15_000,
   });
 });
+
+/**
+ * 每一個 app 視窗自己也要掃。
+ *
+ * 上面兩條掃的是登入頁和「空桌面」—— 而這個系統幾乎所有 UI 都活在視窗裡，
+ * 所以那兩條掃過等於什麼都沒掃到。使用者說「還是有一些 UI 問題沒修到」，
+ * 這就是那個洞。
+ */
+const DOCK_APPS = [
+  "Finder",
+  "Launchpad",
+  "Dashboard",
+  "Photos",
+  "Docker",
+  "Terminal",
+  "Calculator",
+  "Settings",
+  "Trash",
+] as const;
+
+/**
+ * Dock 上點下去之後，那個 app 的 UI 會出現在哪裡。
+ *
+ * ⚠️ Settings 是特例：它在 Dock 上開的是一個 popover，**不是視窗**
+ * （見 Dock.tsx 的 `Popover.Root`）。第一版把它當成視窗等，結果紅在
+ * 「element(s) not found」—— 那是測試寫錯，不是產品壞掉。
+ */
+const SURFACE: Record<(typeof DOCK_APPS)[number], string> = {
+  Finder: "[data-window-frame]",
+  Launchpad: "[data-window-frame]",
+  Dashboard: "[data-window-frame]",
+  Photos: "[data-window-frame]",
+  Docker: "[data-window-frame]",
+  Terminal: "[data-window-frame]",
+  Calculator: "[data-window-frame]",
+  Settings: "[data-dock-settings]",
+  Trash: "[data-window-frame]",
+};
+
+/**
+ * 每個 app 目前已知、還沒修的 serious/critical 數量（棘輪上限）。
+ * 加新 app 的時候這裡會被下面那條測試逼著補上。
+ */
+const WINDOW_ISSUES: Record<(typeof DOCK_APPS)[number], number> = {
+  Finder: 0,
+  Launchpad: 0,
+  Dashboard: 0,
+  Photos: 0,
+  Docker: 0,
+  Terminal: 0,
+  Calculator: 0,
+  Settings: 0,
+  Trash: 0,
+};
+
+/**
+ * 這條是「補全」的那把鎖：新增一個 Dock app 卻沒加進 DOCK_APPS，
+ * 這裡就會紅。否則上面那一串會慢慢過期，而且沒有人會發現。
+ */
+test("DOCK_APPS 涵蓋 Dock 上的每一個 app", async ({ page }) => {
+  await registerAndLogin(page, "a11ylist");
+
+  const icons = page.locator('[data-context-type="dock-icon"]');
+  await expect(icons.first()).toBeVisible({ timeout: 15_000 });
+
+  const labels = await icons.evaluateAll((els) =>
+    els.map((el) => el.getAttribute("aria-label") ?? ""),
+  );
+  expect([...labels].sort()).toEqual([...DOCK_APPS].sort());
+});
+
+for (const app of DOCK_APPS) {
+  test(`${app} 的可及性沒有比現況更差`, async ({ page }) => {
+    await registerAndLogin(page, "a11ywin");
+
+    const surface = SURFACE[app];
+
+    await page.getByRole("button", { name: app, exact: true }).click();
+    // UI 要真的畫出來才有東西可以掃。
+    await expect(page.locator(surface).first()).toBeVisible({ timeout: 15_000 });
+    // 內容多半是非同步載的（檔案列表、容器列表、系統指標）。等到不再有
+    // 載入中的骨架，掃到的才是使用者真正看到的畫面。
+    await expect(page.locator(`${surface} .animate-spin`)).toHaveCount(0, { timeout: 20_000 });
+    await settleTransitions(page);
+
+    const { violations } = await new AxeBuilder({ page })
+      .include(surface)
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+      .analyze();
+    const blocking = violations.filter((v) => BLOCKING.includes(v.impact ?? ""));
+
+    expect(
+      blocking.length,
+      `${app} 的 serious/critical 違規：\n${summarise(violations)}`,
+    ).toBeLessThanOrEqual(WINDOW_ISSUES[app]);
+  });
+}
