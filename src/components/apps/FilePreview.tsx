@@ -10,6 +10,8 @@ import { VideoPlayer } from "@/components/ui/video-player";
 import { AudioPlayer } from "@/components/ui/audio-player";
 import { formatBytes } from "@/lib/format";
 import { apiFileUrl, encodeApiPath } from "@/lib/paths";
+import { OfficePreview } from "./preview/OfficePreview";
+import { officeKind } from "./preview/office";
 
 interface FilePreviewProps {
   file: FileInfo;
@@ -25,7 +27,7 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
     file.mime_type?.startsWith("audio/") === true ||
     !!/\.(mp3|wav|flac|aac|ogg|m4a|wma|opus)$/i.exec(file.name);
   const isPdf = file.mime_type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-  const isOffice = !!/\.(docx?|xlsx?|pptx?)$/i.exec(file.name);
+  const isOffice = officeKind(file.name) !== null;
   const isText =
     file.mime_type?.startsWith("text/") === true ||
     !!/\.(txt|json|md|ts|tsx|js|jsx|css|html|xml|yaml|yml|toml|ini|cfg|conf|sh|bash|zsh|py|rb|rs|go|java|c|cpp|h|hpp|sql|log|env|gitignore|dockerignore|editorconfig|prettierrc|eslintrc)$/i.exec(
@@ -195,14 +197,7 @@ export const FilePreview = ({ file, windowId }: FilePreviewProps) => {
             />
           </div>
         ) : isOffice ? (
-          <div className="flex flex-col items-center gap-4 text-gray-500">
-            <File className="w-24 h-24 opacity-20" />
-            <div className="text-center">
-              <p className="text-lg font-medium text-gray-900 dark:text-white">Office 文件預覽</p>
-              <p className="text-sm">目前不支援直接預覽 Office 文件</p>
-              <p className="text-sm mt-2">請下載後使用相關軟體開啟</p>
-            </div>
-          </div>
+          <OfficePreview name={file.name} path={file.path} />
         ) : (
           <div className="flex flex-col items-center gap-4 text-gray-500">
             <File className="w-24 h-24 opacity-20" />

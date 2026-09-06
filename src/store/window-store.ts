@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { FileInfo } from "@/types/api";
 
+import { currentViewport, fitToViewport } from "./window-geometry";
+
 /**
  * ⚠️ `AppType` 由這個陣列推導，不要反過來手寫聯集再另外維護一份清單 ——
  * 兩者一定會走鐘，而走鐘的症狀是「執行期檢查漏掉某個 app」這種安靜的錯。
@@ -200,12 +202,19 @@ export const useWindowStore = create(
 
         // Restore from history if available
         const history = windowHistory[appType];
-        const position = history
-          ? history.position
-          : { x: 100 + windows.length * 20, y: 100 + windows.length * 20 };
-        const size = history
-          ? history.size
-          : (defaultSizes[appType] ?? { width: 800, height: 600 });
+        // ⚠️ 夾進畫面之後才用。原本是直接吃這些值 —— preview 的 900×700 開在
+        // `y = 100 + 已開視窗數 × 20`，在 1280×720 的畫面上第二個視窗就是
+        // 120 + 700 = 820 > 720，底部 100px 在畫面外，視窗底部的控制項點不到。
+        // 從 history 還原的也要夾：上次是在大螢幕上關掉的話，換到小螢幕會重現同樣的問題。
+        const { position, size } = fitToViewport(
+          {
+            position: history
+              ? history.position
+              : { x: 100 + windows.length * 20, y: 100 + windows.length * 20 },
+            size: history ? history.size : (defaultSizes[appType] ?? { width: 800, height: 600 }),
+          },
+          currentViewport(),
+        );
 
         // ⚠️ 這個 cast 是必要的：`WindowState` 是以 appType 判別的聯集，而 TS
         // 無法證明「`appType: K` 這一筆的 props 型別就是 `AppProps[K]`」——
