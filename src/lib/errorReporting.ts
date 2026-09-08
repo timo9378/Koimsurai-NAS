@@ -71,3 +71,28 @@ export async function initErrorReporting(): Promise<void> {
     },
   });
 }
+
+/**
+ * 主動回報一個**已經被接住**的錯誤。
+ *
+ * ⚠️ 為什麼需要這支：Sentry SDK 只會自動攔「沒人接的錯誤」——
+ * `window.onerror` 和 `unhandledrejection`。凡是被 `try/catch` 或 callback
+ * 接住、轉成 UI 狀態的錯誤，SDK **完全看不到**。
+ *
+ * 這造成過一次真實的監控盲區（2026-09-08）：後端被 OOM 殺掉，瀏覽器收到
+ * 一整串 502，全部被 `useFileUpload` 的 `onError` 接住變成紅色的上傳失敗，
+ * 而 GlitchTip 上什麼都沒有。使用者看得到，監控看不到。
+ *
+ * 所以「畫在 UI 上」跟「送去監控」是兩件事，不能只做前者。
+ *
+ * 沒有初始化（本機開發、或沒設 DSN）時是安靜的 no-op。
+ */
+export async function reportError(err: unknown, context?: Record<string, unknown>): Promise<void> {
+  if (!started) return;
+  try {
+    const { captureException } = await import("@sentry/browser");
+    captureException(err, context ? { extra: context } : undefined);
+  } catch {
+    // 上報失敗不能反過來弄壞正在處理錯誤的那條路徑。
+  }
+}

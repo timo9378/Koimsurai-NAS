@@ -5,6 +5,8 @@ import { apiClient } from "@/lib/api-client";
 import { startTusUpload } from "../tus-upload";
 import type { FileInfo } from "@/types/api";
 import { getApiErrorMessage, isNetworkError } from "@/lib/errors";
+import { reportError } from "@/lib/errorReporting";
+import { uploadErrorMessage, uploadErrorStatus } from "../upload-error";
 import { toApiPath } from "@/lib/paths";
 
 // Concurrency-limited upload queue utility
@@ -138,9 +140,21 @@ export const useFileUpload = () => {
           resolve();
         },
         onError: (error) => {
+          // 使用者看到的是人話（`uploadErrorMessage`），送去 GlitchTip 的是
+          // 原封不動的錯誤 —— 兩者的讀者不一樣，不能共用同一個字串。
+          //
+          // ⚠️ 這裡一定要主動回報。錯誤被這個 callback 接住之後就不再是
+          // 「未處理」的，Sentry SDK 的自動攔截**看不到它** ——
+          // 後端被 OOM 殺掉那次，使用者滿螢幕紅字而 GlitchTip 一片空白。
+          void reportError(error, {
+            file: file.name,
+            size: file.size,
+            path: currentPath,
+            httpStatus: uploadErrorStatus(error),
+          });
           updateTask(taskId, {
             status: "error",
-            error: getApiErrorMessage(error, "Upload interrupted"),
+            error: uploadErrorMessage(error),
           });
           reject(error);
         },
