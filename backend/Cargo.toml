@@ -75,6 +75,8 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 # 它是「自帶儲存」的純協定核心，HTTP 那層我們自己接（handlers/tus.rs），
 # 於是路徑檢查仍然走 StorageRoot。
 tus-protocol = { version = "0.1.0", features = ["storage-file", "state-file", "lock-memory"] }
+sentry = { version = "0.49.2", default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
+sentry-tracing = "0.49.2"
 
 [features]
 default = []
@@ -89,6 +91,7 @@ tempfile = "3.10"
 # 造不出過期的那張），才驗得到 exp 檢查真的有在看。版本跟上面的正式相依一致。
 jsonwebtoken = "9.3"
 proptest = "1.9.0"
+sentry = { version = "0.49.2", default-features = false, features = ["test"] }
 
 [lints]
 workspace = true

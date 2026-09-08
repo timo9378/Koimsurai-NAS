@@ -5,15 +5,38 @@ use dotenvy::dotenv;
 use std::{env, path::PathBuf};
 use tokio::fs;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use Koimsurai_NAS::{create_app, db};
+use Koimsurai_NAS::{create_app, db, observability};
 
-#[tokio::main]
-async fn main() {
+/// ⚠️ 這裡**刻意不用** `#[tokio::main]`。
+///
+/// sentry 的預設 transport 會建一個 `reqwest` 的 blocking client，而在 tokio
+/// runtime 的執行緒裡建 blocking client 會 panic
+/// （「Cannot drop a runtime in a context where blocking is not allowed」）。
+/// 所以順序必須是：先 `sentry::init`，再建 runtime。
+///
+/// ⚠️ `_guard` 要活到 `main` 結束。提早 drop 會把 client 關掉，之後的事件
+/// 全部靜靜地被丟掉 —— 不會有任何錯誤告訴你。
+fn main() {
     dotenv().ok();
 
+    let _guard = observability::init();
+
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("failed to build tokio runtime")
+        .block_on(run());
+}
+
+async fn run() {
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .with(tracing_subscriber::fmt::layer())
+        // `tracing::error!` → GlitchTip 事件，WARN/INFO → 麵包屑。
+        // 這是這次接上之後真正的收穫：後端**已經**在關鍵路徑上寫了
+        // `error!`（tus 落地失敗、寫 files 表失敗、覆寫前存版本失敗…），
+        // 那些訊息一直都在，只是沒有人看得到。
+        .with(sentry_tracing::layer())
         .init();
 
     // Fail-fast if JWT_SECRET is not configured — prevents runtime login errors.
