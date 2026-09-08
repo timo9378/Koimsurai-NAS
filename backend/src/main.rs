@@ -14,21 +14,26 @@ use Koimsurai_NAS::{create_app, db, observability};
 /// （「Cannot drop a runtime in a context where blocking is not allowed」）。
 /// 所以順序必須是：先 `sentry::init`，再建 runtime。
 ///
-/// ⚠️ `_guard` 要活到 `main` 結束。提早 drop 會把 client 關掉，之後的事件
-/// 全部靜靜地被丟掉 —— 不會有任何錯誤告訴你。
 fn main() {
     dotenv().ok();
 
-    let _guard = observability::init();
+    // ⚠️ 這個 guard 一定要活到 main 結束（它在這個 scope 的最後才 drop）。
+    // 提早 drop 會把 client 關掉，之後的事件全部靜靜地被丟掉。
+    // 名字不加底線前綴：clippy 的 used_underscore_binding 不准讀它，
+    // 而下面那行要讀。它有被讀到，所以也不會有 unused 警告。
+    let sentry_guard = observability::init();
+    // guard 在這裡就決定了，但 tracing 還沒初始化 —— 現在印什麼都會掉。
+    // 所以只把「開了沒」帶進去，由 run() 在 subscriber 裝好之後才講。
+    let reporting_enabled = sentry_guard.is_some();
 
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .expect("failed to build tokio runtime")
-        .block_on(run());
+        .block_on(run(reporting_enabled));
 }
 
-async fn run() {
+async fn run(reporting_enabled: bool) {
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .with(tracing_subscriber::fmt::layer())
@@ -38,6 +43,16 @@ async fn run() {
         // 那些訊息一直都在，只是沒有人看得到。
         .with(sentry_tracing::layer())
         .init();
+
+    // ⚠️ 這行不是裝飾。上報沒開起來是**完全靜默**的 —— DSN 打錯字、scheme 寫成
+    // https 卻指向純 HTTP 的內部埠（實際發生過）、環境變數沒帶進容器，
+    // 症狀全都一樣：什麼都不會發生，而你以為它在保護你。
+    // 其他選用功能（Docker 管理、AI 標籤）開機時都會講一句，這個也要。
+    if reporting_enabled {
+        tracing::info!("🛰️ 錯誤上報 ENABLED（panic 與 tracing::error! → GlitchTip）");
+    } else {
+        tracing::info!("🛰️ 錯誤上報 DISABLED（未設 SENTRY_BACKEND_DSN）");
+    }
 
     // Fail-fast if JWT_SECRET is not configured — prevents runtime login errors.
     if std::env::var("JWT_SECRET").is_err() {
