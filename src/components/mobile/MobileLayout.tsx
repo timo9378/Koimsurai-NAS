@@ -612,6 +612,11 @@ export const MobileLayout = () => {
   // 而 useFileUpload 失敗時不發 toast，錯誤只存在 task 裡。手機恰恰是最容易斷線的
   // 地方，桌面版一直都有「繼續」按鈕，這裡卻連上傳失敗了都看不出來。
   const failedTasks = Object.values(uploadTasks).filter((t) => t.status === "error");
+  // 已完成、但有警告（例如 0 bytes）。手機版本來就**不顯示已完成的任務**，
+  // 所以警告不在這裡明講的話，就跟桌面版修掉之前一樣是完全靜默的。
+  const warnedTasks = Object.values(uploadTasks).filter(
+    (t) => t.status === "completed" && t.warning,
+  );
 
   return (
     <div className="fixed inset-0 flex flex-col bg-gray-50 dark:bg-zinc-950 text-gray-900 dark:text-gray-100">
@@ -749,6 +754,32 @@ export const MobileLayout = () => {
               onClick={() => removeUploadTask(task.id)}
               aria-label={`Dismiss upload error for ${task.file.name}`}
               className="shrink-0 p-1 rounded text-red-700 dark:text-red-300"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        ))}
+
+        {/* 上傳「成功」但需要注意（0 bytes 之類）。只有 X，沒有重試 —— 檔案確實傳上去了，
+            問題在來源，要使用者自己確認後重傳。 */}
+        {warnedTasks.map((task) => (
+          <div
+            key={task.id}
+            data-upload-name={task.file.name}
+            data-upload-status="warning"
+            className="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-950/40 border-t border-amber-200 dark:border-amber-900"
+          >
+            <span
+              className="flex-1 min-w-0 truncate text-xs text-amber-800 dark:text-amber-300"
+              title={task.warning}
+            >
+              {task.file.name} — {task.warning}
+            </span>
+            <button
+              type="button"
+              onClick={() => removeUploadTask(task.id)}
+              aria-label={`Dismiss upload warning for ${task.file.name}`}
+              className="shrink-0 p-1 rounded text-amber-800 dark:text-amber-300"
             >
               <X className="w-3 h-3" />
             </button>

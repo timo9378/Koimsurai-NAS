@@ -651,7 +651,18 @@ pub async fn upload_file(
         // 正確內容，也拿得到錯誤；後者還要 fsync 到實體磁碟（防斷電），
         // 對 10GB 級的上傳代價太大，那是另一個層次的取捨。
         file.flush().await.map_err(AppError::from)?;
-        tracing::info!("File {} written successfully, {} bytes", file_name, total_written);
+        if total_written == 0 {
+            // ⚠️ 空檔案是合法的，所以不是 error（不會變成 GlitchTip 事件），但也
+            // 不能再寫「written successfully」。2026-09-08 那 11 支 0 bytes 的 GoPro
+            // 影片，log 裡就是一排「written successfully, 0 bytes」—— 讀起來完全正常。
+            // WARN 會變成麵包屑：之後真的出事時，事件上看得到前面收過空檔。
+            tracing::warn!(
+                "File {} written EMPTY (0 bytes) — client may have failed to read the source",
+                file_name
+            );
+        } else {
+            tracing::info!("File {} written successfully, {} bytes", file_name, total_written);
+        }
 
         // NOTE: thumbnail generation will be enqueued after we determine mime_type
 

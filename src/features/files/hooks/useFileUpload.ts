@@ -7,6 +7,7 @@ import type { FileInfo } from "@/types/api";
 import { getApiErrorMessage, isNetworkError } from "@/lib/errors";
 import { reportError } from "@/lib/errorReporting";
 import { uploadErrorMessage, uploadErrorStatus } from "../upload-error";
+import { uploadWarning } from "../upload-warning";
 import { toApiPath } from "@/lib/paths";
 
 // Concurrency-limited upload queue utility
@@ -73,7 +74,11 @@ export const useFileUpload = () => {
               file,
               path: currentPath,
             });
-            updateTask(taskId, { progress: 100, status: "completed" });
+            updateTask(taskId, {
+              progress: 100,
+              status: "completed",
+              warning: uploadWarning(file),
+            });
           }
         } catch (error: unknown) {
           if (isNetworkError(error)) {
@@ -94,7 +99,11 @@ export const useFileUpload = () => {
 
               if (freshFiles.some((f) => f.name === file.name)) {
                 console.log(`File ${file.name} found despite Network Error. Marking as complete.`);
-                updateTask(taskId, { progress: 100, status: "completed" });
+                updateTask(taskId, {
+                  progress: 100,
+                  status: "completed",
+                  warning: uploadWarning(file),
+                });
                 return; // Skip error logging
               }
             } catch (verifyError) {
@@ -136,7 +145,7 @@ export const useFileUpload = () => {
         // 存起來讓「暫停 → 繼續」找得回同一份上傳
         onUrl: (uploadId) => updateTask(taskId, { uploadId }),
         onSuccess: () => {
-          updateTask(taskId, { progress: 100, status: "completed" });
+          updateTask(taskId, { progress: 100, status: "completed", warning: uploadWarning(file) });
           resolve();
         },
         onError: (error) => {

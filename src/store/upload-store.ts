@@ -8,6 +8,12 @@ export interface UploadTask {
   status: "uploading" | "completed" | "error";
   uploadId?: string;
   error?: string;
+  /**
+   * 已完成、但使用者必須注意（例如 0 bytes，見 `features/files/upload-warning.ts`）。
+   * 刻意不做成第四種 status：「完成」這件事是真的，手機版與 Finder 對
+   * `status` 的判斷都不需要跟著改。
+   */
+  warning?: string;
 }
 
 interface UploadStore {
@@ -58,7 +64,9 @@ export const useUploadStore = create<UploadStore>((set) => ({
     set((state) => {
       const newTasks = { ...state.tasks };
       Object.keys(newTasks).forEach((key) => {
-        if (newTasks[key]?.status === "completed") {
+        // ⚠️ 有警告的不清。批次上傳幾百個檔案後最可能做的事就是按清除 ——
+        // 警告跟著被清掉，就又回到「使用者完全不會知道」。要逐筆按 X 才移除。
+        if (newTasks[key]?.status === "completed" && !newTasks[key].warning) {
           delete newTasks[key];
         }
       });

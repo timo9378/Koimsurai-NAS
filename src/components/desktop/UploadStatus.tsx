@@ -7,6 +7,7 @@ import {
   ChevronUp,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   Loader2,
   RefreshCw,
 } from "lucide-react";
@@ -24,12 +25,14 @@ export const UploadStatus = () => {
   const completedCount = taskList.filter((t) => t.status === "completed").length;
   const uploadingCount = taskList.filter((t) => t.status === "uploading").length;
   const errorCount = taskList.filter((t) => t.status === "error").length;
+  const warningCount = taskList.filter((t) => t.status === "completed" && t.warning).length;
 
   const getStatusText = () => {
     if (uploadingCount > 0)
       return `Uploading ${uploadingCount} item${uploadingCount > 1 ? "s" : ""}`;
     if (errorCount > 0) return `${errorCount} upload${errorCount > 1 ? "s" : ""} failed`;
-    return `${completedCount} upload${completedCount > 1 ? "s" : ""} complete`;
+    const done = `${completedCount} upload${completedCount > 1 ? "s" : ""} complete`;
+    return warningCount > 0 ? `${done}, ${warningCount} need attention` : done;
   };
 
   return (
@@ -50,6 +53,8 @@ export const UploadStatus = () => {
         </span>
         <div className="flex items-center gap-2">
           <button
+            type="button"
+            aria-label={isExpanded ? "收合上傳清單" : "展開上傳清單"}
             onClick={(e) => {
               e.stopPropagation();
               toggleExpanded();
@@ -59,6 +64,8 @@ export const UploadStatus = () => {
             {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
           </button>
           <button
+            type="button"
+            aria-label="清除已完成"
             onClick={(e) => {
               e.stopPropagation();
               clearCompleted();
@@ -80,13 +87,22 @@ export const UploadStatus = () => {
         {taskList.map((task) => (
           <div
             key={task.id}
+            data-upload-name={task.file.name}
+            data-upload-status={
+              task.status === "completed" && task.warning ? "warning" : task.status
+            }
             className="group flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-zinc-800 last:border-0 hover:bg-gray-50 dark:hover:bg-zinc-800/50"
           >
             <div className="flex-shrink-0">
               {task.status === "uploading" && (
                 <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
               )}
-              {task.status === "completed" && <CheckCircle2 className="w-5 h-5 text-green-500" />}
+              {task.status === "completed" && !task.warning && (
+                <CheckCircle2 className="w-5 h-5 text-green-500" />
+              )}
+              {task.status === "completed" && task.warning && (
+                <AlertTriangle className="w-5 h-5 text-amber-500" aria-label="已完成，但需要注意" />
+              )}
               {task.status === "error" && <AlertCircle className="w-5 h-5 text-red-500" />}
             </div>
 
@@ -103,6 +119,15 @@ export const UploadStatus = () => {
               {task.status === "error" && (
                 <span className="text-xs text-red-500 truncate block">
                   {task.error || "Upload failed"}
+                </span>
+              )}
+              {/* amber-700 而不是 600：600 配白底只有約 3:1，過不了 AA（見 a11y 那一輪）。 */}
+              {task.status === "completed" && task.warning && (
+                <span
+                  className="text-xs text-amber-700 dark:text-amber-400 truncate block"
+                  title={task.warning}
+                >
+                  {task.warning}
                 </span>
               )}
             </div>
